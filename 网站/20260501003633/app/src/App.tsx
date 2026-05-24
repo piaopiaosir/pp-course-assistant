@@ -8,6 +8,7 @@ import Footer from './components/Footer'
 import HelpPage from './components/HelpPage'
 import SponsorsPage from './components/SponsorsPage'
 import WelfarePage from './components/WelfarePage'
+import StatusPage from './components/StatusPage'
 
 const slideVariants = {
   enter: (direction: number) => ({ x: direction > 0 ? '100%' : '-100%', opacity: 0 }),
@@ -17,15 +18,15 @@ const slideVariants = {
 
 function App() {
   const [mounted, setMounted] = useState(false)
-  const [page, setPage] = useState<'home' | 'help' | 'sponsor' | 'welfare'>('home')
+  const [page, setPage] = useState<'home' | 'help' | 'sponsor' | 'welfare' | 'status'>('home')
   const [direction, setDirection] = useState(1)
 
   useEffect(() => {
     setMounted(true)
     // 支持 hash 直链跳转，如 #welfare 直接打开免费次数页
     const hash = window.location.hash.replace('#', '')
-    if (hash === 'welfare' || hash === 'help' || hash === 'sponsor') {
-      setPage(hash as 'welfare' | 'help' | 'sponsor')
+    if (hash === 'welfare' || hash === 'help' || hash === 'sponsor' || hash === 'status') {
+      setPage(hash as 'welfare' | 'help' | 'sponsor' | 'status')
     }
   }, [])
 
@@ -53,6 +54,12 @@ function App() {
     window.scrollTo(0, 0)
   }
 
+  const navigateToStatus = () => {
+    setDirection(1)
+    setPage('status')
+    window.scrollTo(0, 0)
+  }
+
   if (!mounted) return null
 
   return (
@@ -63,6 +70,7 @@ function App() {
         onNavigateHome={navigateToHome}
         onNavigateSponsor={navigateToSponsor}
         onNavigateWelfare={navigateToWelfare}
+        onNavigateStatus={navigateToStatus}
       />
 
       <AnimatePresence mode="wait" custom={direction}>
@@ -121,6 +129,19 @@ function App() {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
             <WelfarePage onBack={navigateToHome} />
+          </motion.div>
+        )}
+        {page === 'status' && (
+          <motion.div
+            key="status"
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <StatusPage onBack={navigateToHome} />
           </motion.div>
         )}
       </AnimatePresence>

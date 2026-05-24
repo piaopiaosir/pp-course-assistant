@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { label: '首页', id: 'home' },
   { label: '下载脚本', id: 'install' },
   { label: '免费次数', id: 'welfare' },
+  { label: '服务监控', id: 'status' },
   { label: '故障排查', id: 'help' },
 ] as const
 
@@ -16,21 +17,23 @@ function scrollToSection(id: string) {
 
 interface NavbarProps {
   className?: string
-  currentPage?: 'home' | 'help' | 'sponsor' | 'welfare'
+  currentPage?: 'home' | 'help' | 'sponsor' | 'welfare' | 'status'
   onNavigateHelp?: () => void
   onNavigateHome?: () => void
   onNavigateSponsor?: () => void
   onNavigateWelfare?: () => void
+  onNavigateStatus?: () => void
 }
 
-export default function Navbar({ className = '', currentPage = 'home', onNavigateHelp, onNavigateHome, onNavigateSponsor, onNavigateWelfare }: NavbarProps) {
+export default function Navbar({ className = '', currentPage = 'home', onNavigateHelp, onNavigateHome, onNavigateSponsor, onNavigateWelfare, onNavigateStatus }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const pendingSectionRef = useRef<string | null>(null)
   const isHelpPage = currentPage === 'help'
   const isSponsorPage = currentPage === 'sponsor'
   const isWelfarePage = currentPage === 'welfare'
-  const isSubPage = isHelpPage || isSponsorPage || isWelfarePage
+  const isStatusPage = currentPage === 'status'
+  const isSubPage = isHelpPage || isSponsorPage || isWelfarePage || isStatusPage
 
   useEffect(() => {
     const handleScroll = () => {
@@ -83,6 +86,9 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
     } else if (id === 'welfare') {
       if (isWelfarePage) return
       if (onNavigateWelfare) onNavigateWelfare()
+    } else if (id === 'status') {
+      if (isStatusPage) return
+      if (onNavigateStatus) onNavigateStatus()
     } else {
       goHomeThenScroll(id)
     }
@@ -114,7 +120,8 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
             const isActive =
               (!isSubPage && item.id === 'home') ||
               (isHelpPage && item.id === 'help') ||
-              (isWelfarePage && item.id === 'welfare')
+              (isWelfarePage && item.id === 'welfare') ||
+              (isStatusPage && item.id === 'status')
             return (
               <button
                 key={item.id}
@@ -153,7 +160,8 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
             const isActive =
               (!isSubPage && item.id === 'home') ||
               (isHelpPage && item.id === 'help') ||
-              (isWelfarePage && item.id === 'welfare')
+              (isWelfarePage && item.id === 'welfare') ||
+              (isStatusPage && item.id === 'status')
             return (
               <button
                 key={item.id}
