@@ -1,0 +1,15 @@
+{
+  "name": "tiku-server2",
+  "version": "1.0.0",
+  "description": "第二台服务器 - 自动同步代码，独立执行题库查询（MySQL版）",
+  "main": "bootstrap.js",
+  "scripts": {
+    "start": "node bootstrap.js",
+    "sync": "node bootstrap.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "hono": "^4.12.18",
+    "mysql2": "^3.22.3"
+  }
+}

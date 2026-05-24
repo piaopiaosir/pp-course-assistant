@@ -1,0 +1,16 @@
+{
+  "name": "pay-proxy",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node pay-proxy.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "puppeteer": "^23.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "ws": "^8.20.0"
+  }
+}
