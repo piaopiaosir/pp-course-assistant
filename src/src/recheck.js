@@ -429,7 +429,7 @@ async function removeDuplicateRecords(ids) {
   const result = await db.prepare(
     `DELETE FROM answer_cache WHERE id IN (${placeholders})`
   ).run(...ids);
-  return result.affectedRows || ids.length;
+  return result.changes || ids.length;
 }
 
 // 导出函数供 routes.js 调用

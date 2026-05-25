@@ -535,8 +535,8 @@ async function saveAnswerToCache(questionHash, question, options, type, answer, 
     // 新增或覆盖缓存，is_correct 使用传入值或 NULL
     const isCorrectValue = isCorrect !== null ? isCorrect : null;
     await db.prepare(
-      "INSERT INTO answer_cache (question_hash, question, options, type, answer, source, is_correct, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE question=VALUES(question), options=VALUES(options), type=VALUES(type), answer=VALUES(answer), source=VALUES(source), is_correct=VALUES(is_correct), created_at=VALUES(created_at)"
-    ).run(questionHash, normalizedQuestion, optionsStr, type, answerStr, source, isCorrectValue, now);
+      "INSERT INTO answer_cache (question_hash, question, options, type, answer, source, is_correct, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE question=?, options=?, type=?, answer=?, source=?, is_correct=?, created_at=?"
+    ).run(questionHash, normalizedQuestion, optionsStr, type, answerStr, source, isCorrectValue, now, normalizedQuestion, optionsStr, type, answerStr, source, isCorrectValue, now);
     
     console.log("保存缓存成功:", questionHash.substring(0, 8), "来源:", source, cached ? "(覆盖旧答案)" : "(新增)", isCorrect !== null ? `is_correct=${isCorrect}` : "");
   } catch (e) {

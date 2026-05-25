@@ -2351,6 +2351,11 @@ app.get('/', async (c) => {
   const workType = c.req.query('workType') || null;
   const masterSecret = getEnv('MASTER_SECRET');
   
+  // 校验 userId 格式（学习通/智慧树用户ID为7-10位纯数字）
+  if (userId && !/^\d{7,10}$/.test(userId)) {
+    return c.json({ code: 400, msg: '非法用户ID' }, 400);
+  }
+  
   // 获取客户端IP
   const clientIp = getClientIp(c);
   
@@ -2378,6 +2383,8 @@ app.get('/', async (c) => {
       const validTokens = await getUserValidTokens(userId);
       if (validTokens.length > 0) {
         // 有token列表 → 验证fid后才返回（防止泄露）
+        // 先尝试绑定fid（如果数据库中没有fid，允许首次绑定）
+        if (fid) await recordUserId(userId, null, fid);
         const fidMatch = await verifyUserFid(userId, fid);
         if (!fidMatch) {
           console.log(`[Token验证] userId=${userId} fid验证失败，拒绝返回token列表`);
@@ -2387,15 +2394,14 @@ app.get('/', async (c) => {
             data: { valid: false }
           }, 403);
         }
-        // fid匹配，记录/更新fid
-        if (fid) await recordUserId(userId, null, fid);
         return c.json({
           code: 401,
           msg: '请输入您的Token，或选择已有Token',
           data: { valid: false, existingTokens: validTokens }
         }, 401);
       }
-      // 老用户但没有有效token → 不需要fid验证（返回空，无泄露风险）
+      // 老用户但没有有效token → 绑定fid（如果数据库中没有fid），然后返回空列表
+      if (fid) await recordUserId(userId, null, fid);
       return c.json({
         code: 401,
         msg: '请输入您的Token',
@@ -2447,6 +2453,8 @@ app.get('/', async (c) => {
     const validTokens = await getUserValidTokens(userId);
     if (validTokens.length > 0) {
       // 有token列表 → 验证fid后才返回（防止泄露）
+      // 先尝试绑定fid（如果数据库中没有fid，允许首次绑定）
+      if (fid) await recordUserId(userId, null, fid);
       const fidMatch = await verifyUserFid(userId, fid);
       if (!fidMatch) {
         console.log(`[Token验证失败] userId=${userId} fid验证失败，拒绝返回token列表`);
@@ -2462,6 +2470,8 @@ app.get('/', async (c) => {
         data: { valid: false, existingTokens: validTokens }
       }, 401);
     }
+    // 绑定fid（如果数据库中没有fid）
+    if (userId && fid) await recordUserId(userId, null, fid);
     return c.json({
       code: 401,
       msg: verifyResult.message,
@@ -2481,6 +2491,11 @@ app.post('/', async (c) => {
     const { token, questionData, verifyAnswer, checkOnly, userId, aiMode, model, enableWebSearch, fid } = body;
     const masterSecret = getEnv('MASTER_SECRET');
     const hunyuanApiKey = getEnv('HUNYUAN_API_KEY');
+    
+    // 校验 userId 格式（学习通/智慧树用户ID为7-10位纯数字）
+    if (userId && !/^\d{7,10}$/.test(userId)) {
+      return c.json({ code: 400, msg: '非法用户ID' }, 400);
+    }
     
     log(`━━━ 开始处理请求 ━━━`);
     log(`enableWebSearch: ${enableWebSearch}`);
@@ -2665,11 +2680,13 @@ app.post('/', async (c) => {
           };
         }
         
-        // 受限模式下增加每日计数
+        // 受限模式下增加每日计数（await 确保计数不丢失）
         if (limitedMode) {
-          incrementLimitedCount(userId, clientIp).catch(e => {
+          try {
+            await incrementLimitedCount(userId, clientIp);
+          } catch (e) {
             console.error('[受限模式] 增加每日计数失败:', e.message);
-          });
+          }
         }
         
         // 更新任务状态为完成

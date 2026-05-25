@@ -262,13 +262,13 @@ const _rateLimitCleanupTimer = setInterval(() => {
 const LIMITED_DAILY_QUOTA = parseInt(process.env.LIMITED_DAILY_QUOTA) || 100; // 受限模式每天限额（可通过环境变量配置）
 const LIMITED_RESET_HOUR = 6; // 刷新时间：早上6点
 
-// 获取今天的"受限模式日期"（6点前算前一天）
+// 获取今天的"受限模式日期"（UTC+8 时区，6点前算前一天）
 function getLimitedDate() {
-  const now = new Date();
-  const hour = now.getHours();
+  const now = new Date(Date.now() + 8 * 3600000); // 转换为 UTC+8
+  const hour = now.getUTCHours();
   // 6点前算前一天的日期
   if (hour < LIMITED_RESET_HOUR) {
-    now.setDate(now.getDate() - 1);
+    now.setUTCDate(now.getUTCDate() - 1);
   }
   return now.toISOString().split('T')[0]; // "2026-03-26"
 }

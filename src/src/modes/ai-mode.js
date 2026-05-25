@@ -440,8 +440,8 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
           'gemini-3.1-flash-lite': 'Gemini-3.1',
           'gemini-3.5-flash': 'Gemini-3.5',
           'Pro/zai-org/GLM-5': 'GLM-5',
-          'Pro/zai-org/GLM-5.1': 'GLM-5.1',
-          'Pro/zai-org/GLM-4.7': 'GLM-4.7',
+          'glm-5.1': 'GLM-5.1',
+          'glm-4.7': 'GLM-4.7',
           'hunyuan-t1-latest': 'hunyuan-t1',
           'hunyuan-standard-256K': 'hunyuan-standard'
         };
