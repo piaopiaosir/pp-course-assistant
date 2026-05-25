@@ -1435,15 +1435,22 @@ async function main() {
   });
 
   // ========== 统计数据：后端每5秒轮询 + SSE 推送 ==========
-  let cachedStats = { code: 200, data: { totalQueries: 0, todayQueries: 0, hourlyRate: 0 } };
+  let cachedStats = null; // null 表示数据尚未就绪，避免 SSE 发送假零值
   const statsClients = new Set(); // SSE 连接池
 
-  // 启动时立即轮询一次，避免初始缓存为0
+  // 启动时立即轮询一次，确保缓存尽快有真实数据
   (async () => {
     try {
       const resp = await fetch('http://43.139.12.117:3000/stats', { signal: AbortSignal.timeout(5000) });
       const data = await resp.json();
-      if (data.code === 200 && data.data) cachedStats = data;
+      if (data.code === 200 && data.data) {
+        cachedStats = data;
+        // 数据就绪后立即推送给所有等待的 SSE 客户端
+        const payload = `data: ${JSON.stringify(data.data)}\n\n`;
+        for (const client of statsClients) {
+          try { client.write(payload); } catch (_) { statsClients.delete(client); }
+        }
+      }
     } catch (_) {}
   })();
 
@@ -1473,16 +1480,93 @@ async function main() {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     });
-    // 立即发送当前缓存数据
-    res.write(`data: ${JSON.stringify(cachedStats.data)}\n\n`);
+    // 有缓存数据立即推送，没有则等轮询来了再推
+    if (cachedStats && cachedStats.data) {
+      res.write(`data: ${JSON.stringify(cachedStats.data)}\n\n`);
+    }
     statsClients.add(res);
-    req.on('close', () => statsClients.delete(res));
+    // 心跳保活
+    const hb = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch (_) { statsClients.delete(res); clearInterval(hb); }
+    }, 15000);
+    req.on('close', () => { clearInterval(hb); statsClients.delete(res); });
   });
 
   // 普通查询接口（兼容）
   app.get('/api/proxy/stats', (req, res) => {
-    res.json(cachedStats);
+    if (cachedStats) {
+      res.json(cachedStats);
+    } else {
+      res.status(503).json({ code: 503, msg: '统计数据尚未就绪' });
+    }
+  });
+
+  // ========== Uptime Kuma 监控数据：后端每60秒轮询 + SSE 推送 ==========
+  const UPTIME_BASE = 'https://uptime.piao.one';
+  const UPTIME_SLUG = 'tiku';
+  let cachedUptimeData = null;
+  const uptimeClients = new Set(); // SSE 连接池
+
+  async function fetchUptimeData() {
+    try {
+      const [statusRes, heartbeatRes] = await Promise.all([
+        fetch(`${UPTIME_BASE}/api/status-page/${UPTIME_SLUG}`, { signal: AbortSignal.timeout(10000) }),
+        fetch(`${UPTIME_BASE}/api/status-page/heartbeat/${UPTIME_SLUG}`, { signal: AbortSignal.timeout(10000) }),
+      ]);
+      if (!statusRes.ok || !heartbeatRes.ok) {
+        log(`[监控轮询] API 返回 ${statusRes.status}/${heartbeatRes.status}`);
+        return;
+      }
+      const statusData = await statusRes.json();
+      const heartbeatData = await heartbeatRes.json();
+      cachedUptimeData = { statusData, heartbeatData };
+      // 推送给所有 SSE 客户端
+      const payload = `data: ${JSON.stringify(cachedUptimeData)}\n\n`;
+      for (const client of uptimeClients) {
+        try { client.write(payload); } catch (_) { uptimeClients.delete(client); }
+      }
+    } catch (err) {
+      log(`[监控轮询失败] ${err.message}`);
+    }
+  }
+
+  // 启动时立即拉取一次
+  fetchUptimeData();
+  // 每60秒轮询
+  setInterval(fetchUptimeData, 60000);
+
+  // SSE 实时推送端点
+  app.get('/api/proxy/uptime-stream', (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    // 立即发送当前缓存数据
+    if (cachedUptimeData) {
+      res.write(`data: ${JSON.stringify(cachedUptimeData)}\n\n`);
+    }
+    uptimeClients.add(res);
+    // 心跳
+    const heartbeat = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch (_) { uptimeClients.delete(res); clearInterval(heartbeat); }
+    }, 15000);
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      uptimeClients.delete(res);
+    });
+  });
+
+  // 普通查询接口（兼容）
+  app.get('/api/proxy/uptime', (req, res) => {
+    if (cachedUptimeData) {
+      res.json(cachedUptimeData);
+    } else {
+      res.status(503).json({ error: '监控数据尚未就绪' });
+    }
   });
 
   // 免费福利领取 - IP频率限制（同一IP每分钟最多10次）

@@ -15,7 +15,7 @@ interface StatsData {
 export default function Hero() {
   const ref = useRef<HTMLDivElement>(null)
   const [ready, setReady] = useState(false)
-  const [stats, setStats] = useState<StatsData>({ totalQueries: 0, todayQueries: 0, hourlyRate: 0 })
+  const [stats, setStats] = useState<StatsData | null>(null)
 
   useEffect(() => {
     // 延迟一帧，确保 DOM 挂载完毕，避免 useScroll 读取 null ref
@@ -135,10 +135,10 @@ export default function Hero() {
           transition={{ duration: 0.6, delay: 0.9 }}
           className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap items-center justify-center gap-6 sm:gap-8 md:gap-16"
         >
-          {[
-            { value: stats.totalQueries.toLocaleString(), label: '总查询次数' },
-            { value: stats.todayQueries.toLocaleString(), label: '今日查询次数' },
-            { value: `${stats.hourlyRate}/h`, label: '近一小时查询速率' },
+          {[ 
+            { value: stats ? stats.totalQueries.toLocaleString() : '—', label: '总查询次数' },
+            { value: stats ? stats.todayQueries.toLocaleString() : '—', label: '今日查询次数' },
+            { value: stats ? `${stats.hourlyRate}/h` : '—', label: '近一小时查询速率' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
               <div className="font-heading text-3xl md:text-4xl font-semibold text-brand-dark">

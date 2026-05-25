@@ -1,16 +1,21 @@
-import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Clock, Activity } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, CheckCircle2, XCircle, Clock, Activity } from 'lucide-react'
 import { motion } from 'framer-motion'
 
-const UPTIME_BASE = 'https://uptime.piao.one'
-const STATUS_SLUG = 'tiku'
-const API_KEY = 'uk1_L7l1KJ56-y3dAyiYcVlkkVNwScoMxFAgH2-yyxGe'
+const SSE_URL = '/api/proxy/uptime-stream'
 
 // API 返回时间不含时区，需要转为本地时间显示
 function formatTime(timeStr: string) {
   if (!timeStr) return ''
   const date = new Date(timeStr + ' UTC')
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
+
+interface Heartbeat {
+  status: number
+  time: string
+  msg: string
+  ping: number
 }
 
 interface MonitorInfo {
@@ -27,17 +32,8 @@ interface MonitorGroup {
   monitorList: MonitorInfo[]
 }
 
-interface Heartbeat {
-  status: number
-  time: string
-  msg: string
-  ping: number
-}
-
 interface StatusData {
-  config: {
-    title: string
-  }
+  config: { title: string }
   publicGroupList: MonitorGroup[]
   incidents: any[]
 }
@@ -54,7 +50,6 @@ interface MonitorStatus {
   status: 'up' | 'down' | 'pending'
   uptime: number
   ping: number
-  lastCheck: string
   heartbeats: Heartbeat[]
 }
 
@@ -65,74 +60,59 @@ interface StatusPageProps {
 export default function StatusPage({ onBack }: StatusPageProps) {
   const [monitors, setMonitors] = useState<MonitorStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdate, setLastUpdate] = useState('')
+  const eventSourceRef = useRef<EventSource | null>(null)
 
-  const fetchData = useCallback(async () => {
-    try {
-      setError(null)
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${API_KEY}`,
+  // 解析后端推送的数据
+  const processData = (statusData: StatusData, heartbeatData: HeartbeatData) => {
+    const result: MonitorStatus[] = []
+    for (const group of statusData.publicGroupList) {
+      for (const monitor of group.monitorList) {
+        const beats = heartbeatData.heartbeatList[String(monitor.id)] || []
+        const latestBeat = beats[0]
+        const uptimeKey = `${monitor.id}_24`
+        const uptime = heartbeatData.uptimeList[uptimeKey] ?? 1
+        const recentBeats = beats.slice(0, 100)
+
+        result.push({
+          id: monitor.id,
+          name: monitor.name,
+          group: group.name,
+          status: latestBeat ? (latestBeat.status === 1 ? 'up' : latestBeat.status === 0 ? 'down' : 'pending') : 'pending',
+          uptime: Math.round(uptime * 10000) / 100,
+          ping: latestBeat?.ping ?? 0,
+          heartbeats: recentBeats,
+        })
       }
-
-      const [statusRes, heartbeatRes] = await Promise.all([
-        fetch(`${UPTIME_BASE}/api/status-page/${STATUS_SLUG}`, { headers }),
-        fetch(`${UPTIME_BASE}/api/status-page/heartbeat/${STATUS_SLUG}`, { headers }),
-      ])
-
-      if (!statusRes.ok || !heartbeatRes.ok) {
-        throw new Error(`API 请求失败: ${statusRes.status}`)
-      }
-
-      const statusData: StatusData = await statusRes.json()
-      const heartbeatData: HeartbeatData = await heartbeatRes.json()
-
-      const result: MonitorStatus[] = []
-
-      for (const group of statusData.publicGroupList) {
-        for (const monitor of group.monitorList) {
-          const beats = heartbeatData.heartbeatList[String(monitor.id)] || []
-          const latestBeat = beats[0]
-          const uptimeKey = `${monitor.id}_24`
-          const uptime = heartbeatData.uptimeList[uptimeKey] ?? 1
-
-          // 取最近100条心跳用于显示条形图
-          const recentBeats = beats.slice(0, 100).reverse()
-
-          result.push({
-            id: monitor.id,
-            name: monitor.name,
-            group: group.name,
-            status: latestBeat ? (latestBeat.status === 1 ? 'up' : latestBeat.status === 0 ? 'down' : 'pending') : 'pending',
-            uptime: Math.round(uptime * 10000) / 100,
-            ping: latestBeat?.ping ?? 0,
-            lastCheck: latestBeat?.time ?? '',
-            heartbeats: recentBeats,
-          })
-        }
-      }
-
-      setMonitors(result)
-      setLastUpdate(new Date().toLocaleTimeString('zh-CN'))
-    } catch (err: any) {
-      setError(err.message || '获取监控数据失败')
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
     }
-  }, [])
+    setMonitors(result)
+    setLastUpdate(new Date().toLocaleTimeString('zh-CN'))
+  }
 
   useEffect(() => {
-    fetchData()
-    const timer = setInterval(fetchData, 60000)
-    return () => clearInterval(timer)
-  }, [fetchData])
+    const es = new EventSource(SSE_URL)
+    eventSourceRef.current = es
 
-  const handleRefresh = () => {
-    setIsRefreshing(true)
-    fetchData()
-  }
+    es.onmessage = (event) => {
+      try {
+        const { statusData, heartbeatData } = JSON.parse(event.data)
+        processData(statusData, heartbeatData)
+        setIsLoading(false)
+        setError(null)
+      } catch {}
+    }
+
+    es.onerror = () => {
+      es.close()
+      setError('监控数据连接失败')
+      setIsLoading(false)
+    }
+
+    return () => {
+      es.close()
+    }
+  }, [])
 
   const allUp = monitors.length > 0 && monitors.every(m => m.status === 'up')
 
@@ -181,9 +161,6 @@ export default function StatusPage({ onBack }: StatusPageProps) {
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
             <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
             <p className="text-red-600 font-body text-sm">{error}</p>
-            <button onClick={handleRefresh} className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-body hover:bg-red-600 transition-colors cursor-pointer">
-              重试
-            </button>
           </div>
         </div>
       </div>
@@ -236,14 +213,11 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-1.5 text-brand-dark/40 hover:text-brand-orange transition-colors text-xs font-body cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {lastUpdate && `更新于 ${lastUpdate}`}
-            </button>
+            {lastUpdate && (
+              <span className="text-xs font-body text-brand-dark/30">
+                更新于 {lastUpdate}
+              </span>
+            )}
           </div>
         </div>
 

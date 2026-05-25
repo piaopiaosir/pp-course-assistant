@@ -12,11 +12,6 @@ export default defineConfig({
         ws: true,
         timeout: 0,
       },
-      '/api/status-page': {
-        target: 'https://uptime.piao.one',
-        changeOrigin: true,
-        secure: true,
-      },
     },
   },
 })
