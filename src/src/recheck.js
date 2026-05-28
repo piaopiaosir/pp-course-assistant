@@ -447,7 +447,7 @@ if (require.main === module) {
     process.exit(1);
   }).finally(() => {
     // 关闭数据库连接
-    try { pool?.end?.(); } catch(e) {}
+    try { pool?.end?.(); } catch(e) { console.warn('关闭数据库连接失败:', e.message); }
     console.log('\n✓ 数据库连接已关闭');
   });
 }

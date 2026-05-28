@@ -247,7 +247,7 @@ function normalizeOptions(options) {
         if (Array.isArray(parsed)) {
           return normalizeOptions(parsed);
         }
-      } catch (e) {}
+      } catch (e) { console.warn('解析选项JSON失败:', optionsStr.substring(0, 50)); }
     }
     
     // 换行符分隔（优先级最高）

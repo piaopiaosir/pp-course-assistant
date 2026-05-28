@@ -464,6 +464,128 @@ app.get('/internal/code', async (c) => {
   }
 });
 
+// 获取管理面板统计数据（公共函数）
+async function getAdminStats() {
+  const globalStats = await getGlobalStats();
+  const userStats = await db.prepare(`
+    SELECT 
+      COUNT(*) as total_users,
+      SUM(CASE WHEN user_type = 0 THEN 1 ELSE 0 END) as paid_users,
+      SUM(CASE WHEN user_type = 1 THEN 1 ELSE 0 END) as free_users
+    FROM user_ids
+  `).get();
+  
+  const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);
+  const tokenStats = await db.prepare(`
+    SELECT 
+      COUNT(*) as total_tokens,
+      COUNT(CASE WHEN is_blacklisted = 0 AND last_used > ? THEN 1 END) as active_tokens,
+      SUM(remaining_count) as total_remaining,
+      SUM(CASE WHEN is_blacklisted = 0 AND last_used > ? THEN remaining_count ELSE 0 END) as active_remaining,
+      AVG(remaining_count) as avg_remaining
+    FROM tokens
+  `).get(threeDaysAgo, threeDaysAgo);
+  
+  const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
+  const hourlyRates = {
+    tiku: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'tiku' AND created_at > ?`).get(oneHourAgo)).count,
+    hivenet: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'hivenet' AND created_at > ?`).get(oneHourAgo)).count,
+    yanxi: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'yanxi' AND created_at > ?`).get(oneHourAgo)).count,
+    ucuc: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'ucuc' AND created_at > ?`).get(oneHourAgo)).count,
+    ai: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'ai' AND created_at > ?`).get(oneHourAgo)).count,
+    cache: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'cache' AND created_at > ?`).get(oneHourAgo)).count,
+    server1: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE server_id = 'server1' AND created_at > ?`).get(oneHourAgo)).count,
+    server2: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE server_id = 'server2' AND created_at > ?`).get(oneHourAgo)).count,
+    get total() { return this.tiku + this.hivenet + this.yanxi + this.ucuc + this.ai + this.cache; }
+  };
+  
+  const cacheStats = await db.prepare(`
+    SELECT 
+      COUNT(*) as total_cached,
+      COUNT(CASE WHEN source = 'tiku' THEN 1 END) as tiku_cached,
+      COUNT(CASE WHEN source = 'hivenet' THEN 1 END) as hivenet_cached,
+      COUNT(CASE WHEN source = 'yanxi' THEN 1 END) as yanxi_cached,
+      COUNT(CASE WHEN source = 'ucuc' THEN 1 END) as ucuc_cached,
+      COUNT(CASE WHEN source NOT IN ('tiku', 'hivenet', 'yanxi', 'ucuc') THEN 1 END) as ai_cached,
+      COUNT(CASE WHEN is_correct = 1 THEN 1 END) as verified_correct,
+      COUNT(CASE WHEN is_correct = 0 THEN 1 END) as verified_wrong
+    FROM answer_cache
+  `).get();
+  
+  const recentCache = await db.prepare(`
+    SELECT question, type, answer, source, is_correct, created_at
+    FROM answer_cache ORDER BY created_at DESC LIMIT 10
+  `).all();
+  
+  const topUsers = await db.prepare(`
+    SELECT token, user_id, remaining_count, created_at, last_used
+    FROM tokens WHERE is_blacklisted = 0 ORDER BY last_used DESC LIMIT 10
+  `).all();
+  
+  const allUsers = await db.prepare(`SELECT created_at, user_type FROM user_ids ORDER BY created_at ASC`).all();
+  const now = new Date();
+  const utc8Now = new Date(now.getTime() + 8 * 3600000);
+  const userTrends = { days: [], total: [], paid: [], free: [] };
+  
+  for (let i = 29; i >= 0; i--) {
+    const dayEnd = new Date(utc8Now);
+    dayEnd.setDate(dayEnd.getDate() - i);
+    dayEnd.setHours(23, 59, 59, 999);
+    const endTs = Math.floor((dayEnd.getTime() - 8 * 3600000) / 1000);
+    const label = String(dayEnd.getMonth() + 1).padStart(2, '0') + '-' + String(dayEnd.getDate()).padStart(2, '0');
+    let dayTotal = 0, dayPaid = 0, dayFree = 0;
+    for (const u of allUsers) {
+      if (u.created_at <= endTs) {
+        dayTotal++;
+        if (u.user_type === 0) dayPaid++;
+        else dayFree++;
+      }
+    }
+    userTrends.days.push(label);
+    userTrends.total.push(dayTotal);
+    userTrends.paid.push(dayPaid);
+    userTrends.free.push(dayFree);
+  }
+  
+  const queryTrends = { hours: [], total: [], server1: [], server2: [], tiku: [], hivenet: [], yanxi: [], ucuc: [], ai: [], cache: [] };
+  const nowTs = Date.now();
+  
+  for (let i = 23; i >= 0; i--) {
+    const hourStart = new Date(nowTs - i * 3600000);
+    hourStart.setMinutes(0, 0, 0);
+    const startTs = Math.floor(hourStart.getTime() / 1000);
+    const endTs = startTs + 3600;
+    const label = String(hourStart.getHours()).padStart(2, '0') + ':00';
+    
+    const stats = await db.prepare(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN server_id = 'server1' THEN 1 ELSE 0 END) as server1,
+        SUM(CASE WHEN server_id = 'server2' THEN 1 ELSE 0 END) as server2,
+        SUM(CASE WHEN source = 'cache' THEN 1 ELSE 0 END) as cache,
+        SUM(CASE WHEN source = 'tiku' THEN 1 ELSE 0 END) as tiku,
+        SUM(CASE WHEN source = 'hivenet' THEN 1 ELSE 0 END) as hivenet,
+        SUM(CASE WHEN source = 'yanxi' THEN 1 ELSE 0 END) as yanxi,
+        SUM(CASE WHEN source = 'ucuc' THEN 1 ELSE 0 END) as ucuc,
+        SUM(CASE WHEN source NOT IN ('cache', 'tiku', 'hivenet', 'yanxi', 'ucuc') THEN 1 ELSE 0 END) as ai
+      FROM query_logs WHERE created_at >= ? AND created_at < ?
+    `).get(startTs, endTs);
+    
+    queryTrends.hours.push(label);
+    queryTrends.total.push(stats.total || 0);
+    queryTrends.server1.push(stats.server1 || 0);
+    queryTrends.server2.push(stats.server2 || 0);
+    queryTrends.cache.push(stats.cache || 0);
+    queryTrends.tiku.push(stats.tiku || 0);
+    queryTrends.hivenet.push(stats.hivenet || 0);
+    queryTrends.yanxi.push(stats.yanxi || 0);
+    queryTrends.ucuc.push(stats.ucuc || 0);
+    queryTrends.ai.push(stats.ai || 0);
+  }
+  
+  return { globalStats, userStats, tokenStats, cacheStats, recentCache, topUsers, hourlyRates, userTrends, queryTrends };
+}
+
 // 管理页面 - 显示登录页（支持session免登录）
 app.get('/admin', async (c) => {
   const sessionId = getSessionFromCookie(c);
@@ -476,124 +598,8 @@ app.get('/admin', async (c) => {
     logAdminAccess(ip, sessionId, 'view', userAgent).catch(() => {});
     
     try {
-      const globalStats = await getGlobalStats();
-      const userStats = await db.prepare(`
-        SELECT 
-          COUNT(*) as total_users,
-          SUM(CASE WHEN user_type = 0 THEN 1 ELSE 0 END) as paid_users,
-          SUM(CASE WHEN user_type = 1 THEN 1 ELSE 0 END) as free_users
-        FROM user_ids
-      `).get();
-      
-      const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);
-      const tokenStats = await db.prepare(`
-        SELECT 
-          COUNT(*) as total_tokens,
-          COUNT(CASE WHEN is_blacklisted = 0 AND last_used > ? THEN 1 END) as active_tokens,
-          SUM(remaining_count) as total_remaining,
-          SUM(CASE WHEN is_blacklisted = 0 AND last_used > ? THEN remaining_count ELSE 0 END) as active_remaining,
-          AVG(remaining_count) as avg_remaining
-        FROM tokens
-      `).get(threeDaysAgo, threeDaysAgo);
-      
-      const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
-      const hourlyRates = {
-        tiku: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'tiku' AND created_at > ?`).get(oneHourAgo)).count,
-        hivenet: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'hivenet' AND created_at > ?`).get(oneHourAgo)).count,
-        yanxi: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'yanxi' AND created_at > ?`).get(oneHourAgo)).count,
-        ucuc: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'ucuc' AND created_at > ?`).get(oneHourAgo)).count,
-        ai: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'ai' AND created_at > ?`).get(oneHourAgo)).count,
-        cache: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'cache' AND created_at > ?`).get(oneHourAgo)).count,
-        server1: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE server_id = 'server1' AND created_at > ?`).get(oneHourAgo)).count,
-        server2: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE server_id = 'server2' AND created_at > ?`).get(oneHourAgo)).count,
-        get total() { return this.tiku + this.hivenet + this.yanxi + this.ucuc + this.ai + this.cache; }
-      };
-      
-      const cacheStats = await db.prepare(`
-        SELECT 
-          COUNT(*) as total_cached,
-          COUNT(CASE WHEN source = 'tiku' THEN 1 END) as tiku_cached,
-          COUNT(CASE WHEN source = 'hivenet' THEN 1 END) as hivenet_cached,
-          COUNT(CASE WHEN source = 'yanxi' THEN 1 END) as yanxi_cached,
-          COUNT(CASE WHEN source = 'ucuc' THEN 1 END) as ucuc_cached,
-          COUNT(CASE WHEN source NOT IN ('tiku', 'hivenet', 'yanxi', 'ucuc') THEN 1 END) as ai_cached,
-          COUNT(CASE WHEN is_correct = 1 THEN 1 END) as verified_correct,
-          COUNT(CASE WHEN is_correct = 0 THEN 1 END) as verified_wrong
-        FROM answer_cache
-      `).get();
-      
-      const recentCache = await db.prepare(`
-        SELECT question, type, answer, source, is_correct, created_at
-        FROM answer_cache ORDER BY created_at DESC LIMIT 10
-      `).all();
-      
-      const topUsers = await db.prepare(`
-        SELECT token, user_id, remaining_count, created_at, last_used
-        FROM tokens WHERE is_blacklisted = 0 ORDER BY last_used DESC LIMIT 10
-      `).all();
-      
-      const allUsers = await db.prepare(`SELECT created_at, user_type FROM user_ids ORDER BY created_at ASC`).all();
-      const now = new Date();
-      const utc8Now = new Date(now.getTime() + 8 * 3600000);
-      const userTrends = { days: [], total: [], paid: [], free: [] };
-      
-      for (let i = 29; i >= 0; i--) {
-        const dayEnd = new Date(utc8Now);
-        dayEnd.setDate(dayEnd.getDate() - i);
-        dayEnd.setHours(23, 59, 59, 999);
-        const endTs = Math.floor((dayEnd.getTime() - 8 * 3600000) / 1000);
-        const label = String(dayEnd.getMonth() + 1).padStart(2, '0') + '-' + String(dayEnd.getDate()).padStart(2, '0');
-        let dayTotal = 0, dayPaid = 0, dayFree = 0;
-        for (const u of allUsers) {
-          if (u.created_at <= endTs) {
-            dayTotal++;
-            if (u.user_type === 0) dayPaid++;
-            else dayFree++;
-          }
-        }
-        userTrends.days.push(label);
-        userTrends.total.push(dayTotal);
-        userTrends.paid.push(dayPaid);
-        userTrends.free.push(dayFree);
-      }
-      
-      const queryTrends = { hours: [], total: [], server1: [], server2: [], tiku: [], hivenet: [], yanxi: [], ucuc: [], ai: [], cache: [] };
-      const nowTs = Date.now();
-      
-      for (let i = 23; i >= 0; i--) {
-        const hourStart = new Date(nowTs - i * 3600000);
-        hourStart.setMinutes(0, 0, 0);
-        const startTs = Math.floor(hourStart.getTime() / 1000);
-        const endTs = startTs + 3600;
-        const label = String(hourStart.getHours()).padStart(2, '0') + ':00';
-        
-        const stats = await db.prepare(`
-          SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN server_id = 'server1' THEN 1 ELSE 0 END) as server1,
-            SUM(CASE WHEN server_id = 'server2' THEN 1 ELSE 0 END) as server2,
-            SUM(CASE WHEN source = 'cache' THEN 1 ELSE 0 END) as cache,
-            SUM(CASE WHEN source = 'tiku' THEN 1 ELSE 0 END) as tiku,
-            SUM(CASE WHEN source = 'hivenet' THEN 1 ELSE 0 END) as hivenet,
-            SUM(CASE WHEN source = 'yanxi' THEN 1 ELSE 0 END) as yanxi,
-            SUM(CASE WHEN source = 'ucuc' THEN 1 ELSE 0 END) as ucuc,
-            SUM(CASE WHEN source NOT IN ('cache', 'tiku', 'hivenet', 'yanxi', 'ucuc') THEN 1 ELSE 0 END) as ai
-          FROM query_logs WHERE created_at >= ? AND created_at < ?
-        `).get(startTs, endTs);
-        
-        queryTrends.hours.push(label);
-        queryTrends.total.push(stats.total || 0);
-        queryTrends.server1.push(stats.server1 || 0);
-        queryTrends.server2.push(stats.server2 || 0);
-        queryTrends.cache.push(stats.cache || 0);
-        queryTrends.tiku.push(stats.tiku || 0);
-        queryTrends.hivenet.push(stats.hivenet || 0);
-        queryTrends.yanxi.push(stats.yanxi || 0);
-        queryTrends.ucuc.push(stats.ucuc || 0);
-        queryTrends.ai.push(stats.ai || 0);
-      }
-      
-      return c.html(generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUsers, globalStats, hourlyRates, userTrends, queryTrends));
+      const stats = await getAdminStats();
+      return c.html(generateAdminHTML(stats.userStats, stats.tokenStats, stats.cacheStats, stats.recentCache, stats.topUsers, stats.globalStats, stats.hourlyRates, stats.userTrends, stats.queryTrends));
     } catch (e) {
       return c.text(`管理页面加载失败: ${e.message}`, 500);
     }
@@ -636,170 +642,8 @@ app.post('/admin', async (c) => {
   console.log(`[管理登录] ${ip} 登录成功，session=${sessionId.substring(0,8)}...`);
   
   try {
-    // 获取全局统计
-    const globalStats = await getGlobalStats();
-    
-    // 用户统计（从 user_ids 表统计）
-    const userStats = await db.prepare(`
-      SELECT 
-        COUNT(*) as total_users,
-        SUM(CASE WHEN user_type = 0 THEN 1 ELSE 0 END) as paid_users,
-        SUM(CASE WHEN user_type = 1 THEN 1 ELSE 0 END) as free_users
-      FROM user_ids
-    `).get();
-    
-    // Token统计（从 tokens 表统计）
-    const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);  // 3天前的时间戳
-    
-    const tokenStats = await db.prepare(`
-      SELECT 
-        COUNT(*) as total_tokens,
-        COUNT(CASE WHEN is_blacklisted = 0 AND last_used > ? THEN 1 END) as active_tokens,
-        SUM(remaining_count) as total_remaining,
-        SUM(CASE WHEN is_blacklisted = 0 AND last_used > ? THEN remaining_count ELSE 0 END) as active_remaining,
-        AVG(remaining_count) as avg_remaining
-      FROM tokens
-    `).get(threeDaysAgo, threeDaysAgo);
-    
-    // 各数据源调用速率（最近1小时）
-    const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
-    const hourlyRates = {
-      tiku: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'tiku' AND created_at > ?`).get(oneHourAgo)).count,
-      hivenet: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'hivenet' AND created_at > ?`).get(oneHourAgo)).count,
-      yanxi: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'yanxi' AND created_at > ?`).get(oneHourAgo)).count,
-      ucuc: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'ucuc' AND created_at > ?`).get(oneHourAgo)).count,
-      ai: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'ai' AND created_at > ?`).get(oneHourAgo)).count,
-      cache: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE source = 'cache' AND created_at > ?`).get(oneHourAgo)).count,
-      server1: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE server_id = 'server1' AND created_at > ?`).get(oneHourAgo)).count,
-      server2: (await db.prepare(`SELECT COUNT(*) as count FROM query_logs WHERE server_id = 'server2' AND created_at > ?`).get(oneHourAgo)).count,
-      get total() { return this.tiku + this.hivenet + this.yanxi + this.ucuc + this.ai + this.cache; }
-    };
-    
-    // 缓存统计
-    // AI来源统计：排除所有题库来源(tiku/hivenet/yanxi/ucuc)，因为AI返回的source是具体模型名(如DeepSeek-V3.2、kimi-k2.6)
-    const cacheStats = await db.prepare(`
-      SELECT 
-        COUNT(*) as total_cached,
-        COUNT(CASE WHEN source = 'tiku' THEN 1 END) as tiku_cached,
-        COUNT(CASE WHEN source = 'hivenet' THEN 1 END) as hivenet_cached,
-        COUNT(CASE WHEN source = 'yanxi' THEN 1 END) as yanxi_cached,
-        COUNT(CASE WHEN source = 'ucuc' THEN 1 END) as ucuc_cached,
-        COUNT(CASE WHEN source NOT IN ('tiku', 'hivenet', 'yanxi', 'ucuc') THEN 1 END) as ai_cached,
-        COUNT(CASE WHEN is_correct = 1 THEN 1 END) as verified_correct,
-        COUNT(CASE WHEN is_correct = 0 THEN 1 END) as verified_wrong
-      FROM answer_cache
-    `).get();
-    
-    // 最近缓存
-    const recentCache = await db.prepare(`
-      SELECT 
-        question,
-        type,
-        answer,
-        source,
-        is_correct,
-        created_at
-      FROM answer_cache
-      ORDER BY created_at DESC
-      LIMIT 10
-    `).all();
-    
-    // 活跃用户
-    const topUsers = await db.prepare(`
-      SELECT 
-        token,
-        user_id,
-        remaining_count,
-        created_at,
-        last_used
-      FROM tokens
-      WHERE is_blacklisted = 0
-      ORDER BY last_used DESC
-      LIMIT 10
-    `).all();
-    
-    // 用户增长趋势（最近30天累计用户数）
-    // 查询所有用户，用 JS 按 UTC+8 时区处理
-    const allUsers = await db.prepare(`
-      SELECT created_at, user_type FROM user_ids ORDER BY created_at ASC
-    `).all();
-    
-    // 生成最近30天的日期范围（UTC+8）
-    const now = new Date();
-    // 当前 UTC+8 时间
-    const utc8Now = new Date(now.getTime() + 8 * 3600000);
-    
-    const userTrends = { days: [], total: [], paid: [], free: [] };
-    
-    for (let i = 29; i >= 0; i--) {
-      // 第 i 天前的日期（UTC+8）
-      const dayEnd = new Date(utc8Now);
-      dayEnd.setDate(dayEnd.getDate() - i);
-      dayEnd.setHours(23, 59, 59, 999);
-      
-      // 转回 UTC 时间戳用于比较
-      const endTs = Math.floor((dayEnd.getTime() - 8 * 3600000) / 1000);
-      
-      const label = String(dayEnd.getMonth() + 1).padStart(2, '0') + '-' + String(dayEnd.getDate()).padStart(2, '0');
-      
-      // 累计到当天结束时的用户数
-      let dayTotal = 0, dayPaid = 0, dayFree = 0;
-      for (const u of allUsers) {
-        if (u.created_at <= endTs) {
-          dayTotal++;
-          if (u.user_type === 0) dayPaid++;
-          else dayFree++;
-        }
-      }
-      
-      userTrends.days.push(label);
-      userTrends.total.push(dayTotal);
-      userTrends.paid.push(dayPaid);
-      userTrends.free.push(dayFree);
-    }
-    
-    // 查询速率趋势（最近24小时，按小时分组）
-    const queryTrends = { 
-      hours: [], 
-      total: [], server1: [], server2: [],
-      tiku: [], hivenet: [], yanxi: [], ucuc: [], ai: [], cache: [] 
-    };
-    const nowTs = Date.now();
-    
-    for (let i = 23; i >= 0; i--) {
-      const hourStart = new Date(nowTs - i * 3600000);
-      hourStart.setMinutes(0, 0, 0);
-      const startTs = Math.floor(hourStart.getTime() / 1000);
-      const endTs = startTs + 3600;
-      
-      const label = String(hourStart.getHours()).padStart(2, '0') + ':00';
-      
-      const stats = await db.prepare(`
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN server_id = 'server1' THEN 1 ELSE 0 END) as server1,
-          SUM(CASE WHEN server_id = 'server2' THEN 1 ELSE 0 END) as server2,
-          SUM(CASE WHEN source = 'cache' THEN 1 ELSE 0 END) as cache,
-          SUM(CASE WHEN source = 'tiku' THEN 1 ELSE 0 END) as tiku,
-          SUM(CASE WHEN source = 'hivenet' THEN 1 ELSE 0 END) as hivenet,
-          SUM(CASE WHEN source = 'yanxi' THEN 1 ELSE 0 END) as yanxi,
-          SUM(CASE WHEN source = 'ucuc' THEN 1 ELSE 0 END) as ucuc,
-          SUM(CASE WHEN source NOT IN ('cache', 'tiku', 'hivenet', 'yanxi', 'ucuc') THEN 1 ELSE 0 END) as ai
-        FROM query_logs
-        WHERE created_at >= ? AND created_at < ?
-      `).get(startTs, endTs);
-      
-      queryTrends.hours.push(label);
-      queryTrends.total.push(stats.total || 0);
-      queryTrends.server1.push(stats.server1 || 0);
-      queryTrends.server2.push(stats.server2 || 0);
-      queryTrends.cache.push(stats.cache || 0);
-      queryTrends.tiku.push(stats.tiku || 0);
-      queryTrends.hivenet.push(stats.hivenet || 0);
-      queryTrends.yanxi.push(stats.yanxi || 0);
-      queryTrends.ucuc.push(stats.ucuc || 0);
-      queryTrends.ai.push(stats.ai || 0);
-    }
+    // 使用公共函数获取统计数据
+    const stats = await getAdminStats();
     
     // 登录成功后重定向到 GET /admin，避免刷新时重复提交表单
     const thirtyDays = 30 * 24 * 60 * 60;

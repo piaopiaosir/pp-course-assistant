@@ -1852,11 +1852,11 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
                       status.innerHTML='<span style="color:#4ade80">查重完成! 处理'+data.totalGroups+'组，删除'+data.removed+'条重复</span>';
                     }
                   }
-                } catch (e) {}
+                } catch (e) { console.error('解析SSE数据失败:', e); }
               }
             }
             readStream();
-          }).catch(function(){});
+          }).catch(function(err){ console.error('SSE连接失败:', err); });
         }
         readStream();
       })
@@ -2063,13 +2063,23 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         .catch(e => alert('加载失败: ' + e.message));
     }
     
+    function escapeHtml(text) {
+      if (text === null || text === undefined) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+    
     function renderTable(data) {
       const thead = document.getElementById('tableHead');
       const tbody = document.getElementById('tableBody');
       const pageInfo = document.getElementById('pageInfo');
       const pagination = document.getElementById('pagination');
       
-      thead.innerHTML = '<tr>' + data.columns.map(col => '<th>' + col + '</th>').join('') + '<th>操作</th></tr>';
+      thead.innerHTML = '<tr>' + data.columns.map(col => '<th>' + escapeHtml(col) + '</th>').join('') + '<th>操作</th></tr>';
       
       if (data.rows.length === 0) {
         tbody.innerHTML = '<tr><td colspan="100" style="text-align:center;color:#999;">暂无数据</td></tr>';
@@ -2081,10 +2091,10 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             if (typeof val === 'number' && (col.includes('_at') || col === 'last_used' || col === 'ban_until')) {
               var d=new Date(val*1000); val=d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+' '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
             }
-            return '<td>' + val + '</td>';
+            return '<td>' + escapeHtml(val) + '</td>';
           }).join('');
           const rowId = row.id || row.token || row.user_id || '';
-          const safeRowId = String(rowId).replace(/'/g, '\\x27').replace(/"/g, '&quot;');
+          const safeRowId = escapeHtml(rowId).replace(/'/g, '\\x27').replace(/"/g, '&quot;');
           return '<tr>' + cells + '<td><button class="edit-btn" onclick="openEditModal(\\x27' + currentTable + '\\x27,\\x27' + safeRowId + '\\x27, this)">编辑</button><button class="delete-btn" onclick="deleteRecord(\\x27' + currentTable + '\\x27,\\x27' + safeRowId + '\\x27)">删除</button></td></tr>';
         }).join('');
       }
@@ -2160,7 +2170,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         if (col === 'options' && val && typeof val === 'string' && val.startsWith('[')) {
           try {
             val = JSON.stringify(JSON.parse(val), null, 2);
-          } catch (e) {}
+          } catch (e) { console.error('JSON字段格式化失败:', e); }
         }
         
         // 计算字段不允许编辑
@@ -2307,7 +2317,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             document.getElementById('recheckLogPanel').style.display = 'block';
             connectRecheckSSE();
           }
-        }).catch(function() {});
+        }).catch(function(err){ console.error('获取重查状态失败:', err); });
 
       // 检查查重任务
       fetch('/admin/dedup/status', { credentials: 'include' })
@@ -2322,7 +2332,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             document.getElementById('recheckLogPanel').style.display = 'block';
             connectDedupSSE();
           }
-        }).catch(function() {});
+        }).catch(function(err){ console.error('获取查重状态失败:', err); });
     })();
 
   </script>

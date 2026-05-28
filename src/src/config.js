@@ -38,7 +38,7 @@ const DB_CONFIG = {
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'tiku',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 50,
   queueLimit: 0,
   charset: 'utf8mb4'
 };
@@ -416,7 +416,8 @@ async function addMissingColumns() {
     for (const column of newColumns) {
       if (!existingColumns.includes(column)) {
         console.log(`📌 添加缺失字段: ${column}`);
-        await db.prepare(`ALTER TABLE global_stats ADD COLUMN ${column} INT DEFAULT 0`).run();
+        // 使用反引号包裹列名，防止SQL注入
+        await db.prepare(`ALTER TABLE global_stats ADD COLUMN \`${column}\` INT DEFAULT 0`).run();
       }
     }
     
