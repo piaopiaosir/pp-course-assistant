@@ -464,13 +464,13 @@ const WEB_SEARCH_TOOL = {
   type: "function",
   function: {
     name: "web_search",
-    description: "联网搜索获取最新信息。当你对答案不确定、需要验证知识、或需要查找最新数据时使用此工具。",
+    description: "联网搜索获取最新信息。当你对答案不确定、需要验证知识、或需要查找最新数据时使用此工具。\n\n【重要】搜索后请立即判断：如果搜索结果已经能确定答案，就直接输出答案，不要继续搜索。只有在结果仍然不足时才再次搜索。",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "搜索关键词。"
+          description: "搜索关键词。建议使用精确的中文短语（可加引号）以提高命中率。"
         }
       },
       required: ["query"]

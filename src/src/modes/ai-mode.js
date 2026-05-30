@@ -352,7 +352,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
             console.log(`🔍 执行联网搜索: "${fnArgs.query || questionData.question}"`);
             
             const searchResult = await tavilySearch(fnArgs.query || questionData.question, {
-              maxResults: 5,
+              maxResults: 10,
               searchDepth: 'advanced',
               includeAnswer: true
             });
@@ -363,16 +363,21 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
             } else {
               console.log(`✅ 联网搜索完成，获得${searchResult.results?.length || 0}条结果`);
               
-              // 格式化搜索结果
-              const formattedResults = searchResult.results?.slice(0, 5).map((r, i) => 
+              // 格式化搜索结果（取全部20条）
+              const formattedResults = searchResult.results?.map((r, i) => 
                 `[${i + 1}] ${r.title}\n${r.content}\n来源: ${r.url}`
               ) || [];
 
+              // 构建返回结果
+              const resultParts = [];
               if (searchResult.answer) {
-                toolResult = `直接答案: ${searchResult.answer}\n\n详细结果:\n${formattedResults.join('\n\n')}`;
-              } else {
-                toolResult = formattedResults.join('\n\n') || '无搜索结果';
+                resultParts.push(`【直接答案】${searchResult.answer}`);
               }
+              resultParts.push(formattedResults.join('\n\n') || '无搜索结果');
+              // 关键提示：告诉AI判断是否足够
+              resultParts.push('\n【判断提示】请立即判断：如果上述搜索结果已经能确定答案，就直接输出<answer>标签，不要再继续搜索。只有当结果完全无关或不足时，才考虑再次搜索（用更精确的关键词）。');
+              
+              toolResult = resultParts.join('\n\n');
             }
           } else {
             toolResult = JSON.stringify({ error: `未知工具: ${fnName}` });

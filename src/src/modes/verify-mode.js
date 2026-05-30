@@ -180,7 +180,7 @@ async function executeWebSearch(query) {
   console.log(`🔍 AI请求联网搜索: "${query}"`);
   
   const searchResult = await tavilySearch(query, {
-    maxResults: 5,
+    maxResults: 10,
     searchDepth: 'advanced',
     includeAnswer: true
   });
@@ -205,6 +205,9 @@ async function executeWebSearch(query) {
     formattedResults.push(`【Tavily直接答案】${searchResult.answer}`);
   }
   formattedResults.push(formatSearchContext(searchResult.results));
+
+  // 关键提示：告诉AI判断是否足够
+  formattedResults.push('\n【判断提示】请立即判断：如果上述搜索结果已经能确定答案，就直接输出<answer>标签，不要再继续搜索。只有当结果完全无关或不足时，才考虑再次搜索（用更精确的关键词）。');
 
   return formattedResults.join('\n\n');
 }
@@ -238,7 +241,7 @@ async function fetchDeepSeekThinking(questionData) {
       { role: "user", content: userMessage }
     ];
 
-    const MAX_TOOL_ROUNDS = 3; // 最多3轮工具调用（限制搜索次数）
+    const MAX_TOOL_ROUNDS = 2; // 最多2轮工具调用（限制搜索次数，避免过度搜索）
 
     console.log("━━━━━━━━━ AI深度思考(工具调用模式) ━━━━━━━━━");
     console.log("📍 题目:", questionData.question);
@@ -291,11 +294,11 @@ async function fetchDeepSeekThinking(questionData) {
 
           let toolResult;
           if (isLastRound) {
-            // 达到最大轮数，不再搜索，提示 AI 基于已有信息回答
+            // 达到最大轮数，不再搜索，提示 AI 基于已有信息回答（强化提示）
             toolResult = JSON.stringify({ 
-              message: "搜索次数已达上限。请停止搜索，基于上述已获取的信息，直接以 JSON 格式输出最终答案。" 
+              message: "搜索次数已达上限，你必须立即停止搜索！现在请基于已有信息，严格按照以下格式输出最终答案，不要输出任何其他内容：\n<answer>{\"answer\":[\"你的答案\"]}</answer>\n只输出这一行，不要分析、不要解释、不要搜更多内容。" 
             });
-            console.log(`⚠️ 已达最大搜索轮数，拦截工具调用，提示 AI 停止搜索`);
+            console.log(`⚠️ 已达最大搜索轮数，拦截工具调用，提示 AI 停止搜索并强制输出JSON`);
           } else if (fnName === "web_search") {
             toolResult = await executeWebSearch(fnArgs.query || questionData.question);
           } else {
@@ -312,37 +315,60 @@ async function fetchDeepSeekThinking(questionData) {
           console.log(`🔧 工具结果长度: ${toolResult.length}字符`);
         }
 
-        // 如果是最后一轮，我们需要再调用一次 AI 来获取最终答案
+        // 如果是最后一轮，我们需要再调用 AI 来获取最终答案
         if (isLastRound) {
+          // 第一次尝试：正常调用获取最终答案
           console.log(`━━━ 最终轮：要求 AI 基于已有信息回答 ━━━`);
-          const finalResult = await callAIWithTools(apiKey, AI_MODEL_VERIFY_THINKING, messages);
           
-          if (finalResult.choices && finalResult.choices[0]) {
-            const finalContent = finalResult.choices[0].message?.content || finalResult.choices[0].message?.reasoning_content;
-            console.log("📍 AI最终返回内容:", finalContent?.substring(0, 500) || '(空)');
+          let finalParsed = null;
+          // 尝试最多2次（第一次正常，第二次用更严格的提示）
+          for (let retryAttempt = 0; retryAttempt < 2; retryAttempt++) {
+            if (retryAttempt === 1) {
+              // 第一次失败，用超严格提示重试
+              console.log(`📢 第一次解析失败，用超严格提示重试...`);
+              messages.push({
+                role: "user",
+                content: "你必须立即输出最终答案！只输出一行，格式如下（替换【】内容）：\n<answer>{\"answer\":[\"【你的答案】\"]}</answer>"
+              });
+            }
             
-            const parsed = extractJsonFromContent(finalContent);
-            if (parsed) {
-              // 清理AI答案中的"选项X"前缀（安全模式：仅当去掉前缀后匹配选项时才删除）
-              if (Array.isArray(parsed.answer)) {
-                parsed.answer = parsed.answer.map(a => cleanAiAnswer(a, questionData.options));
+            const finalResult = await callAIWithTools(apiKey, AI_MODEL_VERIFY_THINKING, messages);
+            
+            if (finalResult.choices && finalResult.choices[0]) {
+              const finalContent = finalResult.choices[0].message?.content || '';
+              console.log(`📍 AI最终返回内容(retry=${retryAttempt}):`, finalContent?.substring(0, 500) || '(空)');
+              
+              const parsed = extractJsonFromContent(finalContent);
+              if (parsed) {
+                // 清理AI答案中的"选项X"前缀（安全模式：仅当去掉前缀后匹配选项时才删除）
+                if (Array.isArray(parsed.answer)) {
+                  parsed.answer = parsed.answer.map(a => cleanAiAnswer(a, questionData.options));
+                }
+                // 连线题：标准化答案格式（拆分合并字符串）
+                parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
+                finalParsed = parsed;
+                break; // 解析成功，跳出重试循环
               }
-              // 连线题：标准化答案格式（拆分合并字符串）
-              parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
-              const usedSearch = messages.some(m => m.role === "tool");
-              console.log(`✅ AI深度思考答案 (${usedSearch ? '使用了联网搜索' : '未使用联网搜索'}):`, JSON.stringify(parsed.answer));
-              console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
-              return {
-                code: 200,
-                data: {
-                  answer: parsed.answer,
-                  source: AI_MODEL_VERIFY_THINKING,
-                  searchUsed: usedSearch
-                },
-                msg: "查询成功"
-              };
+              
+              console.log(`⚠️ 第${retryAttempt + 1}次解析失败，尝试${retryAttempt < 1 ? '重试' : '放弃'}`);
             }
           }
+          
+          if (finalParsed) {
+            const usedSearch = messages.some(m => m.role === "tool");
+            console.log(`✅ AI深度思考答案 (${usedSearch ? '使用了联网搜索' : '未使用联网搜索'}):`, JSON.stringify(finalParsed.answer));
+            console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            return {
+              code: 200,
+              data: {
+                answer: finalParsed.answer,
+                source: AI_MODEL_VERIFY_THINKING,
+                searchUsed: usedSearch
+              },
+              msg: "查询成功"
+            };
+          }
+          
           // 如果最终还是没解析出来，跳出循环报错
           break; 
         }
