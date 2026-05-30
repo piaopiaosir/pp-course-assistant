@@ -10,10 +10,11 @@
  * - executeWebSearch: 执行Tavily搜索
  */
 
-const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, MODEL_COLUMN_MAP } = require('../tiku');
+const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { normalizeAnswer, validateAnswer } = require('../utils');
 const { db, getEnv } = require('../config');
 const { tavilySearch, formatSearchContext, WEB_SEARCH_TOOL } = require('../tavily-search');
+const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
 
 // ==================== 校验模式第一次查询（非深度思考） ====================
 
@@ -25,8 +26,12 @@ const { tavilySearch, formatSearchContext, WEB_SEARCH_TOOL } = require('../tavil
  * @returns {Object} { code, msg, data: { answer, source } }
  */
 async function fetchVerifyFirstAI(questionData) {
-  // 校验模式第一次查询固定使用 DeepSeek-V4-Pro
-  const AI_MODEL_VERIFY_FIRST = 'deepseek-v4-pro';
+  const modelConfig = getModelConfig('deepseek-v4-pro');
+  if (!modelConfig) {
+    console.log("❌ 未找到模型配置: deepseek-v4-pro");
+    return { code: 500, msg: "未找到模型配置", data: null };
+  }
+  
   const apiUrl = "https://api.deepseek.com/v1/chat/completions";
   const apiKey = getEnv('DEEPSEEK_API_KEY');
   
@@ -39,31 +44,29 @@ async function fetchVerifyFirstAI(questionData) {
   const { system: systemPrompt, user: userPrompt } = buildPrompt(questionData, false);
 
   const body = {
-    model: AI_MODEL_VERIFY_FIRST,
+    model: modelConfig.model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt }
     ],
     temperature: 0.6,
     max_tokens: 8192,
-    thinking: { type: "disabled" }  // 第一次查询不启用深度思考，disabled模式下支持temperature
+    thinking: { type: "disabled" }
   };
   
   console.log("━━━━━━━━━ AI请求日志（校验模式第一次） ━━━━━━━━━");
   console.log("📍 题目:", questionData.question);
   console.log("📍 题型:", typeDesc);
-  console.log("📍 模型:", AI_MODEL_VERIFY_FIRST);
+  console.log("📍 模型:", modelConfig.name);
   console.log("📍 Prompt长度:", systemPrompt.length + userPrompt.length, "字符");
   
   try {
     console.log("AI查询中...");
     
-    // 增加AI调用次数统计
     await incrementAiCalls();
     await incrementTotalQueries('ai');
     
-    // 按模型统计
-    const modelColumn = MODEL_COLUMN_MAP[AI_MODEL_VERIFY_FIRST];
+    const modelColumn = MODEL_COLUMN_MAP[modelConfig.model];
     if (modelColumn) {
       await incrementModelCalls(modelColumn);
     }
@@ -100,7 +103,7 @@ async function fetchVerifyFirstAI(questionData) {
         
         return {
           code: 200,
-          data: { answer: parsed.answer, source: "DeepSeek-V4-Pro" },
+          data: { answer: parsed.answer, source: modelConfig.name },
           msg: "查询成功"
         };
       }
@@ -220,8 +223,12 @@ async function executeWebSearch(query) {
  * @returns {Object} { code, msg, data: { answer, source, searchUsed } }
  */
 async function fetchDeepSeekThinking(questionData) {
-  // 校验模式第二次查询（深度思考）固定使用 DeepSeek-V4-Pro（官方API）
-  const AI_MODEL_VERIFY_THINKING = 'deepseek-v4-pro';
+  const modelConfig = getModelConfig('deepseek-v4-pro');
+  if (!modelConfig) {
+    console.log("❌ 未找到模型配置: deepseek-v4-pro");
+    return { code: 500, msg: "未找到模型配置", data: null };
+  }
+  
   const apiKey = getEnv('DEEPSEEK_API_KEY');
   
   if (!apiKey) {
@@ -233,7 +240,6 @@ async function fetchDeepSeekThinking(questionData) {
   const { system: systemPrompt, user: basePrompt } = buildPrompt(questionData, true);
 
   try {
-    // 构建初始消息（system prompt 已包含联网搜索指引，直接使用 buildPrompt 的 user prompt）
     const userMessage = basePrompt;
 
     const messages = [
@@ -241,19 +247,18 @@ async function fetchDeepSeekThinking(questionData) {
       { role: "user", content: userMessage }
     ];
 
-    const MAX_TOOL_ROUNDS = 2; // 最多2轮工具调用（限制搜索次数，避免过度搜索）
+    const MAX_TOOL_ROUNDS = 2;
 
     console.log("━━━━━━━━━ AI深度思考(工具调用模式) ━━━━━━━━━");
     console.log("📍 题目:", questionData.question);
     console.log("📍 题型:", typeDesc);
-    console.log("📍 模型:", AI_MODEL_VERIFY_THINKING);
+    console.log("📍 模型:", modelConfig.name);
     console.log("📍 选项:", JSON.stringify(questionData.options));
 
-    // 增加AI调用次数统计
     await incrementAiCalls();
     await incrementTotalQueries('ai');
 
-    const thinkingModelColumn = MODEL_COLUMN_MAP[AI_MODEL_VERIFY_THINKING];
+    const thinkingModelColumn = MODEL_COLUMN_MAP[modelConfig.model];
     if (thinkingModelColumn) {
       await incrementModelCalls(thinkingModelColumn);
     }
@@ -262,7 +267,7 @@ async function fetchDeepSeekThinking(questionData) {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       console.log(`━━━ 第${round + 1}轮调用 ━━━`);
 
-      const result = await callAIWithTools(apiKey, AI_MODEL_VERIFY_THINKING, messages);
+      const result = await callAIWithTools(apiKey, modelConfig.model, messages);
       
       console.log("📍 响应状态:", result.choices ? result.choices[0]?.finish_reason : 'N/A');
       console.log("📍 完整响应:", JSON.stringify(result, null, 2).substring(0, 2000));
@@ -332,7 +337,7 @@ async function fetchDeepSeekThinking(questionData) {
               });
             }
             
-            const finalResult = await callAIWithTools(apiKey, AI_MODEL_VERIFY_THINKING, messages);
+            const finalResult = await callAIWithTools(apiKey, modelConfig.model, messages);
             
             if (finalResult.choices && finalResult.choices[0]) {
               const finalContent = finalResult.choices[0].message?.content || '';
@@ -362,7 +367,7 @@ async function fetchDeepSeekThinking(questionData) {
               code: 200,
               data: {
                 answer: finalParsed.answer,
-                source: AI_MODEL_VERIFY_THINKING,
+                source: modelConfig.name,
                 searchUsed: usedSearch
               },
               msg: "查询成功"
@@ -401,7 +406,7 @@ async function fetchDeepSeekThinking(questionData) {
           code: 200,
           data: {
             answer: parsed.answer,
-            source: AI_MODEL_VERIFY_THINKING,
+            source: modelConfig.name,
             searchUsed: usedSearch
           },
           msg: "查询成功"
@@ -781,7 +786,7 @@ async function handleVerifyMode(c, params) {
               tikuAnswer: tikuHasAnswer ? tikuResult.data.answer : null,
               aiAnswer: aiHasAnswer ? aiResult.data.answer : null,
               reason: thinkingReason,
-              thinkingModel: 'deepseek-v4-pro'
+              thinkingModel: getDisplayName('deepseek-v4-pro')
             }
           });
         }

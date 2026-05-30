@@ -7,9 +7,10 @@
  * - fetchAISupplement: 正常模式AI补充（含深度思考备用）
  */
 
-const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, MODEL_COLUMN_MAP } = require('../tiku');
+const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { validateAnswer } = require('../utils');
 const { getEnv } = require('../config');
+const { MODEL_COLUMN_MAP } = require('../config/ai-models');
 
 // ==================== 正常模式 AI 补充 ====================
 

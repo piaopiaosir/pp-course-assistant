@@ -6,9 +6,9 @@ dist/
 .DS_Store
 Thumbs.db
 
-# 忽略杂物文件夹
 乱/
 旧/
-
-# 忽略.codebuddy
 .codebuddy/
+.vscode/
+scripts/
+__pycache__/

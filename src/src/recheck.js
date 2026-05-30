@@ -25,6 +25,7 @@ const { db, pool } = require('./config');
 const { validateAnswer, getTypeDescription } = require('./utils');
 const { fetchDeepSeekThinking } = require('./modes/verify-mode');
 const { incrementTikuCalls, incrementAiCalls, incrementTotalQueries } = require('./tiku');
+const { getDisplayName } = require('./config/ai-models');
 
 // ==================== 配置 ====================
 
@@ -253,7 +254,7 @@ async function recheckQuestion(row) {
       await incrementTotalQueries('ai');
       
       const newAnswer = aiResult.data.answer;
-      const newSource = aiResult.data.source || 'deepseek-v4-pro';
+      const newSource = aiResult.data.source || getDisplayName('deepseek-v4-pro');
 
       console.log(`✓ AI 返回答案: ${JSON.stringify(newAnswer)}`);
       console.log('🔍 正在校验答案...');

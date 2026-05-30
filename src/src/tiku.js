@@ -1,5 +1,6 @@
 const { db, getEnv, TIKU_API_URL, HIVENET_API_URL, YANXI_API_URL, SERVER_ID } = require('./config');
 const { sha256, normalizeAnswer, normalizeOptions, validateAnswer, getTypeDescription } = require('./utils');
+const { MODEL_COLUMN_MAP } = require('./config/ai-models');
 
 // 从AI返回内容中提取JSON（处理AI在JSON前后输出分析文字、markdown代码块包裹等情况）
 function extractJsonFromContent(content) {
@@ -1051,38 +1052,6 @@ async function incrementModelCalls(columnName) {
     console.error(`更新${columnName}调用次数失败:`, e.message);
   }
 }
-
-// 模型名 → global_stats 列名映射
-const MODEL_COLUMN_MAP = {
-  // DeepSeek 系列（302.AI）
-  'deepseek-ai/DeepSeek-V3.2': 'deepseek_v3_calls',  // AI模式 DeepSeek-V3.2
-  'Pro/deepseek-ai/DeepSeek-R1': 'deepseek_r1_calls',  // AI模式 DeepSeek-R1-0528
-  'deepseek-v4-flash': 'deepseek_v4_flash_calls',  // DeepSeek-V4-Flash
-  'deepseek-v4-pro': 'deepseek_v4_pro_calls',  // DeepSeek-V4-Pro
-  // Kimi 系列（302.AI）
-  'kimi-k2.6': 'kimi_k26_calls',
-  'kimi-k2.5': 'kimi_k25_calls',
-  // Qwen 系列（302.AI）
-  'Qwen/Qwen3.6-Plus': 'qwen3_6_calls',  // qwen3.6-plus实际调用的model
-  'Qwen/Qwen3.5-Plus': 'qwen3_5_calls',  // qwen3.5-plus实际调用的model
-  'Qwen/Qwen3.7-Max': 'qwen3_7_calls',   // qwen3.7-max实际调用的model
-  // MiniMax 系列（302.AI）
-  'MiniMax-M2.5': 'minimax_m25_calls',  // minimax-m2.5实际调用的model
-  'MiniMax-M2.7': 'minimax_m27_calls',  // minimax-m2.7实际调用的model
-  // 混元系列（腾讯云）
-  'hunyuan-t1-latest': 'hunyuan_t1_calls',  // tencent-hunyuan-t1实际调用的model
-  'hunyuan-standard-256K': 'hunyuan_standard_calls',  // tencent-hunyuan-standard实际调用的model
-  // GPT 系列（302.AI）
-  'gpt-5.4-mini': 'gpt_54_mini_calls',
-  'gpt-5.4-nano': 'gpt_54_nano_calls',
-  // Gemini 系列（302.AI）
-  'gemini-3.1-flash-lite': 'gemini_31_calls',
-  'gemini-3.5-flash': 'gemini_35_calls',
-  // GLM 系列（302.AI）
-  'Pro/zai-org/GLM-5': 'glm_5_calls',
-  'glm-5.1': 'glm_51_calls',
-  'glm-4.7': 'glm_47_calls'
-};
 
 // 增加缓存命中次数
 async function incrementCacheHits() {

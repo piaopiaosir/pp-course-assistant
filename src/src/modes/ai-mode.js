@@ -5,198 +5,12 @@
  * 包含：
  * - handleAIMode: 路由处理函数
  * - fetchAICustom: AI模式专用AI调用（独立参数配置）
- * - AI_MODEL_CONFIG: AI模型配置映射
  */
 
-const { saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers, MODEL_COLUMN_MAP } = require('../tiku');
+const { saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
 const { getEnv } = require('../config');
 const { validateAnswer } = require('../utils');
-
-// ==================== AI模型配置映射 ====================
-
-/**
- * AI模型配置映射
- * 注意：每个模型都有独立的参数配置和API密钥
- * 除腾讯混元外，其他模型统一使用302.AI提供商（共享302AI_API_KEY）
- * 腾讯云混元模型共享HUNYUAN_API_KEY
- */
-const AI_MODEL_CONFIG = {
-  // 302.AI DeepSeek 模型（共享302AI_API_KEY）
-  'DeepSeek-V3.2': {
-    provider: '302ai',
-    model: 'deepseek-ai/DeepSeek-V3.2',
-    name: 'DeepSeek-V3.2',
-    temperature: 0.6,
-    max_tokens: 8192,
-    enable_thinking: true,
-    cost: 1  // 低成本模型
-  },
-  'DeepSeek-R1-0528': {
-    provider: '302ai',
-    model: 'Pro/deepseek-ai/DeepSeek-R1',
-    name: 'DeepSeek-R1-0528',
-    max_tokens: 8192,
-    cost: 3  // 中等成本，推理模型需要更大空间
-  },
-  'deepseek-v4-flash': {
-    provider: 'deepseek',
-    model: 'deepseek-v4-flash',
-    name: 'DeepSeek-V4-Flash',
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    reasoning_effort: "max",
-    cost: 1  // 低成本
-  },
-  'deepseek-v4-pro': {
-    provider: 'deepseek',
-    model: 'deepseek-v4-pro',
-    name: 'DeepSeek-V4-Pro',
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    reasoning_effort: "max",
-    cost: 1  // 低成本
-  },
-  // 302.AI Qwen 模型（共享302AI_API_KEY）
-  'qwen3.6-plus': {
-    provider: '302ai',
-    model: 'Qwen/Qwen3.6-Plus',
-    name: 'qwen3.6-plus',
-    temperature: 0.6,
-    max_tokens: 8192,
-    enable_thinking: true,
-    cost: 2  // 中等成本
-  },
-  'qwen3.7-max': {
-    provider: '302ai',
-    model: 'Qwen/Qwen3.7-Max',
-    name: 'qwen3.7-max',
-    temperature: 0.6,
-    max_tokens: 8192,
-    enable_thinking: true,
-    cost: 3  // 中高成本（输入¥12.6/1M，输出¥37.1/1M）
-  },
-  'qwen3.5-plus': {
-    provider: '302ai',
-    model: 'Qwen/Qwen3.5-Plus',
-    name: 'qwen3.5-plus',
-    temperature: 0.6,
-    max_tokens: 8192,
-    enable_thinking: true,
-    cost: 1  // 低成本模型
-  },
-  // 302.AI MiniMax 模型（共享302AI_API_KEY）
-  'minimax-m2.5': {
-    provider: '302ai',
-    model: 'MiniMax-M2.5',
-    name: 'MiniMax-M2.5',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 1  // 低成本模型
-  },
-  'minimax-m2.7': {
-    provider: '302ai',
-    model: 'MiniMax-M2.7',
-    name: 'MiniMax-M2.7',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 1  // 低成本模型
-  },
-  // 腾讯云混元模型（共享HUNYUAN_API_KEY）
-  'hunyuan-t1': {
-    provider: 'tencent',
-    model: 'hunyuan-t1-latest',
-    name: 'hunyuan-t1',
-    max_tokens: 8192,
-    cost: 1  // 推理模型，不推荐修改temperature
-  },
-  'hunyuan-standard': {
-    provider: 'tencent',
-    model: 'hunyuan-standard-256K',
-    name: 'hunyuan-standard-256K',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 1  // 低成本模型
-  },
-  // 302.AI ChatGPT模型（共享302AI_API_KEY）
-  'gpt-5.4-mini': {
-    provider: '302ai',
-    model: 'gpt-5.4-mini',
-    name: 'gpt-5.4-mini',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 3  // 中高成本
-  },
-  'gpt-5.4-nano': {
-    provider: '302ai',
-    model: 'gpt-5.4-nano',
-    name: 'gpt-5.4-nano',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 1  // 低成本模型
-  },
-  // 302.AI Gemini 模型（共享302AI_API_KEY）
-  'gemini-3.1-flash-lite': {
-    provider: '302ai',
-    model: 'gemini-3.1-flash-lite',
-    name: 'gemini-3.1-flash-lite',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 1  // 低成本模型
-  },
-  'gemini-3.5-flash': {
-    provider: '302ai',
-    model: 'gemini-3.5-flash',
-    name: 'gemini-3.5-flash',
-    temperature: 0.6,
-    max_tokens: 2048,
-    cost: 2  // 中等成本（输入¥10.5/1M，输出¥63/1M）
-  },
-  // 302.AI GLM 模型（共享302AI_API_KEY）
-  'GLM-5': {
-    provider: '302ai',
-    model: 'Pro/zai-org/GLM-5',
-    name: 'GLM-5',
-    temperature: 1.0,
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    cost: 4  // 高成本模型
-  },
-  'GLM-5.1': {
-    provider: '302ai',
-    model: 'glm-5.1',
-    name: 'GLM-5.1',
-    temperature: 1.0,
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    cost: 4  // 高成本模型
-  },
-  'GLM-4.7': {
-    provider: '302ai',
-    model: 'glm-4.7',
-    name: 'GLM-4.7',
-    temperature: 1.0,
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    cost: 2  // 中等成本
-  },
-  // 302.AI Kimi 模型（共享302AI_API_KEY）
-  'kimi-k2.6': {
-    provider: '302ai',
-    model: 'kimi-k2.6',
-    name: 'Kimi-K2.6',
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    cost: 4  // 最高成本模型
-  },
-  'kimi-k2.5': {
-    provider: '302ai',
-    model: 'kimi-k2.5',
-    name: 'Kimi-K2.5',
-    max_tokens: 8192,
-    thinking: { type: "enabled" },
-    cost: 3  // 高成本模型
-  }
-};
+const { getModelConfig, getSupportedModels, getModelCosts, getFullModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
 
 // ==================== AI模式专用AI调用 ====================
 
@@ -429,29 +243,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-        // 根据实际模型名映射到简洁的source名称
-        const modelToSourceMap = {
-          'deepseek-ai/DeepSeek-V3.2': 'DeepSeek-V3.2',
-          'Pro/deepseek-ai/DeepSeek-R1': 'DeepSeek-R1',
-          'deepseek-v4-flash': 'DeepSeek-V4-Flash',
-          'deepseek-v4-pro': 'DeepSeek-V4-Pro',
-          'Qwen/Qwen3.6-Plus': 'Qwen3.6-Plus',
-          'Qwen/Qwen3.7-Max': 'Qwen3.7-Max',
-          'Qwen/Qwen3.5-Plus': 'Qwen3.5-Plus',
-          'MiniMax-M2.5': 'MiniMax-M2.5',
-          'MiniMax-M2.7': 'MiniMax-M2.7',
-          'gpt-5.4-mini': 'GPT-5.4-mini',
-          'gpt-5.4-nano': 'GPT-5.4-nano',
-          'gemini-3.1-flash-lite': 'Gemini-3.1',
-          'gemini-3.5-flash': 'Gemini-3.5',
-          'Pro/zai-org/GLM-5': 'GLM-5',
-          'glm-5.1': 'GLM-5.1',
-          'glm-4.7': 'GLM-4.7',
-          'hunyuan-t1-latest': 'hunyuan-t1',
-          'hunyuan-standard-256K': 'hunyuan-standard'
-        };
-
-        const source = modelToSourceMap[model] || model;
+        const source = getDisplayName(model);
 
         return {
           code: 200,
@@ -514,7 +306,7 @@ async function handleAIMode(c, params) {
   log("━━━ AI模式（仅使用AI） ━━━");
   log(`AI模型: ${model}`);
 
-  const modelConfig = AI_MODEL_CONFIG[model];
+  const modelConfig = getModelConfig(model);
   if (!modelConfig) {
     log(`✗ 不支持的AI模型: ${model}`);
     return c.json({
@@ -671,127 +463,13 @@ async function handleAIMode(c, params) {
   return c.json(answerData);
 }
 
-// ==================== 辅助函数 ====================
-
-/**
- * 获取支持的AI模型列表
- * @returns {Array<string>} 支持的AI模型标识符列表
- */
-function getSupportedModels() {
-  return Object.keys(AI_MODEL_CONFIG);
-}
-
-/**
- * 获取AI模型配置
- * @param {string} model - AI模型标识符
- * @returns {Object|null} AI模型配置对象
- */
-function getModelConfig(model) {
-  return AI_MODEL_CONFIG[model] || null;
-}
-
-/**
- * 获取所有模型的消耗映射
- * @returns {Object} 模型消耗映射 { modelId: cost }
- */
-function getModelCosts() {
-  const costs = {};
-  for (const [modelId, config] of Object.entries(AI_MODEL_CONFIG)) {
-    costs[modelId] = config.cost || 1;
-  }
-  return costs;
-}
-
-/**
- * 获取完整的模型配置（供客户端动态获取）
- * @returns {Object} 包含类型、选项、映射的完整配置
- */
-function getFullModelConfig() {
-  // AI类型分组配置（用于客户端下拉选择）
-  const typeModelMap = {
-    'DeepSeek': ['V4-Flash', 'V4-Pro', 'V3.2', 'R1'],
-    'HunYuan': ['Standard', 'T1'],
-    'Qwen': ['3.5-plus', '3.6-plus', '3.7-Max'],
-    'MiniMax': ['M2.7', 'M2.5'],
-    'GLM': ['5.1', '5.0', '4.7'],
-    'Kimi': ['K2.6', 'K2.5'],
-    'ChatGPT': ['5.4-nano', '5.4'],
-    'Gemini': ['3.5', '3.1']
-  };
-  
-  // 默认模型配置（选择最新版本）
-  const defaultModels = {
-    'DeepSeek': 'V4-Flash',
-    'HunYuan': 'Standard',
-    'Qwen': '3.7-Max',
-    'MiniMax': 'M2.7',
-    'GLM': '5.1',
-    'Kimi': 'K2.6',
-    'ChatGPT': '5.4-nano',
-    'Gemini': '3.5'
-  };
-  
-  // 类型+模型名称 → 模型标识符映射
-  const modelIdMap = {
-    'DeepSeek': {
-      'V4-Flash': 'deepseek-v4-flash',
-      'V4-Pro': 'deepseek-v4-pro',
-      'V3.2': 'DeepSeek-V3.2',
-      'R1': 'DeepSeek-R1-0528'
-    },
-    'HunYuan': {
-      'Standard': 'hunyuan-standard',
-      'T1': 'hunyuan-t1'
-    },
-    'Qwen': {
-      '3.7-Max': 'qwen3.7-max',
-      '3.6-plus': 'qwen3.6-plus',
-      '3.5-plus': 'qwen3.5-plus'
-    },
-    'MiniMax': {
-      'M2.7': 'minimax-m2.7',
-      'M2.5': 'minimax-m2.5'
-    },
-    'GLM': {
-      '5.1': 'GLM-5.1',
-      '5.0': 'GLM-5',
-      '4.7': 'GLM-4.7'
-    },
-    'Kimi': {
-      'K2.6': 'kimi-k2.6',
-      'K2.5': 'kimi-k2.5'
-    },
-    'ChatGPT': {
-      '5.4-nano': 'gpt-5.4-nano',
-      '5.4': 'gpt-5.4-mini'
-    },
-    'Gemini': {
-      '3.5': 'gemini-3.5-flash',
-      '3.1': 'gemini-3.1-flash-lite'
-    }
-  };
-  
-  // 所有类型选项
-  const typeOptions = Object.keys(typeModelMap);
-  
-  // 所有模型选项（合并）
-  const allModelOptions = Object.values(typeModelMap).flat();
-  
-  return {
-    typeOptions,           // ["混元", "DeepSeek", ...]
-    allModelOptions,       // ["Standard", "T1", "3.2", ...]
-    typeModelMap,          // { '混元': ['Standard', 'T1'], ... }
-    defaultModels,         // { '混元': 'Standard', ... }
-    modelIdMap,            // { '混元': { 'Standard': 'hunyuan-standard', ... } }
-    modelCosts: getModelCosts()  // { 'hunyuan-standard': 1, ... }
-  };
-}
-
 module.exports = {
   handleAIMode,
   fetchAICustom,
   getSupportedModels,
   getModelConfig,
   getModelCosts,
-  getFullModelConfig
+  getFullModelConfig,
+  getDisplayName,
+  MODEL_COLUMN_MAP
 };
