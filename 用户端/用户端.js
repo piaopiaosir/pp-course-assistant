@@ -12192,10 +12192,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const offsetX = vue.ref(0);
       const offsetY = vue.ref(0);
       
+      const MIN_TOP = 60;
+      const ensureMinTop = (val) => {
+        const num = parseInt(val);
+        return (isNaN(num) || num < MIN_TOP) ? `${MIN_TOP}px` : val;
+      };
       const moveStyle = vue.computed(() => {
         return {
           left: configStore.position.x,
-          top: configStore.position.y,
+          top: ensureMinTop(configStore.position.y),
           height: configStore.isMinus ? "auto" : "560px",
           maxHeight: configStore.isMinus ? "none" : "560px",
           width: configStore.isMinus ? "280px" : "720px",
@@ -12219,8 +12224,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         if (x < 0) {
           configStore.position.x = "0px";
         }
-        if (y < 0) {
-          configStore.position.y = "0px";
+        if (y < MIN_TOP) {
+          configStore.position.y = `${MIN_TOP}px`;
         }
         const dragW = configStore.isMinus ? 280 : 720;
         const dragH = configStore.isMinus ? 0 : 560;
@@ -12260,8 +12265,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         if (x < 0) {
           configStore.position.x = "0px";
         }
-        if (y < 0) {
-          configStore.position.y = "0px";
+        if (y < MIN_TOP) {
+          configStore.position.y = `${MIN_TOP}px`;
         }
         const dragW = configStore.isMinus ? 280 : 720;
         const dragH = configStore.isMinus ? 0 : 560;
