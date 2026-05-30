@@ -10,6 +10,10 @@
  * - src/tiku.js: 题库查询
  * - src/admin.js: 管理面板
  * - src/ip-security.js: IP安全机制
+ * - src/admin-session.js: 管理面板Session认证
+ * - src/admin-routes.js: 管理面板路由
+ * - src/query-tasks.js: 异步查询任务管理
+ * - src/config/ai-models.js: AI模型统一配置
  * - src/routes.js: API路由
  */
 

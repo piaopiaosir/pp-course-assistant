@@ -69,11 +69,10 @@ async function syncCode() {
             let filePath;
             if (filename === 'index.js' || filename === 'package.json') {
               filePath = path.join(__dirname, filename);
-            } else if (filename.startsWith('modes/')) {
-              // modes 子目录文件
-              const modesDir = path.join(srcDir, 'modes');
-              if (!fs.existsSync(modesDir)) {
-                fs.mkdirSync(modesDir, { recursive: true });
+            } else if (filename.includes('/')) {
+              const subDir = path.join(srcDir, path.dirname(filename));
+              if (!fs.existsSync(subDir)) {
+                fs.mkdirSync(subDir, { recursive: true });
               }
               filePath = path.join(srcDir, filename);
             } else {
