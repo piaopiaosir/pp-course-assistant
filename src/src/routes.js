@@ -781,6 +781,8 @@ app.get('/', async (c) => {
       }
     }
     
+    if (userId && fid) await recordUserId(userId, null, fid);
+
     if (userId) {
       await updateUserType(userId);
     }
