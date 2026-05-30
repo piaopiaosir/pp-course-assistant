@@ -158,7 +158,7 @@ export default function WelfarePage({ onBack }: WelfarePageProps) {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-body font-medium text-brand-dark/70 mb-2">
-                学习通用户ID
+                用户ID
               </label>
               <input
                 type="text"

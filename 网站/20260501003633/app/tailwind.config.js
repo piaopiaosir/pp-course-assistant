@@ -30,11 +30,21 @@ export default {
         body: ['Jost', 'Lora', 'sans-serif'],
       },
       animation: {
-        'fade-up': 'fadeUp 0.8s ease-out forwards',
-        'fade-in': 'fadeIn 1s ease-out forwards',
-        'scale-in': 'scaleIn 0.6s ease-out forwards',
+        // 保留现有动画
+        'fade-up': 'fadeUp var(--anim-duration-normal, 0.6s) var(--ease-out-expo, ease-out) forwards',
+        'fade-in': 'fadeIn var(--anim-duration-normal, 0.6s) var(--ease-out-quart, ease-out) forwards',
+        'scale-in': 'scaleIn var(--anim-duration-fast, 0.3s) var(--ease-out-expo, ease-out) forwards',
+        // 新增动画
+        'fade-up-delay': 'fadeUpDelay var(--anim-duration-slow, 0.9s) var(--ease-out-expo, ease-out) 0.2s forwards',
+        'slide-in-right': 'slideInRight var(--anim-duration-normal, 0.6s) var(--ease-out-expo, ease-out) forwards',
+        'slide-in-left': 'slideInLeft var(--anim-duration-normal, 0.6s) var(--ease-out-expo, ease-out) forwards',
+        'scale-fade': 'scaleFade var(--anim-duration-normal, 0.6s) var(--ease-out-expo, ease-out) forwards',
+        'pulse-subtle': 'pulseSubtle 2s var(--ease-in-out-quad, ease-in-out) infinite',
+        'glow-pulse': 'glowPulse 2.5s var(--ease-in-out-quad, ease-in-out) infinite',
+        'bounce-subtle': 'bounceSubtle 0.6s var(--ease-out-expo, ease-out)',
       },
       keyframes: {
+        // 保留现有关键帧
         fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(40px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
@@ -46,6 +56,39 @@ export default {
         scaleIn: {
           '0%': { opacity: '0', transform: 'scale(0.95)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        // 新增关键帧
+        fadeUpDelay: {
+          '0%': { opacity: '0', transform: 'translateY(40px)' },
+          '40%': { opacity: '0', transform: 'translateY(40px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(60px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        slideInLeft: {
+          '0%': { opacity: '0', transform: 'translateX(-60px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        scaleFade: {
+          '0%': { opacity: '0', transform: 'scale(0.85)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        pulseSubtle: {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.03)' },
+        },
+        glowPulse: {
+          '0%, 100%': { boxShadow: '0 0 5px rgba(217, 119, 87, 0.3)' },
+          '50%': { boxShadow: '0 0 20px rgba(217, 119, 87, 0.6), 0 0 40px rgba(217, 119, 87, 0.3)' },
+        },
+        bounceSubtle: {
+          '0%': { transform: 'translateY(0)' },
+          '30%': { transform: 'translateY(-6px)' },
+          '50%': { transform: 'translateY(0)' },
+          '70%': { transform: 'translateY(-3px)' },
+          '100%': { transform: 'translateY(0)' },
         },
       },
     },

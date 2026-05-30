@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { label: '下载脚本', id: 'install' },
   { label: '免费次数', id: 'welfare' },
   { label: '服务监控', id: 'status' },
+  { label: '题库接口', id: 'tiku' },
   { label: '故障排查', id: 'help' },
 ] as const
 
@@ -17,15 +18,16 @@ function scrollToSection(id: string) {
 
 interface NavbarProps {
   className?: string
-  currentPage?: 'home' | 'help' | 'sponsor' | 'welfare' | 'status'
+  currentPage?: 'home' | 'help' | 'sponsor' | 'welfare' | 'status' | 'tiku'
   onNavigateHelp?: () => void
   onNavigateHome?: () => void
   onNavigateSponsor?: () => void
   onNavigateWelfare?: () => void
   onNavigateStatus?: () => void
+  onNavigateTiku?: () => void
 }
 
-export default function Navbar({ className = '', currentPage = 'home', onNavigateHelp, onNavigateHome, onNavigateSponsor, onNavigateWelfare, onNavigateStatus }: NavbarProps) {
+export default function Navbar({ className = '', currentPage = 'home', onNavigateHelp, onNavigateHome, onNavigateSponsor, onNavigateWelfare, onNavigateStatus, onNavigateTiku }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const pendingSectionRef = useRef<string | null>(null)
@@ -33,7 +35,8 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
   const isSponsorPage = currentPage === 'sponsor'
   const isWelfarePage = currentPage === 'welfare'
   const isStatusPage = currentPage === 'status'
-  const isSubPage = isHelpPage || isSponsorPage || isWelfarePage || isStatusPage
+  const isTikuPage = currentPage === 'tiku'
+  const isSubPage = isHelpPage || isSponsorPage || isWelfarePage || isStatusPage || isTikuPage
 
   useEffect(() => {
     const handleScroll = () => {
@@ -89,6 +92,9 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
     } else if (id === 'status') {
       if (isStatusPage) return
       if (onNavigateStatus) onNavigateStatus()
+    } else if (id === 'tiku') {
+      if (isTikuPage) return
+      if (onNavigateTiku) onNavigateTiku()
     } else {
       goHomeThenScroll(id)
     }
@@ -121,7 +127,8 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
               (!isSubPage && item.id === 'home') ||
               (isHelpPage && item.id === 'help') ||
               (isWelfarePage && item.id === 'welfare') ||
-              (isStatusPage && item.id === 'status')
+              (isStatusPage && item.id === 'status') ||
+              (isTikuPage && item.id === 'tiku')
             return (
               <button
                 key={item.id}
@@ -161,7 +168,8 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
               (!isSubPage && item.id === 'home') ||
               (isHelpPage && item.id === 'help') ||
               (isWelfarePage && item.id === 'welfare') ||
-              (isStatusPage && item.id === 'status')
+              (isStatusPage && item.id === 'status') ||
+              (isTikuPage && item.id === 'tiku')
             return (
               <button
                 key={item.id}

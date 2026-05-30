@@ -12,6 +12,7 @@
     "dev:all": "concurrently -n web,proxy -c blue,green \"npm run dev\" \"npm run proxy\""
   },
   "dependencies": {
+    "animejs": "^4.4.1",
     "framer-motion": "^11.18.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.5",

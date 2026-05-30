@@ -12,10 +12,60 @@ interface StatsData {
   hourlyRate: number
 }
 
+// easeOutExpo 缓动函数
+const easeOutExpo = (t: number): number => {
+  return t === 1 ? 1 : 1 - Math.pow(2, -10 * t)
+}
+
+// 数字递增 hook
+function useCountUp(target: number, duration: number = 1200, enabled: boolean = false) {
+  const [displayValue, setDisplayValue] = useState(0)
+  const hasAnimatedRef = useRef(false)
+  const frameRef = useRef<number>(0)
+
+  useEffect(() => {
+    if (!enabled || target === 0) {
+      return
+    }
+
+    if (hasAnimatedRef.current) {
+      setDisplayValue(target)
+      return
+    }
+
+    const startTime = performance.now()
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const easedProgress = easeOutExpo(progress)
+      const currentValue = Math.floor(easedProgress * target)
+
+      setDisplayValue(currentValue)
+
+      if (progress < 1) {
+        frameRef.current = requestAnimationFrame(animate)
+      } else {
+        setDisplayValue(target)
+        hasAnimatedRef.current = true
+      }
+    }
+
+    frameRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      cancelAnimationFrame(frameRef.current)
+    }
+  }, [target, duration, enabled])
+
+  return displayValue
+}
+
 export default function Hero() {
   const ref = useRef<HTMLDivElement>(null)
   const [ready, setReady] = useState(false)
   const [stats, setStats] = useState<StatsData | null>(null)
+  const [statsReady, setStatsReady] = useState(false)
 
   useEffect(() => {
     // 延迟一帧，确保 DOM 挂载完毕，避免 useScroll 读取 null ref
@@ -31,7 +81,10 @@ export default function Hero() {
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        if (data) setStats(data)
+        if (data) {
+          setStats(data)
+          setStatsReady(true)
+        }
       } catch (_) {
         // 忽略解析错误
       }
@@ -50,16 +103,33 @@ export default function Hero() {
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%'])
   const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
 
+  // Stats 数字递增
+  const totalQueries = useCountUp(stats?.totalQueries || 0, 1200, statsReady)
+  const todayQueries = useCountUp(stats?.todayQueries || 0, 1200, statsReady)
+  const hourlyRate = useCountUp(stats?.hourlyRate || 0, 1200, statsReady)
+
   return (
     <section
       ref={ref}
       className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20"
     >
-      {/* Background gradient */}
+      {/* Background gradient with breathing animation */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[600px] md:h-[600px] bg-brand-blue/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 right-1/4 w-[250px] h-[250px] sm:w-[350px] sm:h-[350px] md:w-[500px] md:h-[500px] bg-brand-orange/8 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] sm:w-[550px] sm:h-[550px] md:w-[800px] md:h-[800px] bg-brand-green/5 rounded-full blur-3xl" />
+        <motion.div
+          animate={{ scale: [1, 1.05, 1], opacity: [0.1, 0.15, 0.1] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-1/4 left-1/4 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[600px] md:h-[600px] bg-brand-blue/10 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.08, 0.12, 0.08] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute bottom-1/3 right-1/4 w-[250px] h-[250px] sm:w-[350px] sm:h-[350px] md:w-[500px] md:h-[500px] bg-brand-orange/8 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{ scale: [1, 1.06, 1], opacity: [0.05, 0.1, 0.05] }}
+          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] sm:w-[550px] sm:h-[550px] md:w-[800px] md:h-[800px] bg-brand-green/5 rounded-full blur-3xl"
+        />
       </div>
 
       {/* Decorative grid */}
@@ -80,7 +150,7 @@ export default function Hero() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          transition={{ duration: 0.7, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-light-gray/50 border border-brand-light-gray mb-8"
         >
           <Sparkles className="w-4 h-4 text-brand-orange" />
@@ -93,7 +163,7 @@ export default function Hero() {
         <motion.h1
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.9, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
           className="font-heading text-3xl xs:text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-semibold leading-[1.05] tracking-tight mb-4 md:mb-6"
         >
           <span className="gradient-text">网课小助手</span>
@@ -105,7 +175,7 @@ export default function Hero() {
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
+          transition={{ duration: 0.7, delay: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="max-w-2xl mx-auto text-base sm:text-lg md:text-xl font-body text-brand-dark/50 leading-relaxed mb-8 md:mb-10 px-4 sm:px-0"
         >
           考试 · 视频 · 章节测验，一键自动化完成
@@ -117,7 +187,7 @@ export default function Hero() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.7 }}
+          transition={{ duration: 0.6, delay: 0.65, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="flex flex-col xs:flex-row items-center justify-center gap-3 sm:gap-4"
         >
           <button
@@ -132,18 +202,33 @@ export default function Hero() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.9 }}
+          transition={{ duration: 0.7, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap items-center justify-center gap-6 sm:gap-8 md:gap-16"
         >
-          {[ 
-            { value: stats ? stats.totalQueries.toLocaleString() : '—', label: '总查询次数' },
-            { value: stats ? stats.todayQueries.toLocaleString() : '—', label: '今日查询次数' },
-            { value: stats ? `${stats.hourlyRate}/h` : '—', label: '近一小时查询速率' },
+          {[
+            { value: totalQueries, label: '总查询次数', suffix: '' },
+            { value: todayQueries, label: '今日查询次数', suffix: '' },
+            { value: hourlyRate, label: '近一小时查询速率', suffix: '/h' },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
-              <div className="font-heading text-3xl md:text-4xl font-semibold text-brand-dark">
-                {stat.value}
-              </div>
+              <motion.div
+                className="font-heading text-3xl md:text-4xl font-semibold text-brand-dark"
+                animate={
+                  statsReady
+                    ? {
+                        textShadow: [
+                          '0 0 0px rgba(217, 119, 87, 0)',
+                          '0 0 12px rgba(217, 119, 87, 0.4)',
+                          '0 0 0px rgba(217, 119, 87, 0)',
+                        ],
+                      }
+                    : {}
+                }
+                transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1] }}
+              >
+                {stats ? stat.value.toLocaleString() : '—'}
+                {stat.suffix}
+              </motion.div>
               <div className="text-sm font-body text-brand-dark/40 mt-1">
                 {stat.label}
               </div>
@@ -160,7 +245,11 @@ export default function Hero() {
         className="absolute bottom-8 left-1/2 -translate-x-1/2"
       >
         <motion.div
-          animate={{ y: [0, 8, 0] }}
+          animate={{
+            y: [0, 8, 0],
+            opacity: [0.6, 1, 0.6],
+            scale: [1, 1.05, 1],
+          }}
           transition={{ duration: 2, repeat: Infinity }}
           className="w-5 h-8 rounded-full border-2 border-brand-dark/15 flex items-start justify-center p-1"
         >
