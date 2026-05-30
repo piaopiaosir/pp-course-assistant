@@ -10143,6 +10143,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           let uid = null;
           let duration = null;
           let dtoken = null;
+          let rt = '0.9';
           let iframeSrc = iframe.src || '';
           let videoName = mediaType === 'video' ? '视频' : '音频';
 
@@ -10411,6 +10412,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     jobId = attachment.jobid;
                     otherInfo = attachment.otherInfo || '';
                     videoName = attachment.property?.name || videoName;
+                    rt = attachment.property?.rt || '0.9';
                     break;
                   }
 
@@ -10419,6 +10421,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     jobId = attachment.jobid;
                     otherInfo = attachment.otherInfo || '';
                     videoName = attachment.property?.name || videoName;
+                    rt = attachment.property?.rt || '0.9';
                   }
                 }
               }
@@ -10439,6 +10442,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     jobId = attachment.jobid;
                     otherInfo = attachment.otherInfo || '';
                     videoName = attachment.property?.name || videoName;
+                    rt = attachment.property?.rt || '0.9';
                     break;
                   }
                 }
@@ -10606,7 +10610,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
               const currentIsdrag = isComplete ? '4' : (currentTime > 0 ? '0' : '3');
               const baseUrl = reportUrl.startsWith('http') ? reportUrl : `${protocol}//${host}${reportUrl}`;
-              const reportsUrl = `${baseUrl}/${dtoken}?clazzId=${classId}&playingTime=${currentTime}&duration=${duration}&clipTime=0_${duration}&objectId=${objectId}&otherInfo=${otherInfo}&jobid=${jobId}&userid=${uid}&isdrag=${currentIsdrag}&view=pc&enc=${enc}&rt=0.9&dtype=${mediaType === 'video' ? 'Video' : 'Audio'}&_t=${Date.now()}`;
+              const reportsUrl = `${baseUrl}/${dtoken}?clazzId=${classId}&playingTime=${currentTime}&duration=${duration}&clipTime=0_${duration}&objectId=${objectId}&otherInfo=${otherInfo}&jobid=${jobId}&userid=${uid}&isdrag=${currentIsdrag}&view=pc&enc=${enc}&rt=${rt}&dtype=${mediaType === 'video' ? 'Video' : 'Audio'}&_t=${Date.now()}`;
 
               _GM_xmlhttpRequest({
                 method: "get",
@@ -10644,12 +10648,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
             reportUrl = '/multimedia/v2';
           }
 
+          // 音频时 rt 设为空字符串（与404脚本一致，音频上报不需要rt参数）
+          if (mediaType === 'audio') {
+            rt = '';
+          }
+
+          // 根据 rt 计算实际需要播放的目标时间（rt=1.0 需要100%，rt=0.8 需要80%）
+          const rtValue = parseFloat(rt) || 1.0;
+          let targetDuration = Math.ceil(duration * rtValue);
+          let rtAttempted = false; // 标记是否已尝试过 rt 完成上报
+
           if (directComplete) {
             logStore.addLog(`⚠️ 直接上报中...`, "warning");
             progressStore.update({
               taskName: videoName,
               percent: 100,
-              currentTime: duration,
+              currentTime: targetDuration,
               totalTime: duration,
               type: mediaType === 'video' ? '视频' : '音频',
               detail: '直接上报',
@@ -10657,7 +10671,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               speedDisabled: speedDisabled
             });
             
-            const isComplete = await reportProgress(duration, true);
+            const isComplete = await reportProgress(targetDuration, true);
             if (isComplete) {
               completedSimulatedIds.add(objectId);
               logStore.addLog(`🎬 ${mediaType}直接上报`, "success");
@@ -10796,50 +10810,83 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                 logStore.addLog(`📤 上报进度: ${percent}%（${Math.round(playTime)}/${Math.round(duration)}s）`, "info");
                 lastLoggedPercent = percent;
               }
-              const isComplete = await reportProgress(playTime, isdrag === '4');
-              isReporting = false;
 
-              if (isComplete) {
-                if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
-                window._simulateActive = false;
-                completedSimulatedIds.add(objectId);
-                logStore.addLog(`🎬 ${mediaType}模拟播放完成`, "success");
-                progressStore.update({
-                  percent: 100,
-                  currentTime: duration,
-                  detail: '播放完成',
-                  isPlaying: false
-                });
-                
-                
-                try {
-                  const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
-                  if (mediaElement) {
-                    mediaElement.dispatchEvent(new Event('ended', { bubbles: true }));
-                    logStore.addLog(`已触发${mediaType} ended事件，页面UI将自动更新`, "success");
-                  }
-                } catch (e) {
-                  logStore.addLog(`触发ended事件失败: ${e.message}`, "warning");
-                }
-                
-                window._currentMediaInterval = null;
-                safeResolve();
-              } else if (isdrag === '4') {
-                completeRetryCount++;
-                if (completeRetryCount >= maxCompleteRetries) {
+              // 当播放到 rt 比例且尚未尝试过时，尝试一次完成上报
+              if (!rtAttempted && playTime >= targetDuration) {
+                rtAttempted = true;
+                logStore.addLog(`📊 已播放至${rtValue * 100}%，尝试完成上报`, "info");
+                const isComplete = await reportProgress(playTime, true);
+                isReporting = false;
+                if (isComplete) {
                   if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
                   window._simulateActive = false;
-                  logStore.addLog(`完成上报重试${maxCompleteRetries}次仍未通过，请检查视频是否需要其他操作`, "danger");
+                  completedSimulatedIds.add(objectId);
+                  logStore.addLog(`🎬 ${mediaType}模拟播放完成`, "success");
                   progressStore.update({
                     percent: 100,
                     currentTime: duration,
-                    detail: '上报未通过',
+                    detail: '播放完成',
                     isPlaying: false
                   });
+                  try {
+                    const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
+                    if (mediaElement) {
+                      mediaElement.dispatchEvent(new Event('ended', { bubbles: true }));
+                      logStore.addLog(`已触发${mediaType} ended事件，页面UI将自动更新`, "success");
+                    }
+                  } catch (e) {
+                    logStore.addLog(`触发ended事件失败: ${e.message}`, "warning");
+                  }
                   window._currentMediaInterval = null;
                   safeResolve();
+                  return;
                 } else {
-                  logStore.addLog(`完成上报未通过，重试中(${completeRetryCount}/${maxCompleteRetries})...`, "warning");
+                  logStore.addLog(`⚠️ rt比例完成上报未通过，继续播放至100%`, "warning");
+                  targetDuration = duration;
+                }
+              } else {
+                const isComplete = await reportProgress(playTime, isdrag === '4');
+                isReporting = false;
+
+                if (isComplete) {
+                  if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
+                  window._simulateActive = false;
+                  completedSimulatedIds.add(objectId);
+                  logStore.addLog(`🎬 ${mediaType}模拟播放完成`, "success");
+                  progressStore.update({
+                    percent: 100,
+                    currentTime: duration,
+                    detail: '播放完成',
+                    isPlaying: false
+                  });
+                  try {
+                    const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
+                    if (mediaElement) {
+                      mediaElement.dispatchEvent(new Event('ended', { bubbles: true }));
+                      logStore.addLog(`已触发${mediaType} ended事件，页面UI将自动更新`, "success");
+                    }
+                  } catch (e) {
+                    logStore.addLog(`触发ended事件失败: ${e.message}`, "warning");
+                  }
+                  window._currentMediaInterval = null;
+                  safeResolve();
+                } else if (isdrag === '4') {
+                  completeRetryCount++;
+                  if (completeRetryCount >= maxCompleteRetries) {
+                    if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
+                    window._simulateActive = false;
+                    logStore.addLog(`完成上报重试${maxCompleteRetries}次仍未通过，请检查视频是否需要其他操作`, "danger");
+                    progressStore.update({
+                      percent: 100,
+                      currentTime: duration,
+                      detail: '上报未通过',
+                      isPlaying: false
+                    });
+                    window._currentMediaInterval = null;
+                    safeResolve();
+                  } else {
+                    logStore.addLog(`完成上报未通过，重试中(${completeRetryCount}/${maxCompleteRetries})...`, "warning");
+                  }
                 }
               }
             }
