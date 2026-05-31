@@ -145,7 +145,7 @@ export default function HelpPage({ onBack }: HelpPageProps) {
         </div>
       </div>
 
-      <div className="section-container py-6 sm:py-8 md:py-12 max-w-2xl mx-auto">
+      <div className="section-container py-6 sm:py-8 md:py-12 max-w-4xl mx-auto">
         {/* Alert */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}

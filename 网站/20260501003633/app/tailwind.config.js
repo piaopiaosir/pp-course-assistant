@@ -42,6 +42,8 @@ export default {
         'pulse-subtle': 'pulseSubtle 2s var(--ease-in-out-quad, ease-in-out) infinite',
         'glow-pulse': 'glowPulse 2.5s var(--ease-in-out-quad, ease-in-out) infinite',
         'bounce-subtle': 'bounceSubtle 0.6s var(--ease-out-expo, ease-out)',
+        'alert-flash': 'alertFlash 1.5s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
       },
       keyframes: {
         // 保留现有关键帧
@@ -89,6 +91,14 @@ export default {
           '50%': { transform: 'translateY(0)' },
           '70%': { transform: 'translateY(-3px)' },
           '100%': { transform: 'translateY(0)' },
+        },
+        alertFlash: {
+          '0%, 100%': { borderColor: 'rgba(248, 113, 113, 0.3)' },
+          '50%': { borderColor: 'rgba(248, 113, 113, 0.8)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
     },

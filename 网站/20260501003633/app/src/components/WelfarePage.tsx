@@ -130,7 +130,7 @@ export default function WelfarePage({ onBack }: WelfarePageProps) {
 
   return (
     <div className="min-h-screen pt-20 md:pt-28 pb-16">
-      <div className="section-container max-w-2xl mx-auto">
+      <div className="section-container max-w-3xl mx-auto">
         {/* Back */}
         <button
           onClick={onBack}

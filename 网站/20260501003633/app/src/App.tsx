@@ -20,6 +20,7 @@ const slideVariants = {
 
 function App() {
   const [mounted, setMounted] = useState(false)
+  const [introExiting, setIntroExiting] = useState(false)
   const [introDone, setIntroDone] = useState(false)
   const [page, setPage] = useState<'home' | 'help' | 'sponsor' | 'welfare' | 'status' | 'tiku'>('home')
   const [direction, setDirection] = useState(1)
@@ -32,6 +33,10 @@ function App() {
       setPage(hash as 'welfare' | 'help' | 'sponsor' | 'status' | 'tiku')
     }
   }, [])
+
+  const handleIntroExitStart = () => {
+    setIntroExiting(true)
+  }
 
   const handleIntroComplete = () => {
     setIntroDone(true)
@@ -76,13 +81,19 @@ function App() {
   if (!mounted) return null
 
   return (
-    <div className="relative min-h-screen bg-brand-light text-brand-dark overflow-hidden">
-      {/* 主页内容 - 提前渲染在底层，被 IntroAnimation 遮挡 */}
+    <div className="relative min-h-screen bg-brand-light text-brand-dark overflow-x-hidden">
+      {/* 主页层 - 从一开始就渲染在 DOM 中，开场动画退场时同步淡入 */}
       <motion.div
-        className="min-h-screen"
+        className="min-h-screen relative z-10"
         initial={{ opacity: 0 }}
-        animate={{ opacity: introDone ? 1 : 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        animate={{
+          opacity: introExiting ? 1 : 0,
+        }}
+        transition={{
+          duration: 1.0,
+          delay: 0.3,
+          ease: [0.22, 1, 0.36, 1],
+        }}
       >
         <Navbar
           currentPage={page}
@@ -181,8 +192,13 @@ function App() {
         </AnimatePresence>
       </motion.div>
 
-      {/* 开场动画 - 绝对定位在顶层 */}
-      {!introDone && <IntroAnimation onComplete={handleIntroComplete} />}
+      {/* 开场动画 - fixed 定位覆盖在主页层之上 */}
+      {!introDone && (
+        <IntroAnimation
+          onExitStart={handleIntroExitStart}
+          onComplete={handleIntroComplete}
+        />
+      )}
     </div>
   )
 }

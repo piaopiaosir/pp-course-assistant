@@ -3,6 +3,7 @@ import { animate as animeAnimate } from 'animejs'
 
 interface IntroAnimationProps {
   onComplete: () => void
+  onExitStart?: () => void
 }
 
 // 品牌色系：暖橙、蓝、绿
@@ -13,7 +14,7 @@ function easeOutQuart(t: number): number {
   return 1 - Math.pow(1 - t, 4)
 }
 
-export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
+export default function IntroAnimation({ onComplete, onExitStart }: IntroAnimationProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<{
@@ -257,19 +258,59 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
       if (exiting || s.exited) return
       exiting = true
       s.exited = true
+      onExitStart?.()
       const container = containerRef.current
+      const canvasEl = canvasRef.current
+      const title = document.querySelector('.intro-title') as HTMLElement | null
+      const subtitle = document.querySelector('.intro-subtitle') as HTMLElement | null
+      const hint = document.querySelector('.intro-hint') as HTMLElement | null
+
       if (container) {
-        animeAnimate(container, {
-          opacity: [1, 0],
-          scale: [1, 0.95],
-          filter: ['blur(0px)', 'blur(8px)'],
-          duration: 800,
-          ease: 'inOutQuad',
-          onComplete: () => {
-            cancelAnimationFrame(s.rafId)
-            onComplete()
-          },
+        // 添加底部阴影，增强"幕布是实体"的感觉
+        container.style.boxShadow = '0 10px 40px rgba(0,0,0,0.1)'
+
+        // 第一阶段：内部收敛（0.5s）
+        // Canvas 元素群 scale 1→0.96, opacity 1→0.2
+        if (canvasEl) {
+          animeAnimate(canvasEl, {
+            scale: [1, 0.96],
+            opacity: [1, 0.2],
+            duration: 500,
+            easing: 'linear',
+          })
+        }
+
+        // 文字"网课小助手"和副标题 opacity 1→0
+        const textEls = [title, subtitle, hint].filter(Boolean) as HTMLElement[]
+        textEls.forEach((el) => {
+          animeAnimate(el, {
+            opacity: [1, 0],
+            duration: 500,
+            easing: 'linear',
+          })
         })
+
+        // 500ms 后停止 canvas 动画
+        setTimeout(() => {
+          cancelAnimationFrame(s.rafId)
+        }, 500)
+
+        // 第二阶段：整体幕布升起（1.2s）
+        // 整个容器 translateY: 0→-100%, opacity: 1→0
+        animeAnimate(container, {
+          translateY: ['0%', '-100%'],
+          opacity: [1, 0],
+          duration: 1200,
+          easing: 'cubicBezier(0.22, 1, 0.36, 1)',
+          delay: 500,
+        })
+
+        // 退场动画完成后通知 App（phase1 0.5s + phase2 delay 0.5s + phase2 duration 1.2s = 2.2s）
+        setTimeout(() => {
+          onComplete()
+        }, 2200)
+      } else {
+        onComplete()
       }
     }
 
@@ -326,7 +367,7 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
       cancelAnimationFrame(s.rafId)
       s.listeners.forEach((fn) => fn())
     }
-  }, [drawFrame, onComplete])
+  }, [drawFrame, onComplete, onExitStart])
 
   return (
     <div

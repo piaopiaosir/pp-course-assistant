@@ -113,23 +113,11 @@ export default function Hero() {
       ref={ref}
       className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20"
     >
-      {/* Background gradient with breathing animation */}
+      {/* Background gradient */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.1, 0.15, 0.1] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-1/4 left-1/4 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[600px] md:h-[600px] bg-brand-blue/10 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{ scale: [1, 1.08, 1], opacity: [0.08, 0.12, 0.08] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute bottom-1/3 right-1/4 w-[250px] h-[250px] sm:w-[350px] sm:h-[350px] md:w-[500px] md:h-[500px] bg-brand-orange/8 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{ scale: [1, 1.06, 1], opacity: [0.05, 0.1, 0.05] }}
-          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] sm:w-[550px] sm:h-[550px] md:w-[800px] md:h-[800px] bg-brand-green/5 rounded-full blur-3xl"
-        />
+        <div className="absolute top-1/4 left-1/4 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] md:w-[600px] md:h-[600px] bg-brand-blue/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/3 right-1/4 w-[250px] h-[250px] sm:w-[350px] sm:h-[350px] md:w-[500px] md:h-[500px] bg-brand-orange/8 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] sm:w-[550px] sm:h-[550px] md:w-[800px] md:h-[800px] bg-brand-green/5 rounded-full blur-3xl" />
       </div>
 
       {/* Decorative grid */}
@@ -150,7 +138,7 @@ export default function Hero() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+          transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-light-gray/50 border border-brand-light-gray mb-8"
         >
           <Sparkles className="w-4 h-4 text-brand-orange" />
@@ -161,9 +149,9 @@ export default function Hero() {
 
         {/* Main Heading */}
         <motion.h1
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.8, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
           className="font-heading text-3xl xs:text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-semibold leading-[1.05] tracking-tight mb-4 md:mb-6"
         >
           <span className="gradient-text">网课小助手</span>
@@ -173,9 +161,9 @@ export default function Hero() {
 
         {/* Subtitle */}
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+          transition={{ duration: 0.8, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
           className="max-w-2xl mx-auto text-base sm:text-lg md:text-xl font-body text-brand-dark/50 leading-relaxed mb-8 md:mb-10 px-4 sm:px-0"
         >
           考试 · 视频 · 章节测验，一键自动化完成
@@ -187,7 +175,7 @@ export default function Hero() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.65, ease: [0.25, 0.46, 0.45, 0.94] }}
+          transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col xs:flex-row items-center justify-center gap-3 sm:gap-4"
         >
           <button
@@ -200,17 +188,27 @@ export default function Hero() {
 
         {/* Stats */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.7 }}
           className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap items-center justify-center gap-6 sm:gap-8 md:gap-16"
         >
           {[
             { value: totalQueries, label: '总查询次数', suffix: '' },
             { value: todayQueries, label: '今日查询次数', suffix: '' },
             { value: hourlyRate, label: '近一小时查询速率', suffix: '/h' },
-          ].map((stat) => (
-            <div key={stat.label} className="text-center">
+          ].map((stat, index) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.6,
+                delay: 0.7 + index * 0.1,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className="text-center"
+            >
               <motion.div
                 className="font-heading text-3xl md:text-4xl font-semibold text-brand-dark"
                 animate={
@@ -232,7 +230,7 @@ export default function Hero() {
               <div className="text-sm font-body text-brand-dark/40 mt-1">
                 {stat.label}
               </div>
-            </div>
+            </motion.div>
           ))}
         </motion.div>
       </motion.div>
