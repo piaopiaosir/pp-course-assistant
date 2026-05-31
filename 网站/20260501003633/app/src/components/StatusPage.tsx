@@ -74,7 +74,7 @@ function CircularProgress({ value, size = 80, strokeWidth = 6 }: { value: number
           cy={size / 2}
         />
         <circle
-          className="text-brand-green transition-all duration-500"
+          className="text-emerald-400 transition-all duration-500"
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -187,11 +187,16 @@ export default function StatusPage({ onBack }: StatusPageProps) {
   const avgPing = monitors.length > 0 ? Math.round(monitors.reduce((sum, m) => sum + m.ping, 0) / monitors.length) : 0
   const avgUptime = monitors.length > 0 ? monitors.reduce((sum, m) => sum + m.uptime, 0) / monitors.length : 0
 
-  const getBarColor = (status: number, index: number, total: number) => {
-    const opacity = index < total / 2 ? 'opacity-40' : 'opacity-100'
-    if (status === 1) return `bg-brand-green ${opacity}`
+  const getBarColor = (status: number) => {
+    if (status === 1) return 'bg-emerald-400'
     if (status === 0) return 'bg-red-400'
     return 'bg-yellow-400'
+  }
+
+  const getBarOpacity = (index: number, total: number) => {
+    // 从旧到新透明度平滑过渡：0.3 → 1.0
+    const ratio = total > 1 ? index / (total - 1) : 1
+    return 0.3 + ratio * 0.7
   }
 
   if (isLoading) {
@@ -273,7 +278,7 @@ export default function StatusPage({ onBack }: StatusPageProps) {
         <div className="flex items-center gap-3">
           <h1 className="text-lg md:text-xl font-heading font-semibold text-brand-dark">服务监控</h1>
           <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${allUp ? 'bg-brand-green' : 'bg-red-400'} animate-pulse`} />
+            <div className={`w-2 h-2 rounded-full ${allUp ? 'bg-emerald-400' : 'bg-red-400'} animate-pulse`} />
             <span className="text-xs font-body text-brand-dark/50">实时监控中</span>
           </div>
         </div>
@@ -292,72 +297,136 @@ export default function StatusPage({ onBack }: StatusPageProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+          {/* 运行中卡片 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-white rounded-2xl border border-brand-light-gray/50 p-5 shadow-sm hover:shadow-md transition-shadow"
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="group relative glass-card overflow-hidden cursor-default transition-all duration-500 hover:shadow-[0_8px_32px_rgba(120,140,93,0.15)] hover:border-brand-green/30"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-brand-green" />
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-brand-green/10 rounded-full blur-2xl group-hover:bg-brand-green/20 transition-colors duration-500" />
+            <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-emerald-400/8 rounded-full blur-xl group-hover:bg-emerald-400/15 transition-colors duration-500" />
+            <div className="relative p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-green to-emerald-400 flex items-center justify-center shadow-lg shadow-brand-green/20 group-hover:shadow-brand-green/40 transition-shadow duration-500">
+                    <CheckCircle2 className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-sm font-body font-medium text-brand-dark/60 group-hover:text-brand-dark/80 transition-colors duration-300">运行中</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-green/10">
+                  <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
+                  <span className="text-[10px] font-body font-medium text-brand-green tracking-wide uppercase">Live</span>
+                </div>
               </div>
-              <span className="text-sm font-body text-brand-dark/60">运行中</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <motion.span
-                key={upCount}
-                initial={{ scale: 1.1 }}
-                animate={{ scale: 1 }}
-                className="text-3xl font-heading font-bold text-brand-dark"
-              >
-                {upCount}
-              </motion.span>
-              <span className="text-lg font-heading text-brand-dark/40">/</span>
-              <span className="text-lg font-heading text-brand-dark/40">{monitors.length}</span>
+              <div className="mb-5">
+                <span className="text-5xl font-heading font-bold tracking-tight bg-gradient-to-br from-brand-dark via-brand-dark/90 to-brand-green bg-clip-text text-transparent">
+                  {upCount}
+                </span>
+                <span className="text-2xl font-heading font-medium text-brand-dark/20 ml-0.5">/{monitors.length}</span>
+              </div>
+              <div className="relative h-2 bg-brand-green/8 rounded-full overflow-hidden mb-3">
+                <div className="absolute inset-0 bg-gradient-to-r from-brand-green/5 to-brand-green/10 rounded-full" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${monitors.length > 0 ? (upCount / monitors.length) * 100 : 0}%` }}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative h-full bg-gradient-to-r from-brand-green to-emerald-400 rounded-full shadow-sm shadow-brand-green/30"
+                />
+              </div>
+              <p className="text-xs font-body text-brand-dark/40 group-hover:text-brand-dark/60 transition-colors duration-300">
+                {upCount === monitors.length ? '所有服务正常运行' : `${monitors.length - upCount} 个服务异常`}
+              </p>
             </div>
           </motion.div>
 
+          {/* 可用率卡片 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-white rounded-2xl border border-brand-light-gray/50 p-5 shadow-sm hover:shadow-md transition-shadow"
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="group relative glass-card overflow-hidden cursor-default transition-all duration-500 hover:shadow-[0_8px_32px_rgba(106,155,204,0.15)] hover:border-brand-blue/30"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-brand-green" />
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-brand-blue/10 rounded-full blur-2xl group-hover:bg-brand-blue/20 transition-colors duration-500" />
+            <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-sky-400/8 rounded-full blur-xl group-hover:bg-sky-400/15 transition-colors duration-500" />
+            <div className="relative p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-blue to-sky-400 flex items-center justify-center shadow-lg shadow-brand-blue/20 group-hover:shadow-brand-blue/40 transition-shadow duration-500">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-sm font-body font-medium text-brand-dark/60 group-hover:text-brand-dark/80 transition-colors duration-300">可用率</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-blue/10">
+                  <div className="w-1.5 h-1.5 rounded-full bg-brand-blue animate-pulse" />
+                  <span className="text-[10px] font-body font-medium text-brand-blue tracking-wide uppercase">24h</span>
+                </div>
               </div>
-              <span className="text-sm font-body text-brand-dark/60">可用率</span>
-            </div>
-            <div className="flex items-center justify-center">
-              <CircularProgress value={avgUptime} size={80} strokeWidth={6} />
+              <div className="mb-5">
+                <span className="text-5xl font-heading font-bold tracking-tight bg-gradient-to-br from-brand-dark via-brand-dark/90 to-brand-blue bg-clip-text text-transparent">
+                  {avgUptime.toFixed(1)}
+                </span>
+                <span className="text-2xl font-heading font-medium text-brand-dark/20 ml-0.5">%</span>
+              </div>
+              <div className="relative h-2 bg-brand-blue/8 rounded-full overflow-hidden mb-3">
+                <div className="absolute inset-0 bg-gradient-to-r from-brand-blue/5 to-brand-blue/10 rounded-full" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${avgUptime}%` }}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative h-full bg-gradient-to-r from-brand-blue to-sky-400 rounded-full shadow-sm shadow-brand-blue/30"
+                />
+              </div>
+              <p className="text-xs font-body text-brand-dark/40 group-hover:text-brand-dark/60 transition-colors duration-300">过去24小时可用率</p>
             </div>
           </motion.div>
 
+          {/* 平均响应卡片 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-white rounded-2xl border border-brand-light-gray/50 p-5 shadow-sm hover:shadow-md transition-shadow"
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="group relative glass-card overflow-hidden cursor-default transition-all duration-500 hover:shadow-[0_8px_32px_rgba(217,119,87,0.15)] hover:border-brand-orange/30"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-brand-blue" />
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-brand-orange/10 rounded-full blur-2xl group-hover:bg-brand-orange/20 transition-colors duration-500" />
+            <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-amber-400/8 rounded-full blur-xl group-hover:bg-amber-400/15 transition-colors duration-500" />
+            <div className="relative p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-orange to-amber-400 flex items-center justify-center shadow-lg shadow-brand-orange/20 group-hover:shadow-brand-orange/40 transition-shadow duration-500">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-sm font-body font-medium text-brand-dark/60 group-hover:text-brand-dark/80 transition-colors duration-300">平均响应</span>
+                </div>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${avgPing < 200 ? 'bg-brand-green/10' : avgPing < 500 ? 'bg-amber-400/10' : 'bg-red-400/10'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${avgPing < 200 ? 'bg-brand-green' : avgPing < 500 ? 'bg-amber-400' : 'bg-red-400'} animate-pulse`} />
+                  <span className={`text-[10px] font-body font-medium tracking-wide uppercase ${avgPing < 200 ? 'text-brand-green' : avgPing < 500 ? 'text-amber-500' : 'text-red-400'}`}>
+                    {avgPing < 200 ? 'Fast' : avgPing < 500 ? 'Normal' : 'Slow'}
+                  </span>
+                </div>
               </div>
-              <span className="text-sm font-body text-brand-dark/60">平均响应</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <motion.span
-                key={avgPing}
-                initial={{ scale: 1.1 }}
-                animate={{ scale: 1 }}
-                className="text-3xl font-heading font-bold text-brand-dark"
-              >
-                {avgPing}
-              </motion.span>
-              <span className="text-sm font-body text-brand-dark/40">ms</span>
+              <div className="mb-5">
+                <span className="text-5xl font-heading font-bold tracking-tight bg-gradient-to-br from-brand-dark via-brand-dark/90 to-brand-orange bg-clip-text text-transparent">
+                  {avgPing}
+                </span>
+                <span className="text-2xl font-heading font-medium text-brand-dark/20 ml-0.5">ms</span>
+              </div>
+              <div className="relative h-2 bg-brand-orange/8 rounded-full overflow-hidden mb-3">
+                <div className="absolute inset-0 bg-gradient-to-r from-brand-orange/5 to-brand-orange/10 rounded-full" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((avgPing / 1000) * 100, 100)}%` }}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative h-full bg-gradient-to-r from-brand-orange to-amber-400 rounded-full shadow-sm shadow-brand-orange/30"
+                />
+              </div>
+              <p className="text-xs font-body text-brand-dark/40 group-hover:text-brand-dark/60 transition-colors duration-300">
+                {avgPing < 200 ? '响应速度良好' : avgPing < 500 ? '响应速度一般' : '响应速度较慢'}
+              </p>
             </div>
           </motion.div>
         </div>
@@ -366,20 +435,20 @@ export default function StatusPage({ onBack }: StatusPageProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className={`rounded-2xl p-6 mb-6 border ${allUp ? 'bg-brand-green/[0.04] border-brand-green/20' : 'bg-red-50 border-red-200/50'}`}
+          className={`rounded-2xl p-6 mb-6 border ${allUp ? 'bg-emerald-400/[0.04] border-emerald-400/20' : 'bg-red-50 border-red-200/50'}`}
         >
           <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${allUp ? 'bg-brand-green/10' : 'bg-red-100'}`}>
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${allUp ? 'bg-emerald-400/10' : 'bg-red-100'}`}>
               {allUp ? (
-                <CheckCircle2 className="w-8 h-8 text-brand-green" />
+                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
               ) : (
                 <XCircle className="w-8 h-8 text-red-500" />
               )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <div className={`w-2.5 h-2.5 rounded-full ${allUp ? 'bg-brand-green' : 'bg-red-400'} animate-pulse`} />
-                <p className={`font-heading font-semibold text-lg ${allUp ? 'text-brand-green' : 'text-red-600'}`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${allUp ? 'bg-emerald-400' : 'bg-red-400'} animate-pulse`} />
+                <p className={`font-heading font-semibold text-lg ${allUp ? 'text-emerald-500' : 'text-red-600'}`}>
                   {allUp ? '所有服务运行正常' : '部分服务异常'}
                 </p>
               </div>
@@ -422,7 +491,7 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                         <div
                           className={`w-3 h-3 rounded-full ${
                             monitor.status === 'up'
-                              ? 'bg-brand-green shadow-sm shadow-brand-green/30'
+                              ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
                               : monitor.status === 'down'
                               ? 'bg-red-400 shadow-sm shadow-red-400/30'
                               : 'bg-yellow-400 shadow-sm shadow-yellow-400/30'
@@ -431,11 +500,11 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                         <span className="font-heading font-semibold text-brand-dark text-sm md:text-base">{monitor.name}</span>
                       </div>
                       <div className="flex items-center gap-4 text-xs font-body">
-                        <span className={`flex items-center gap-1 ${monitor.ping < 200 ? 'text-brand-green' : 'text-brand-orange'}`}>
+                        <span className={`flex items-center gap-1 ${monitor.ping < 200 ? 'text-emerald-500' : 'text-brand-orange'}`}>
                           <Clock className="w-3 h-3" />
                           {monitor.ping > 0 ? `${monitor.ping}ms` : '-'}
                         </span>
-                        <span className={`font-semibold ${monitor.uptime >= 99 ? 'text-brand-green' : monitor.uptime >= 95 ? 'text-brand-orange' : 'text-red-500'}`}>
+                        <span className={`font-semibold ${monitor.uptime >= 99 ? 'text-emerald-500' : monitor.uptime >= 95 ? 'text-brand-orange' : 'text-red-500'}`}>
                           {monitor.uptime.toFixed(2)}%
                         </span>
                       </div>
@@ -445,8 +514,11 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                       {monitor.heartbeats.map((beat, i) => (
                         <div
                           key={i}
-                          className={`flex-1 min-w-[2px] rounded-sm transition-all hover:scale-y-110 ${getBarColor(beat.status, i, monitor.heartbeats.length)}`}
-                          style={{ height: beat.status === 1 ? `${Math.max(20, Math.min(100, (beat.ping / 2000) * 100))}%` : '100%' }}
+                          className={`flex-1 min-w-[2px] rounded-sm transition-all hover:scale-y-110 ${getBarColor(beat.status)}`}
+                          style={{
+                            height: beat.status === 1 ? `${Math.max(20, Math.min(100, (beat.ping / 2000) * 100))}%` : '100%',
+                            opacity: getBarOpacity(i, monitor.heartbeats.length),
+                          }}
                           title={`${formatTime(beat.time)} · ${beat.status === 1 ? '正常' : '异常'}${beat.ping ? ` · ${beat.ping}ms` : ''}`}
                         />
                       ))}
@@ -454,7 +526,7 @@ export default function StatusPage({ onBack }: StatusPageProps) {
 
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-body text-brand-dark/25">
-                        {formatTime(monitor.heartbeats[monitor.heartbeats.length - 1]?.time || '')}
+                        {formatTime(monitor.heartbeats[0]?.time || '')}
                       </span>
                       <div className="flex items-center gap-2 flex-1 mx-3">
                         <div className="flex-1 bg-brand-light-gray/50 rounded-full h-2 overflow-hidden">
@@ -462,12 +534,12 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                             initial={{ width: 0 }}
                             animate={{ width: `${monitor.uptime}%` }}
                             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                            className="bg-gradient-to-r from-brand-green to-brand-green/70 rounded-full h-full"
+                            className="bg-gradient-to-r from-emerald-400 to-emerald-400/70 rounded-full h-full"
                           />
                         </div>
                       </div>
                       <span className="text-[10px] font-body text-brand-dark/25">
-                        {formatTime(monitor.heartbeats[0]?.time || '')}
+                        {formatTime(monitor.heartbeats[monitor.heartbeats.length - 1]?.time || '')}
                       </span>
                     </div>
                   </motion.div>
@@ -476,36 +548,6 @@ export default function StatusPage({ onBack }: StatusPageProps) {
             </div>
           </motion.div>
         ))}
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="bg-gradient-to-br from-brand-blue/[0.04] to-transparent rounded-2xl border border-brand-blue/10 p-6 mb-6"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center">
-              <Search className="w-4 h-4 text-brand-blue" />
-            </div>
-            <h3 className="font-heading font-semibold text-brand-dark">快速排查指南</h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm font-body">
-            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-brand-light-gray/50">
-              <Wifi className="w-4 h-4 text-brand-green" />
-              <span className="text-brand-dark/70">检查网络连接</span>
-            </div>
-            <span className="text-brand-dark/30">→</span>
-            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-brand-light-gray/50">
-              <Trash2 className="w-4 h-4 text-brand-orange" />
-              <span className="text-brand-dark/70">清除浏览器缓存</span>
-            </div>
-            <span className="text-brand-dark/30">→</span>
-            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-brand-light-gray/50">
-              <UserCircle className="w-4 h-4 text-brand-blue" />
-              <span className="text-brand-dark/70">联系管理员</span>
-            </div>
-          </div>
-        </motion.div>
 
         <div className="text-center pt-4 border-t border-brand-light-gray/30">
           <p className="text-xs font-body text-brand-dark/30">
