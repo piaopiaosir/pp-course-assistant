@@ -273,7 +273,7 @@ app.post('/api/tiku', async (c) => {
     if (!question) {
       return c.json({
         code: 400,
-        msg: '缺少必要参数: question 为必填项',
+        msg: '参数错误，请检查是否有参数缺失',
         data: null
       }, 400);
     }
@@ -303,7 +303,7 @@ app.post('/api/tiku', async (c) => {
     if (!cached) {
       return c.json({
         code: 404,
-        msg: '缓存中未找到该题目答案',
+      msg: '未找到答案',
         data: null
       }, 404);
     }
@@ -314,6 +314,17 @@ app.post('/api/tiku', async (c) => {
       VALUES (?, ?, 1, ?)
       ON DUPLICATE KEY UPDATE count = count + 1, updated_at = ?
     `).run(GLOBAL_LIMIT_KEY, today, now, now);
+
+    // 记录PP题库请求日志
+    try {
+      await db.prepare(`
+        INSERT INTO pp_api_logs (ip, request_count, token, last_used_at, created_at)
+        VALUES (?, 1, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE request_count = request_count + 1, last_used_at = ?
+      `).run(clientIp, authHeader, now, now, now);
+    } catch (e) {
+      console.error('[/api/tiku] PP请求日志记录失败:', e.message);
+    }
 
     let answerData;
     try {
@@ -328,7 +339,7 @@ app.post('/api/tiku', async (c) => {
       data: {
         answer: answerData,
         source: cached.source || 'cache',
-        num: 1
+        num: GLOBAL_DAILY_QUOTA - globalUsed
       }
     });
   } catch (e) {
@@ -1051,6 +1062,19 @@ app.post('/', async (c) => {
 console.log(`\n🚀 服务启动中...`);
 console.log(`📍 地址: http://localhost:${PORT}`);
 console.log(`📊 管理面板: http://localhost:${PORT}/admin`);
+
+// PP题库请求日志7天自动清理
+setInterval(async () => {
+  try {
+    const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+    const result = await db.prepare('DELETE FROM pp_api_logs WHERE last_used_at < ?').run(sevenDaysAgo);
+    if (result.changes > 0) {
+      console.log(`[PP请求日志] 已清理 ${result.changes} 条7天前的记录`);
+    }
+  } catch (e) {
+    console.error('[PP请求日志] 清理失败:', e.message);
+  }
+}, 24 * 60 * 60 * 1000);
 if (FREE_MODE) {
   console.log(`🌟 免费模式: 已开启 (无需Token验证，不扣除次数)`);
 } else {

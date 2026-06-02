@@ -402,10 +402,10 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                   </div>
                   <span className="text-sm font-body font-medium text-brand-dark/60 group-hover:text-brand-dark/80 transition-colors duration-300">平均响应</span>
                 </div>
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${avgPing < 200 ? 'bg-brand-green/10' : avgPing < 500 ? 'bg-amber-400/10' : 'bg-red-400/10'}`}>
-                  <div className={`w-1.5 h-1.5 rounded-full ${avgPing < 200 ? 'bg-brand-green' : avgPing < 500 ? 'bg-amber-400' : 'bg-red-400'} animate-pulse`} />
-                  <span className={`text-[10px] font-body font-medium tracking-wide uppercase ${avgPing < 200 ? 'text-brand-green' : avgPing < 500 ? 'text-amber-500' : 'text-red-400'}`}>
-                    {avgPing < 200 ? 'Fast' : avgPing < 500 ? 'Normal' : 'Slow'}
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${avgPing < 800 ? 'bg-brand-green/10' : avgPing < 1500 ? 'bg-amber-400/10' : 'bg-red-400/10'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${avgPing < 800 ? 'bg-brand-green' : avgPing < 1500 ? 'bg-amber-400' : 'bg-red-400'} animate-pulse`} />
+                  <span className={`text-[10px] font-body font-medium tracking-wide uppercase ${avgPing < 800 ? 'text-brand-green' : avgPing < 1500 ? 'text-amber-500' : 'text-red-400'}`}>
+                    {avgPing < 800 ? 'Fast' : avgPing < 1500 ? 'Normal' : 'Slow'}
                   </span>
                 </div>
               </div>
@@ -425,7 +425,7 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                 />
               </div>
               <p className="text-xs font-body text-brand-dark/40 group-hover:text-brand-dark/60 transition-colors duration-300">
-                {avgPing < 200 ? '响应速度良好' : avgPing < 500 ? '响应速度一般' : '响应速度较慢'}
+                {avgPing < 800 ? '响应速度良好' : avgPing < 1500 ? '响应速度一般' : '响应速度较慢'}
               </p>
             </div>
           </motion.div>

@@ -1349,6 +1349,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
           <option value="referrals">推荐记录</option>
           <option value="answer_cache">答案缓存</option>
           <option value="daily_limits">每日限额</option>
+          <option value="pp_api_logs">PP题库请求</option>
         </select>
         <select id="searchColumn" onchange="updateSearchPlaceholder()">
           <option value="">所有列</option>

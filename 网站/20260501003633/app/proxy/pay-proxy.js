@@ -14,7 +14,7 @@ puppeteer.use(StealthPlugin());
 
 // ==================== MySQL 配置 ====================
 const DB_CONFIG = {
-  host: process.env.DB_HOST || '38.76.188.68',
+  host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '13306'),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'PIAOPIAONB',
@@ -1640,6 +1640,29 @@ async function main() {
   }, 60000);
 
   // 免费福利领取（后端转发，不暴露题库服务器地址）
+  // 题库接口代理（解决 HTTPS 混合内容问题）
+  app.post('/api/proxy/tiku', async (req, res) => {
+    const { server } = req.body;
+    const servers = ['122.152.249.109:3000', '152.136.30.238:3000'];
+    const target = server && servers.includes(server) ? server : servers[0];
+    try {
+      const resp = await fetch(`http://${target}/api/tiku`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers['authorization'] || 'free',
+        },
+        body: JSON.stringify(req.body),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await resp.json();
+      res.status(resp.status).json(data);
+    } catch (err) {
+      log(`[题库代理失败] ${err.message}`);
+      res.status(500).json({ code: 500, msg: '题库服务器连接失败，请稍后重试', data: null });
+    }
+  });
+
   app.post('/api/proxy/welfare', async (req, res) => {
     // IP频率限制
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || req.socket.remoteAddress;
@@ -1647,7 +1670,7 @@ async function main() {
       return res.status(429).json({ code: 429, msg: '操作过于频繁，请1分钟后再试' });
     }
     try {
-      const resp = await fetch('http://43.139.12.117:3000/welfare', {
+      const resp = await fetch('http://122.152.249.109:3000/welfare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(req.body),

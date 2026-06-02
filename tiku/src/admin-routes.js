@@ -477,6 +477,24 @@ function registerAdminRoutes(app) {
 
         total = (await db.prepare(`SELECT COUNT(*) as count FROM admin_access_logs ${whereClause}`).get(...params)).count;
         rows = await db.prepare(`SELECT * FROM admin_access_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+      } else if (table === 'pp_api_logs') {
+        columns = ['id', 'ip', 'request_count', 'token', 'last_used_at', 'created_at'];
+        let whereClause = '';
+        let params = [];
+
+        if (search) {
+          const safeColumn = validateColumn(searchColumn, columns);
+          if (safeColumn) {
+            whereClause = `WHERE \`${safeColumn}\` LIKE ?`;
+            params = [`%${search}%`];
+          } else {
+            whereClause = 'WHERE ip LIKE ? OR token LIKE ?';
+            params = [`%${search}%`, `%${search}%`];
+          }
+        }
+
+        total = (await db.prepare(`SELECT COUNT(*) as count FROM pp_api_logs ${whereClause}`).get(...params)).count;
+        rows = await db.prepare(`SELECT * FROM pp_api_logs ${whereClause} ORDER BY last_used_at DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
       }
 
       return c.json({ columns, rows, total });
@@ -513,6 +531,8 @@ function registerAdminRoutes(app) {
         await db.prepare('DELETE FROM daily_limits WHERE id = ?').run(id);
       } else if (table === 'suspicious_ips') {
         await db.prepare('DELETE FROM suspicious_ips WHERE id = ?').run(id);
+      } else if (table === 'pp_api_logs') {
+        await db.prepare('DELETE FROM pp_api_logs WHERE id = ?').run(id);
       } else {
         return c.json({ error: '不支持的表' }, 400);
       }

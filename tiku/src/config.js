@@ -317,6 +317,18 @@ async function initDatabase() {
         INDEX idx_reporter_token (reporter_token),
         INDEX idx_created_at (created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+      CREATE TABLE IF NOT EXISTS pp_api_logs (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        ip VARCHAR(45) NOT NULL,
+        request_count INT DEFAULT 1 COMMENT '同一IP累计请求次数',
+        token VARCHAR(64) DEFAULT 'free' COMMENT '请求使用的Token',
+        last_used_at BIGINT DEFAULT (UNIX_TIMESTAMP()) COMMENT '最近使用时间',
+        created_at BIGINT DEFAULT (UNIX_TIMESTAMP()),
+        UNIQUE KEY uk_ip_token (ip, token),
+        INDEX idx_last_used (last_used_at),
+        INDEX idx_ip (ip)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
     
     // 创建索引

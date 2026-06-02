@@ -22,10 +22,16 @@ function useCountUp(target: number, duration: number = 1200, enabled: boolean = 
   const [displayValue, setDisplayValue] = useState(0)
   const hasAnimatedRef = useRef(false)
   const frameRef = useRef<number>(0)
+  const initialTargetRef = useRef<number>(0)
 
   useEffect(() => {
     if (!enabled || target === 0) {
       return
+    }
+
+    // 记录首次启用时的目标值，后续数据更新直接显示最新值
+    if (!hasAnimatedRef.current && initialTargetRef.current === 0) {
+      initialTargetRef.current = target
     }
 
     if (hasAnimatedRef.current) {
@@ -34,12 +40,13 @@ function useCountUp(target: number, duration: number = 1200, enabled: boolean = 
     }
 
     const startTime = performance.now()
+    const animatedTarget = initialTargetRef.current
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime
       const progress = Math.min(elapsed / duration, 1)
       const easedProgress = easeOutExpo(progress)
-      const currentValue = Math.floor(easedProgress * target)
+      const currentValue = Math.floor(easedProgress * animatedTarget)
 
       setDisplayValue(currentValue)
 
@@ -56,7 +63,15 @@ function useCountUp(target: number, duration: number = 1200, enabled: boolean = 
     return () => {
       cancelAnimationFrame(frameRef.current)
     }
-  }, [target, duration, enabled])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled])
+
+  // 动画完成后，直接同步最新值
+  useEffect(() => {
+    if (hasAnimatedRef.current) {
+      setDisplayValue(target)
+    }
+  }, [target])
 
   return displayValue
 }

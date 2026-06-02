@@ -7,8 +7,8 @@ interface TikuDocPageProps {
 }
 
 const SERVERS = [
-  { label: '广州节点', ip: '122.152.249.109', region: '🇨🇳 广州' },
-  { label: '北京节点', ip: '152.136.30.238', region: '🇨🇳 北京' },
+  { label: '广州节点', ip: '122.152.249.109:3000', region: '🇨🇳 广州' },
+  { label: '北京节点', ip: '152.136.30.238:3000', region: '🇨🇳 北京' },
 ]
 
 const TOC_ITEMS = [
@@ -34,7 +34,7 @@ function ResponseCodeBlock() {
   "data": {
     "answer": ["北京"], // 题目答案
     "source": "cache",  // 答案来源
-    "num": 1            // token剩余查题次数
+    "num": 4999         // 每日剩余查询次数
   }
 }`,
     },
@@ -54,7 +54,7 @@ function ResponseCodeBlock() {
       color: 'bg-red-100 text-red-600 border-red-300 ring-1 ring-red-200',
       code: `{
   "code": 400,
-  "msg": "参数错误：question 不能为空",
+  "msg": "参数错误，请检查是否有参数缺失",
   "data": null
 }`,
     },
@@ -94,11 +94,11 @@ function ResponseCodeBlock() {
       </div>
       <div className="p-5 sm:p-6 space-y-3">
         <div className="flex flex-wrap gap-2">
-          {(Object.keys(responses) as unknown as number[]).map((key) => (
+                  {(Object.keys(responses) as unknown as number[]).map((key) => (
             <button
               key={key}
-              onClick={() => setActiveStatus(key as 200 | 404 | 400 | 401 | 429)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium transition-all duration-200 cursor-pointer border ${activeStatus === key ? responses[key].color : 'bg-white text-brand-dark/50 border-brand-light-gray/60 hover:text-brand-dark/70 hover:border-brand-dark/20'}`}
+              onClick={() => setActiveStatus(Number(key) as 200 | 404 | 400 | 401 | 429)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium transition-all duration-200 cursor-pointer border ${activeStatus === Number(key) ? responses[key as keyof typeof responses].color : 'bg-white text-brand-dark/50 border-brand-light-gray/60 hover:text-brand-dark/70 hover:border-brand-dark/20'}`}
             >
               {responses[key].label}
             </button>
@@ -143,8 +143,9 @@ function ExampleCodeBlock() {
     shell: {
       label: 'cURL',
       file: 'request.sh',
-      code: `curl --location 'http://122.152.249.109/api/tiku' \\\\
+      code: `curl --location 'http://122.152.249.109:3000/api/tiku' \\\\
   --header 'Content-Type: application/json' \\\\
+  --header 'Authorization: free' \\\\
   --data '{
     "question": "中国的首都是哪里？",
     "options": ["北京", "上海", "广州", "深圳"],
@@ -154,7 +155,7 @@ function ExampleCodeBlock() {
     node: {
       label: 'Node.js',
       file: 'request.js',
-      code: `const servers = ["122.152.249.109", "152.136.30.238"]
+      code: `const servers = ["122.152.249.109:3000", "152.136.30.238:3000"]
 const server = servers[Math.floor(Math.random() * servers.length)]
 
 const http = require("http")
@@ -165,13 +166,15 @@ const data = JSON.stringify({
   type: "0",
 })
 
+const [hostname, port] = server.split(":")
 const options = {
-  hostname: server,
-  port: 80,
+  hostname,
+  port: parseInt(port),
   path: "/api/tiku",
   method: "POST",
   headers: {
     "Content-Type": "application/json",
+    "Authorization": "free",
     "Content-Length": Buffer.byteLength(data),
   },
 }
@@ -188,12 +191,12 @@ req.end()`,
     js: {
       label: 'JavaScript',
       file: 'request.mjs',
-      code: `const servers = ["122.152.249.109", "152.136.30.238"]
+      code: `const servers = ["122.152.249.109:3000", "152.136.30.238:3000"]
 const server = servers[Math.floor(Math.random() * servers.length)]
 
 const response = await fetch(\`http://\${server}/api/tiku\`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", "Authorization": "free" },
   body: JSON.stringify({
     question: "中国的首都是哪里？",
     options: ["北京", "上海", "广州", "深圳"],
@@ -210,7 +213,7 @@ console.log(data)`,
       code: `import random
 import requests
 
-servers = ["122.152.249.109", "152.136.30.238"]
+servers = ["122.152.249.109:3000", "152.136.30.238:3000"]
 server = random.choice(servers)
 
 url = f"http://{server}/api/tiku"
@@ -220,7 +223,7 @@ data = {
     "type": "0",
 }
 
-response = requests.post(url, json=data)
+response = requests.post(url, json=data, headers={"Authorization": "free"})
 print(response.json())`,
     },
   }
@@ -323,10 +326,10 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
     const server = SERVERS[selectedServer].ip
     const startTime = Date.now()
     try {
-      const res = await fetch(`http://${server}/api/tiku`, {
+      const res = await fetch('/api/proxy/tiku', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsedBody),
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'free' },
+        body: JSON.stringify({ ...parsedBody, server }),
       })
       const elapsed = Date.now() - startTime
       setResponseStatus(res.status)
@@ -593,7 +596,18 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
       if (el) observer.observe(el)
     })
 
-    return () => observer.disconnect()
+    // 当页面滚到底部时，强制激活最后一个 section
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 50) {
+        setActiveSection(TOC_ITEMS[TOC_ITEMS.length - 1].id)
+      }
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', handleScroll)
+    }
   }, [])
 
   const scrollToSection = (id: string) => {
@@ -616,6 +630,8 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
     '每日共享5000次查询额度，超出后当日无法继续查询，次日重置。',
     '请勿恶意刷接口，否则IP将被封禁。',
     '接口返回的答案仅供参考，请自行判断准确性。',
+    '本服务仅供学习研究使用，严禁用于考试作弊、学术欺诈等任何违反法律法规的用途。',
+    '用户应遵守相关法律法规，自行承担不当使用的一切后果。',
   ]
 
   return (
@@ -682,7 +698,7 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
                   <div>
                     <p className="text-sm sm:text-base font-body font-semibold text-brand-orange mb-1">免费接口 · 每日5000次</p>
                     <p className="text-xs sm:text-sm font-body text-brand-dark/50 leading-relaxed">
-                      本接口完全免费，无需Token认证，每日共享5000次查询额度。仅支持查询服务器缓存内容，不调用外部题库和AI。
+                      本题库完全免费，PP题库每日共享5000次查询额度。
                     </p>
                   </div>
                 </div>
@@ -697,17 +713,17 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
                       <span className="inline-flex items-center h-6 rounded-md px-1.5 py-0.5 text-xs font-semibold font-mono bg-brand-orange/10 text-brand-orange">POST</span>
                     </div>
                     <div className="flex items-center flex-1 min-w-0 border-l border-brand-light-gray/60">
-                      <div className="relative flex-shrink-0">
+                      <div className="relative flex-shrink-0 group/sel">
                         <select
                           value={selectedServer}
                           onChange={(e) => setSelectedServer(Number(e.target.value))}
-                          className="appearance-none bg-transparent text-sm font-mono text-brand-dark/70 px-2.5 py-1.5 pr-6 focus:outline-none cursor-pointer h-full"
+                          className="appearance-none bg-brand-orange/5 hover:bg-brand-orange/10 text-sm font-mono text-brand-dark/80 px-2.5 py-1.5 pr-6 rounded-l focus:outline-none cursor-pointer h-full border-r border-brand-light-gray/60 transition-colors"
                         >
                           {SERVERS.map((s, i) => (
-                            <option key={i} value={i}>http://{s.ip}</option>
+                            <option key={i} value={i}>{s.region} · http://{s.ip}</option>
                           ))}
                         </select>
-                        <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-brand-dark/30 pointer-events-none" />
+                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-brand-orange/60 group-hover/sel:text-brand-orange pointer-events-none transition-colors" />
                       </div>
                       <span className="text-sm font-mono text-brand-dark/60 hover:underline hover:decoration-dashed cursor-default flex-shrink-0 pr-2">/api/tiku</span>
                     </div>
