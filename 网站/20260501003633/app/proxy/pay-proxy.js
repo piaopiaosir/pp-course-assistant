@@ -1862,8 +1862,8 @@ async function main() {
     try {
       // 1. 检查脚本猫是否有新版本
       log('[下载] 检查脚本猫最新版本...');
-      const metaResp = await fetch(SCRIPT_META_URL, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      const metaResp = await fetch(SCRIPT_META_URL + '?t=' + Date.now(), {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
         signal: AbortSignal.timeout(10000),
       });
       if (!metaResp.ok) throw new Error(`meta.js 请求失败: ${metaResp.status}`);
@@ -1882,8 +1882,8 @@ async function main() {
 
       // 3. 下载新版本脚本
       log(`[下载] 发现新版本 v${latestVersion}，正在下载...`);
-      const scriptResp = await fetch(SCRIPT_CODE_URL, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      const scriptResp = await fetch(SCRIPT_CODE_URL + '?t=' + Date.now(), {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
         signal: AbortSignal.timeout(15000),
       });
       if (!scriptResp.ok) throw new Error(`脚本下载失败: ${scriptResp.status}`);

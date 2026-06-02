@@ -639,9 +639,10 @@ app.get('/referral/status', async (c) => {
     const userExists = await checkUserIdExists(userId);
     
     if (!userExists) {
-      const newToken = await createTokenForNewUser(userId, masterSecret, clientIp);
-      await recordUserId(userId, clientIp, null);
-      console.log(`[推广接口] 为新用户 ${userId} 创建免费Token: ${newToken}`);
+      return c.json({
+        code: 404,
+        msg: "用户不存在，请先使用脚本后再查看推荐状态"
+      }, 404);
     }
     
     const status = await checkReferralStatus(userId);
@@ -836,15 +837,6 @@ app.post('/', async (c) => {
     log("━━━ 请求参数 ━━━");
     log(`verifyAnswer: ${verifyAnswer} (${typeof verifyAnswer})`);
     log(`userId: ${userId}`);
-    
-    if (FREE_MODE && userId) {
-      const userExists = await checkUserIdExists(userId);
-      if (!userExists) {
-        const newToken = await createTokenForNewUser(userId, masterSecret, clientIp);
-        await recordUserId(userId, clientIp, fid);
-        log(`✓ 免费模式：为新用户 ${userId} 创建Token: ${newToken}`);
-      }
-    }
     
     let limitedMode = false;
     

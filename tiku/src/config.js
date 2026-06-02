@@ -38,7 +38,7 @@ const DB_CONFIG = {
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'tiku',
   waitForConnections: true,
-  connectionLimit: 50,
+  connectionLimit: 100,
   queueLimit: 0,
   charset: 'utf8mb4'
 };

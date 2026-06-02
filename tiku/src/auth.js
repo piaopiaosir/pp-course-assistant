@@ -200,8 +200,18 @@ function generateValidToken(masterSecret) {
   return checksum + seed;
 }
 
-// 为新用户创建Token
+// 为新用户创建Token（带防重检查，防止并发请求创建多个token）
 async function createTokenForNewUser(userId, masterSecret, ip = null) {
+  // 防重检查：如果该用户已有未拉黑的免费token，直接返回
+  const existingToken = await db.prepare(
+    "SELECT token FROM tokens WHERE user_id = ? AND is_free_token = 1 AND is_blacklisted = 0 LIMIT 1"
+  ).get(userId);
+  
+  if (existingToken) {
+    console.log(`用户 ${userId} 已有免费Token: ${existingToken.token}，跳过创建`);
+    return existingToken.token;
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const newToken = generateValidToken(masterSecret);
 

@@ -166,6 +166,6 @@ def remove_comments_from_js(input_file, output_file):
     print(f"输出文件: {output_file}")
 
 if __name__ == '__main__':
-    input_file = r'f:\Users\PIAOPIAO\CodeBuddy\20260309\其他\用户端.js'
-    output_file = r'f:\Users\PIAOPIAO\CodeBuddy\20260309\其他\用户端_无注释.js'
+    input_file = r'f:\Users\PIAOPIAO\CodeBuddy\20260309\用户端\用户端.js'
+    output_file = r'f:\Users\PIAOPIAO\CodeBuddy\20260309\用户端\用户端_无注释.js'
     remove_comments_from_js(input_file, output_file)

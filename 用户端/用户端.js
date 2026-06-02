@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      2.9.7
+// @version      3.0.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         http://pan-yz.chaoxing.com/favicon.ico
@@ -2190,71 +2190,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         
         checkUpdate();
         
-        // 等待预注册/预验证结果（最多3秒）
-        let preReg = null;
-        try {
-          preReg = await Promise.race([
-            __preRegPromise,
-            new Promise(r => setTimeout(() => r(null), 3000))
-          ]);
-        } catch(e) {}
-        
-        if (preReg && preReg.result) {
-          const res = preReg.result;
-          pingDelay.value = preReg.ping;
-          
-          if (res.code === 200 && res.data && res.data.valid) {
-            // 验证成功（包括新用户自动获取Token）
-            remainingCount.value = res.data.num;
-            verifyState.value = { status: 'success', message: `验证成功！剩余次数: ${res.data.num}次` };
-            configStore.tokenVerified = true;
-            configStore.tokenVerifyError = null;
-            
-            if (res.data.newToken) {
-              vue.unref(configStore).queryApis[0].token = res.data.newToken;
-              logStore.addLog('🎉 欢迎新用户！已自动获取Token，赠送' + res.data.num + '次查询额度', 'success');
-            } else {
-              logStore.addLog(`✅ Token验证成功，剩余次数: ${res.data.num}次`, 'success');
-            }
-            
-            if (res.data.num <= 0) {
-              logStore.addLog('💎 次数已用完，<a href="https://hsfaka.cn/shop/IU2JDO1E" target="_blank" style="color:#667eea;text-decoration:underline;">点击购买Token</a>', 'warning');
-            }
-          } else if (res.code === 403 && res.data?.isBlacklisted) {
-            remainingCount.value = 0;
-            verifyState.value = { status: 'error', message: 'Token已用完' };
-            configStore.tokenVerified = false;
-            configStore.tokenVerifyError = 'invalid';
-            logStore.addLog('❌ Token已用完，请重新购买', 'danger');
-          } else if (res.code === 403) {
-            // fid验证失败
-            verifyState.value = { status: 'error', message: '身份验证失败' };
-            configStore.tokenVerified = false;
-            configStore.tokenVerifyError = 'invalid';
-            logStore.addLog('❌ 身份验证失败，请确保在学习通页面内使用', 'danger');
-          } else if (res.code === 401) {
-            remainingCount.value = 0;
-            configStore.tokenVerified = false;
-            configStore.tokenVerifyError = 'invalid';
-            
-            if (res.data?.existingTokens?.length > 0) {
-              existingTokens.value = res.data.existingTokens;
-              verifyState.value = { status: 'error', message: '请选择或输入Token' };
-              logStore.addLog(`💡 检测到${res.data.existingTokens.length}个有效Token，请在下方选择`, 'warning');
-            } else {
-              verifyState.value = { status: 'error', message: '请输入Token' };
-              logStore.addLog('🔄 请输入有效的Token', 'primary');
-            }
-          } else {
-            // 未知响应，回退到正常验证
-            logStore.addLog('🔄 脚本启动，正在验证Token...', 'primary');
-            verifyToken();
-          }
-        } else {
-          // 预注册失败或超时，回退到正常验证
-          logStore.addLog('🔄 脚本启动，正在验证Token...', 'primary');
-          verifyToken();
-        }
+        logStore.addLog('🔄 脚本启动，正在验证Token...', 'primary');
+        verifyToken();
       });
       
       return (_ctx, _cache) => {
@@ -12525,47 +12462,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     hookWebpack();
     hookError();
   }
-  // =========================================================================
-  // 预注册/预验证：UI加载前获取userId和fid并上报服务器
-  // 新用户自动获取Token并填入，老用户预验证Token
-  // 目的：让新用户无需手动输入Token，打开脚本即可使用
-  // =========================================================================
-  let __preRegResolve;
-  const __preRegPromise = new Promise(r => { __preRegResolve = r; });
-  let __preRegStartTime = Date.now();
 
-  // 读取存储的token（用于老用户预验证）
-  let __storedToken = '';
-  try {
-    const __sc = _GM_getValue("config");
-    if (__sc) {
-      const __parsed = JSON.parse(__sc);
-      __storedToken = __parsed?.queryApis?.[0]?.token || '';
-    }
-  } catch(e) {}
-
-  const __preRegUserId = getUid();
-  const __preRegFid = getFid();
-
-  if (__preRegUserId) {
-    __preRegStartTime = Date.now();
-    _GM_xmlhttpRequest({
-      method: "GET",
-      url: CURRENT_SERVER + "?token=" + encodeURIComponent(__storedToken) + "&userId=" + encodeURIComponent(__preRegUserId) + "&fid=" + encodeURIComponent(__preRegFid),
-      timeout: 10000,
-      onload: (response) => {
-        try {
-          __preRegResolve({ result: JSON.parse(response.responseText), ping: Date.now() - __preRegStartTime });
-        } catch(e) {
-          __preRegResolve(null);
-        }
-      },
-      onerror: () => __preRegResolve(null),
-      ontimeout: () => __preRegResolve(null)
-    });
-  } else {
-    __preRegResolve(null);
-  }
 
   // =========================================================================
   // Vue应用初始化
