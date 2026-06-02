@@ -189,6 +189,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
       'qwen3-235b-a22b': 'qwen3-235b-a22b',
       'minimax-m2.5': 'minimax-m2.5',
       'minimax-m2.7': 'minimax-m2.7',
+      'minimax-m3': 'minimax-m3',
       'gpt-5.4-mini': 'gpt-5.4-mini',
       'gpt-5.4-nano': 'gpt-5.4-nano',
       'gemini-3.1': 'gemini-3.1',
@@ -547,6 +548,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     .badge-qwen3-235b-a22b { background: rgba(2, 132, 199, 0.15); color: #0284c7; }
     .badge-minimax-m2\\.5 { background: rgba(249, 115, 22, 0.15); color: #f97316; }
     .badge-minimax-m2\\.7 { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+    .badge-minimax-m3 { background: rgba(234, 88, 12, 0.15); color: #ea580c; }
     .badge-gpt-5\\.4-mini { background: rgba(16, 185, 129, 0.15); color: #10b981; }
     .badge-gpt-5\\.4-nano { background: rgba(5, 150, 105, 0.15); color: #059669; }
     .badge-gemini-3\\.1 { background: rgba(8, 145, 178, 0.15); color: #0891b2; }
@@ -1183,6 +1185,10 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #fb923c;">${globalStats.minimax_m27_calls || 0}</span>
           </div>
           <div class="detail-item">
+            <span class="detail-label">MiniMax-M3</span>
+            <span class="detail-value" style="color: #ea580c;">${globalStats.minimax_m3_calls || 0}</span>
+          </div>
+          <div class="detail-item">
             <span class="detail-label">混元 Standard</span>
             <span class="detail-value" style="color: #667eea;">${globalStats.hunyuan_standard_calls || 0}</span>
           </div>
@@ -1480,7 +1486,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         deepseek_v3: '#ec4899', deepseek_r1: '#8b5cf6', deepseek_v4_flash: '#3b82f6',
         deepseek_v4_pro: '#2563eb', kimi_k26: '#7c3aed', kimi_k25: '#9333ea',
         qwen3_5: '#0ea5e9', qwen3_6: '#38bdf8', qwen3_7: '#7dd3fc', minimax_m25: '#f97316',
-        minimax_m27: '#fb923c', hunyuan_standard: '#667eea', hunyuan_t1: '#764ba2',
+        minimax_m27: '#fb923c', minimax_m3: '#ea580c', hunyuan_standard: '#667eea', hunyuan_t1: '#764ba2',
         gpt_54_mini: '#10b981', gpt_54_nano: '#059669', gemini_31: '#0891b2', gemini_35: '#06b6d4',
         glm_5: '#7c3aed', glm_51: '#8b5cf6', glm_47: '#6366f1'
       };
@@ -1510,6 +1516,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         { label: 'Qwen3.7', value: globalStats.qwen3_7_calls||0, color: colors.qwen3_7 },
         { label: 'MiniMax-M2.5', value: globalStats.minimax_m25_calls||0, color: colors.minimax_m25 },
         { label: 'MiniMax-M2.7', value: globalStats.minimax_m27_calls||0, color: colors.minimax_m27 },
+        { label: 'MiniMax-M3', value: globalStats.minimax_m3_calls||0, color: colors.minimax_m3 },
         { label: 'Hunyuan Standard', value: globalStats.hunyuan_standard_calls||0, color: colors.hunyuan_standard },
         { label: 'Hunyuan T1', value: globalStats.hunyuan_t1_calls||0, color: colors.hunyuan_t1 },
         { label: 'GPT-5.4-mini', value: globalStats.gpt_54_mini_calls||0, color: colors.gpt_54_mini },

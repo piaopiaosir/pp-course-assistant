@@ -80,7 +80,7 @@ const AI_MODELS = {
     provider: '302ai',
     displayName: 'MiniMax-M2.5',
     temperature: 0.6,
-    max_tokens: 2048,
+    max_completion_tokens: 8192,
     cost: 1,
     statsColumn: 'minimax_m25_calls'
   },
@@ -90,9 +90,21 @@ const AI_MODELS = {
     provider: '302ai',
     displayName: 'MiniMax-M2.7',
     temperature: 0.6,
-    max_tokens: 2048,
+    max_completion_tokens: 8192,
     cost: 1,
     statsColumn: 'minimax_m27_calls'
+  },
+  'minimax-m3': {
+    id: 'minimax-m3',
+    apiModel: 'MiniMax-M3',
+    provider: '302ai',
+    displayName: 'MiniMax-M3',
+    temperature: 0.6,
+    max_completion_tokens: 8192,
+    thinking: { type: "adaptive" },
+    reasoning_split: true,
+    cost: 2,
+    statsColumn: 'minimax_m3_calls'
   },
   'hunyuan-t1': {
     id: 'hunyuan-t1',
@@ -225,7 +237,10 @@ function getModelConfig(modelId) {
     name: entry.displayName,
     temperature: entry.temperature,
     max_tokens: entry.max_tokens,
+    max_completion_tokens: entry.max_completion_tokens,
+    top_p: entry.top_p,
     thinking: entry.thinking,
+    reasoning_split: entry.reasoning_split,
     enable_thinking: entry.enable_thinking,
     reasoning_effort: entry.reasoning_effort,
     cost: entry.cost
@@ -249,7 +264,7 @@ function getFullModelConfig() {
     'DeepSeek': ['V4-Flash', 'V4-Pro', 'V3.2', 'R1'],
     'HunYuan': ['Standard', 'T1'],
     'Qwen': ['3.5-plus', '3.6-plus', '3.7-Max'],
-    'MiniMax': ['M2.7', 'M2.5'],
+    'MiniMax': ['M3', 'M2.7', 'M2.5'],
     'GLM': ['5.1', '5.0', '4.7'],
     'Kimi': ['K2.6', 'K2.5'],
     'ChatGPT': ['5.4-nano', '5.4'],
@@ -260,7 +275,7 @@ function getFullModelConfig() {
     'DeepSeek': 'V4-Flash',
     'HunYuan': 'Standard',
     'Qwen': '3.7-Max',
-    'MiniMax': 'M2.7',
+    'MiniMax': 'M3',
     'GLM': '5.1',
     'Kimi': 'K2.6',
     'ChatGPT': '5.4-nano',
@@ -284,6 +299,7 @@ function getFullModelConfig() {
       '3.5-plus': 'qwen3.5-plus'
     },
     'MiniMax': {
+      'M3': 'minimax-m3',
       'M2.7': 'minimax-m2.7',
       'M2.5': 'minimax-m2.5'
     },

@@ -60,8 +60,16 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
   if (modelConfig.temperature !== undefined) {
     body.temperature = modelConfig.temperature;
   }
-  if (modelConfig.max_tokens !== undefined) {
+  if (modelConfig.max_completion_tokens !== undefined) {
+    body.max_completion_tokens = modelConfig.max_completion_tokens;
+  } else if (modelConfig.max_tokens !== undefined) {
     body.max_tokens = modelConfig.max_tokens;
+  }
+  if (modelConfig.top_p !== undefined) {
+    body.top_p = modelConfig.top_p;
+  }
+  if (modelConfig.reasoning_split !== undefined) {
+    body.reasoning_split = modelConfig.reasoning_split;
   }
   
   // 根据不同模型添加对应的深度思考参数
@@ -383,7 +391,7 @@ async function handleAIMode(c, params) {
     }
 
     // 使用 fetchAICustom 函数（OpenAI兼容API）
-    const aiResult = await fetchAICustom(questionData, apiKey302, modelConfig, 'https://api.302ai.com/v1/chat/completions', enableWebSearch, tavilySearch);
+    const aiResult = await fetchAICustom(questionData, apiKey302, modelConfig, 'https://aip.302ai.cn/v1/chat/completions', enableWebSearch, tavilySearch);
     answerData = aiResult;
   } else if (modelConfig.provider === 'deepseek') {
     log("━━━ 查询 DeepSeek 官方 API ━━━");
