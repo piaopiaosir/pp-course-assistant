@@ -32,7 +32,7 @@ function ResponseCodeBlock() {
   "code": 200,         // 状态码
   "msg": "查询成功",    // 状态信息
   "data": {
-    "answer": ["北京"], // 题目答案
+    "answer": ["长安"], // 题目答案
     "source": "cache",  // 答案来源
     "num": 4999         // 每日剩余查询次数
   }
@@ -147,8 +147,8 @@ function ExampleCodeBlock() {
   --header 'Content-Type: application/json' \\\\
   --header 'Authorization: free' \\\\
   --data '{
-    "question": "中国的首都是哪里？",
-    "options": ["北京", "上海", "广州", "深圳"],
+    "question": "唐朝首都是。",
+    "options": ["洛阳", "临安", "长安", "北京"],
     "type": "0"
   }'`,
     },
@@ -161,8 +161,8 @@ const server = servers[Math.floor(Math.random() * servers.length)]
 const http = require("http")
 
 const data = JSON.stringify({
-  question: "中国的首都是哪里？",
-  options: ["北京", "上海", "广州", "深圳"],
+  question: "唐朝首都是。",
+  options: ["洛阳", "临安", "长安", "北京"],
   type: "0",
 })
 
@@ -198,8 +198,8 @@ const response = await fetch(\`http://\${server}/api/tiku\`, {
   method: "POST",
   headers: { "Content-Type": "application/json", "Authorization": "free" },
   body: JSON.stringify({
-    question: "中国的首都是哪里？",
-    options: ["北京", "上海", "广州", "深圳"],
+    question: "唐朝首都是。",
+    options: ["洛阳", "临安", "长安", "北京"],
     type: "0",
   }),
 })
@@ -218,8 +218,8 @@ server = random.choice(servers)
 
 url = f"http://{server}/api/tiku"
 data = {
-    "question": "中国的首都是哪里？",
-    "options": ["北京", "上海", "广州", "深圳"],
+    "question": "唐朝首都是。",
+    "options": ["洛阳", "临安", "长安", "北京"],
     "type": "0",
 }
 
@@ -299,9 +299,19 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
   onServerChange: (idx: number) => void
 }) {
   const [requestTab, setRequestTab] = useState<'params' | 'headers' | 'body'>('body')
+  const [paramsValues, setParamsValues] = useState({
+    question: '唐朝首都是。',
+    options: '["洛阳", "临安", "长安", "北京"]',
+    type: '0',
+  })
+  const [headerValues, setHeaderValues] = useState({
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': 'free',
+  })
   const [requestBody, setRequestBody] = useState(`{
-  "question": "中国的首都是哪里？",
-  "options": ["北京", "上海", "广州", "深圳"],
+  "question": "唐朝首都是。",
+  "options": ["洛阳", "临安", "长安", "北京"],
   "type": "0"
 }`)
   const [testResult, setTestResult] = useState<string | null>(null)
@@ -328,7 +338,7 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
     try {
       const res = await fetch('/api/proxy/tiku', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'free' },
+        headers: { 'Content-Type': headerValues['Content-Type'], 'Authorization': headerValues['Authorization'] },
         body: JSON.stringify({ ...parsedBody, server }),
       })
       const elapsed = Date.now() - startTime
@@ -344,7 +354,19 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
     } finally {
       setIsTesting(false)
     }
-  }, [requestBody, selectedServer])
+  }, [requestBody, selectedServer, headerValues])
+
+  const updateParam = (key: string, value: string) => {
+    setParamsValues(prev => {
+      const next = { ...prev, [key]: value }
+      try {
+        const body: Record<string, any> = { question: next.question, type: next.type }
+        try { body.options = JSON.parse(next.options) } catch { body.options = next.options }
+        setRequestBody(JSON.stringify(body, null, 2))
+      } catch {}
+      return next
+    })
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -458,17 +480,23 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
               {requestTab === 'params' && (
                 <div className="px-5 py-4 space-y-2.5">
                   {[
-                    { key: 'question', value: '题目内容（必填）', required: true },
-                    { key: 'options', value: '["北京", "上海", "广州", "深圳"]', required: false },
-                    { key: 'type', value: '"0"=单选 / "1"=多选 / "2"=判断', required: false },
+                    { key: 'question', label: '题目内容', required: true, placeholder: '输入题目内容' },
+                    { key: 'options', label: '选项', required: false, placeholder: 'JSON数组，如 ["A","B","C","D"]' },
+                    { key: 'type', label: '类型', required: false, placeholder: '0=单选 1=多选 2=判断' },
                   ].map((p) => (
                     <div key={p.key} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#f5f5f5]">
-                      <span className="text-xs font-mono text-brand-dark/50 w-24 flex-shrink-0">{p.key}</span>
-                      <span className="text-xs font-mono text-brand-dark/40 flex-1">{p.value}</span>
+                      <span className="text-xs font-mono text-brand-dark/50 w-16 flex-shrink-0">{p.label}</span>
+                      <input
+                        type="text"
+                        value={paramsValues[p.key as keyof typeof paramsValues]}
+                        onChange={(e) => updateParam(p.key, e.target.value)}
+                        placeholder={p.placeholder}
+                        className="flex-1 text-xs font-mono text-brand-dark/80 bg-transparent outline-none placeholder:text-brand-dark/25"
+                      />
                       {p.required ? (
-                        <span className="text-[10px] font-medium text-red-500">必填</span>
+                        <span className="text-[10px] font-medium text-red-500 flex-shrink-0">必填</span>
                       ) : (
-                        <span className="text-[10px] font-medium text-brand-dark/25">选填</span>
+                        <span className="text-[10px] font-medium text-brand-dark/25 flex-shrink-0">选填</span>
                       )}
                     </div>
                   ))}
@@ -477,19 +505,33 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
 
               {requestTab === 'headers' && (
                 <div className="px-5 py-4 space-y-0.5">
-                  {[
-                    { key: 'Content-Type', value: 'application/json', checked: true },
-                    { key: 'Accept', value: 'application/json', checked: true },
-                    { key: 'Authorization', value: 'free', checked: true },
-                  ].map((h) => (
-                    <div key={h.key} className="flex items-center gap-2 py-2.5 px-3 border-b border-brand-light-gray/20">
-                      <div className="w-4 h-4 rounded-full border-2 border-brand-green flex items-center justify-center flex-shrink-0">
-                        <svg className="w-2.5 h-2.5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                      </div>
-                      <span className="text-xs font-mono text-brand-dark/60 w-28 flex-shrink-0">{h.key}</span>
-                      <span className="text-xs font-mono text-brand-dark/70">{h.value}</span>
+                  <div className="flex items-center gap-2 py-2.5 px-3 border-b border-brand-light-gray/20">
+                    <div className="w-4 h-4 rounded-full border-2 border-brand-green flex items-center justify-center flex-shrink-0">
+                      <svg className="w-2.5 h-2.5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
                     </div>
-                  ))}
+                    <span className="text-xs font-mono text-brand-dark/60 w-28 flex-shrink-0">Content-Type</span>
+                    <span className="text-xs font-mono text-brand-dark/70">application/json</span>
+                  </div>
+                  <div className="flex items-center gap-2 py-2.5 px-3 border-b border-brand-light-gray/20">
+                    <div className="w-4 h-4 rounded-full border-2 border-brand-green flex items-center justify-center flex-shrink-0">
+                      <svg className="w-2.5 h-2.5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    <span className="text-xs font-mono text-brand-dark/60 w-28 flex-shrink-0">Accept</span>
+                    <span className="text-xs font-mono text-brand-dark/70">application/json</span>
+                  </div>
+                  <div className="flex items-center gap-2 py-2.5 px-3 border-b border-brand-light-gray/20">
+                    <div className="w-4 h-4 rounded-full border-2 border-brand-green flex items-center justify-center flex-shrink-0">
+                      <svg className="w-2.5 h-2.5 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    <span className="text-xs font-mono text-brand-dark/60 w-28 flex-shrink-0">Authorization</span>
+                    <input
+                      type="text"
+                      value={headerValues['Authorization']}
+                      onChange={(e) => setHeaderValues(prev => ({ ...prev, 'Authorization': e.target.value }))}
+                      placeholder="Token值"
+                      className="flex-1 text-xs font-mono text-brand-dark/70 bg-[#f5f5f5] rounded px-2 py-1 outline-none border border-brand-light-gray/60 focus:border-brand-orange/40 placeholder:text-brand-dark/25"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -515,7 +557,17 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
                       </div>
                       <textarea
                         value={requestBody}
-                        onChange={(e) => setRequestBody(e.target.value)}
+                        onChange={(e) => {
+                          setRequestBody(e.target.value)
+                          try {
+                            const parsed = JSON.parse(e.target.value)
+                            setParamsValues({
+                              question: parsed.question ?? '',
+                              options: Array.isArray(parsed.options) ? JSON.stringify(parsed.options) : String(parsed.options ?? ''),
+                              type: String(parsed.type ?? '0'),
+                            })
+                          } catch {}
+                        }}
                         spellCheck={false}
                         className="flex-1 min-h-[140px] px-3 py-3 bg-white text-sm font-mono text-brand-dark/80 leading-relaxed focus:outline-none resize-none tabular-nums"
                         style={{ tabSize: 2 }}
@@ -580,34 +632,24 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
   const [debugOpen, setDebugOpen] = useState(false)
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id)
-          }
-        })
-      },
-      { rootMargin: '-20% 0px -60% 0px', threshold: 0.1 }
-    )
-
-    TOC_ITEMS.forEach((item) => {
-      const el = document.getElementById(item.id)
-      if (el) observer.observe(el)
-    })
-
-    // 当页面滚到底部时，强制激活最后一个 section
     const handleScroll = () => {
       if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 50) {
         setActiveSection(TOC_ITEMS[TOC_ITEMS.length - 1].id)
+        return
       }
+      const triggerLine = window.scrollY + window.innerHeight * 0.3
+      let current = TOC_ITEMS[0].id
+      for (const item of TOC_ITEMS) {
+        const el = document.getElementById(item.id)
+        if (el && el.offsetTop <= triggerLine) {
+          current = item.id
+        }
+      }
+      setActiveSection(current)
     }
+    handleScroll()
     window.addEventListener('scroll', handleScroll, { passive: true })
-
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('scroll', handleScroll)
-    }
+    return () => { window.removeEventListener('scroll', handleScroll) }
   }, [])
 
   const scrollToSection = (id: string) => {
