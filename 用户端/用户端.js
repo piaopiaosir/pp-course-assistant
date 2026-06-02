@@ -422,7 +422,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   // 广州/北京双节点负载均衡，随机选取一个
   // =========================================================================
   const SERVER_CONFIGS = [
-    { url: "http://43.139.12.117:3000", location: "广州", color: "#09b4ff" },
+    { url: "http://122.152.249.109:3000", location: "广州", color: "#09b4ff" },
     { url: "http://152.136.30.238:3000", location: "北京", color: "#21d181" }
   ];
 
@@ -3662,28 +3662,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   });
   const ReferralPanel =  _export_sfc(_sfc_main_referral, [["__scopeId", "data-v-referral-panel"]]);
   
-  const changelogLoading = vue.ref(true);
-  const changelogList = vue.ref([]);
-  const changelogRefreshKey = vue.ref(0);
-  try {
-    _GM_xmlhttpRequest({
-      method: "GET",
-      url: getRandomServer() + "/changelog",
-      timeout: 5000,
-      onload: (response) => {
-        try {
-          const res = JSON.parse(response.responseText);
-          if (res.code === 200 && res.data) {
-            changelogList.value = res.data;
-          }
-        } catch (e) {}
-        changelogLoading.value = false;
-        changelogRefreshKey.value++;
-      },
-      onerror: () => {},
-      ontimeout: () => {}
-    });
-  } catch (e) {}
+  
 
   const _sfc_main$4 =  vue.defineComponent({
     __name: "AuthorWords",
@@ -11494,21 +11473,40 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           for (const answer of question.answer) {
             const cleanAnswer = answer.replace(/<[^>]*>/g, "").trim();
             let matched = false;
-            for (const key in question.options) {
-              if (key === cleanAnswer && !selectedKeys.has(key)) {
-                matched = true;
-                selectedKeys.add(key);
-                clickOption(question.options[key]);
-                await randomDelay(0.1, 0.15);
-                break;
+            // 判断题：使用正则匹配，题库可能返回"正确"/"错误"等而选项是"对"/"错"
+            if (question.type === "3") {
+              const isTrueAnswer = REGEX.JUDGE_TRUE.test(cleanAnswer);
+              const isFalseAnswer = REGEX.JUDGE_FALSE.test(cleanAnswer);
+              for (const key in question.options) {
+                const isTrueOption = REGEX.JUDGE_TRUE.test(key);
+                const isFalseOption = REGEX.JUDGE_FALSE.test(key);
+                if ((isTrueAnswer && isTrueOption) || (isFalseAnswer && isFalseOption)) {
+                  if (!selectedKeys.has(key)) {
+                    selectedKeys.add(key);
+                    clickOption(question.options[key]);
+                    await randomDelay(0.1, 0.15);
+                    matched = true;
+                  }
+                  break;
+                }
               }
-            }
-            if (!matched && useSimilarity) {
-              const bestMatch = pickBestOption(cleanAnswer, question.options);
-              if (bestMatch && !selectedKeys.has(bestMatch.key)) {
-                selectedKeys.add(bestMatch.key);
-                clickOption(question.options[bestMatch.key]);
-                await randomDelay(0.1, 0.15);
+            } else {
+              for (const key in question.options) {
+                if (key === cleanAnswer && !selectedKeys.has(key)) {
+                  matched = true;
+                  selectedKeys.add(key);
+                  clickOption(question.options[key]);
+                  await randomDelay(0.1, 0.15);
+                  break;
+                }
+              }
+              if (!matched && useSimilarity) {
+                const bestMatch = pickBestOption(cleanAnswer, question.options);
+                if (bestMatch && !selectedKeys.has(bestMatch.key)) {
+                  selectedKeys.add(bestMatch.key);
+                  clickOption(question.options[bestMatch.key]);
+                  await randomDelay(0.1, 0.15);
+                }
               }
             }
           }
@@ -12191,6 +12189,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const isDragging = vue.ref(false);
       const offsetX = vue.ref(0);
       const offsetY = vue.ref(0);
+      let dragElement = null;
       
       const MIN_TOP = 60;
       const ensureMinTop = (val) => {
@@ -12209,35 +12208,34 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       });
       const startDrag = (event) => {
         isDragging.value = true;
-        offsetX.value = event.clientX - event.target.getBoundingClientRect().left;
-        offsetY.value = event.clientY - event.target.getBoundingClientRect().top;
+        dragElement = event.currentTarget.closest('.main-page');
+        offsetX.value = event.clientX - event.currentTarget.getBoundingClientRect().left;
+        offsetY.value = event.clientY - event.currentTarget.getBoundingClientRect().top;
         document.addEventListener("mousemove", drag);
         document.addEventListener("mouseup", endDrag);
       };
       const drag = (event) => {
-        if (!isDragging.value)
-          return;
+        if (!isDragging.value || !dragElement) return;
         const x = event.clientX - offsetX.value;
         const y = event.clientY - offsetY.value;
-        configStore.position.x = `${x - 11}px`;
-        configStore.position.y = `${y - 11}px`;
-        if (x < 0) {
-          configStore.position.x = "0px";
-        }
-        if (y < MIN_TOP) {
-          configStore.position.y = `${MIN_TOP}px`;
-        }
         const dragW = configStore.isMinus ? 280 : 720;
         const dragH = configStore.isMinus ? 0 : 560;
-        if (x > window.innerWidth - dragW) {
-          configStore.position.x = `${window.innerWidth - dragW}px`;
-        }
-        if (y > window.innerHeight - dragH) {
-          configStore.position.y = `${window.innerHeight - dragH}px`;
-        }
+        let newX = x - 11;
+        let newY = y - 11;
+        if (x < 0) newX = 0;
+        if (y < MIN_TOP) newY = MIN_TOP;
+        if (x > window.innerWidth - dragW) newX = window.innerWidth - dragW;
+        if (y > window.innerHeight - dragH) newY = window.innerHeight - dragH;
+        // 直接操作 DOM，避免 Vue 响应式延迟
+        dragElement.style.left = `${newX}px`;
+        dragElement.style.top = `${newY}px`;
+        // 同步更新 store（用于保存配置）
+        configStore.position.x = `${newX}px`;
+        configStore.position.y = `${newY}px`;
       };
       const endDrag = () => {
         isDragging.value = false;
+        dragElement = null;
         document.removeEventListener("mousemove", drag);
         document.removeEventListener("mouseup", endDrag);
         saveConfigImmediate();
@@ -12247,38 +12245,37 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         if (event.touches.length === 1) {
           isDragging.value = true;
           const touch = event.touches[0];
-          offsetX.value = touch.clientX - event.target.getBoundingClientRect().left;
-          offsetY.value = touch.clientY - event.target.getBoundingClientRect().top;
+          offsetX.value = touch.clientX - event.currentTarget.getBoundingClientRect().left;
+          offsetY.value = touch.clientY - event.currentTarget.getBoundingClientRect().top;
           document.addEventListener("touchmove", dragTouch, { passive: false });
           document.addEventListener("touchend", endDragTouch);
         }
       };
       const dragTouch = (event) => {
-        if (!isDragging.value || event.touches.length !== 1)
+        if (!isDragging.value || event.touches.length !== 1 || !dragElement)
           return;
         event.preventDefault(); 
         const touch = event.touches[0];
         const x = touch.clientX - offsetX.value;
         const y = touch.clientY - offsetY.value;
-        configStore.position.x = `${x - 11}px`;
-        configStore.position.y = `${y - 11}px`;
-        if (x < 0) {
-          configStore.position.x = "0px";
-        }
-        if (y < MIN_TOP) {
-          configStore.position.y = `${MIN_TOP}px`;
-        }
         const dragW = configStore.isMinus ? 280 : 720;
         const dragH = configStore.isMinus ? 0 : 560;
-        if (x > window.innerWidth - dragW) {
-          configStore.position.x = `${window.innerWidth - dragW}px`;
-        }
-        if (y > window.innerHeight - dragH) {
-          configStore.position.y = `${window.innerHeight - dragH}px`;
-        }
+        let newX = x - 11;
+        let newY = y - 11;
+        if (x < 0) newX = 0;
+        if (y < MIN_TOP) newY = MIN_TOP;
+        if (x > window.innerWidth - dragW) newX = window.innerWidth - dragW;
+        if (y > window.innerHeight - dragH) newY = window.innerHeight - dragH;
+        // 直接操作 DOM，避免 Vue 响应式延迟
+        dragElement.style.left = `${newX}px`;
+        dragElement.style.top = `${newY}px`;
+        // 同步更新 store（用于保存配置）
+        configStore.position.x = `${newX}px`;
+        configStore.position.y = `${newY}px`;
       };
       const endDragTouch = () => {
         isDragging.value = false;
+        dragElement = null;
         document.removeEventListener("touchmove", dragTouch);
         document.removeEventListener("touchend", endDragTouch);
         saveConfigImmediate();

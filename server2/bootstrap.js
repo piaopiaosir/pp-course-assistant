@@ -11,7 +11,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 // ==================== 配置 ====================
-const MAIN_SERVER = process.env.MAIN_SERVER || '43.139.12.117';
+const MAIN_SERVER = process.env.MAIN_SERVER || '122.152.249.109';
 const MAIN_PORT = process.env.MAIN_PORT || 3000;
 const LOCAL_PORT = process.env.PORT || 3000;
 const SYNC_TRIGGER_PORT = 3001;  // 同步触发服务端口
@@ -83,16 +83,14 @@ async function syncCode() {
             console.log(`  ✅ ${filename}`);
           }
           
-          // 写入 .env 文件前，自动修改 DB_HOST 为当前主服务器IP
+          // 写入 .env 文件前，自动修改 DB_HOST 为香港数据库IP
           let modifiedEnv = envFileContent;
-          if (MAIN_SERVER !== 'localhost' && MAIN_SERVER !== '127.0.0.1') {
-            // 替换 DB_HOST 为主服务器IP（两台服务器共用数据库）
-            modifiedEnv = modifiedEnv.replace(
-              /^DB_HOST=.*$/m,
-              `DB_HOST=${MAIN_SERVER}`
-            );
-            console.log(`  🔧 已自动设置 DB_HOST=${MAIN_SERVER}`);
-          }
+          const DB_SERVER = process.env.DB_SERVER || '38.76.188.68';
+          modifiedEnv = modifiedEnv.replace(
+            /^DB_HOST=.*$/m,
+            `DB_HOST=${DB_SERVER}`
+          );
+          console.log(`  🔧 已自动设置 DB_HOST=${DB_SERVER}`);
           // 第二台服务器跳过题库密钥刷新
           if (!modifiedEnv.includes('SKIP_KEY_REFRESH=')) {
             modifiedEnv += '\nSKIP_KEY_REFRESH=true\n';

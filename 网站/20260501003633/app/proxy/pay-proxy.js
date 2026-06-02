@@ -5,11 +5,69 @@
 
 import express from 'express';
 import cors from 'cors';
+import mysql from 'mysql2/promise';
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 // 使用 stealth 插件绕过 WAF/反自动化检测
 puppeteer.use(StealthPlugin());
+
+// ==================== MySQL 配置 ====================
+const DB_CONFIG = {
+  host: process.env.DB_HOST || '38.76.188.68',
+  port: parseInt(process.env.DB_PORT || '13306'),
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'PIAOPIAONB',
+  database: process.env.DB_NAME || 'tiku',
+  waitForConnections: true,
+  connectionLimit: 5,
+  queueLimit: 0,
+  charset: 'utf8mb4'
+};
+
+let dbPool = null;
+
+async function initDb() {
+  try {
+    dbPool = mysql.createPool(DB_CONFIG);
+    // 测试连接
+    const conn = await dbPool.getConnection();
+    log(`✓ MySQL 连接成功: ${DB_CONFIG.host}:${DB_CONFIG.port}/${DB_CONFIG.database}`);
+    conn.release();
+  } catch (err) {
+    log(`✗ MySQL 连接失败: ${err.message}，统计数据将不可用`);
+    dbPool = null;
+  }
+}
+
+async function queryStats() {
+  if (!dbPool) return null;
+  try {
+    const [rows] = await dbPool.query('SELECT total_queries FROM global_stats WHERE id = 1');
+    const globalStats = rows[0] || {};
+
+    const nowUtc8 = new Date(Date.now() + 8 * 3600000);
+    const today0Utc8 = new Date(nowUtc8);
+    today0Utc8.setUTCHours(0, 0, 0, 0);
+    const todayStart = Math.floor((today0Utc8.getTime() - 8 * 3600000) / 1000);
+
+    const [todayRows] = await dbPool.query('SELECT COUNT(*) as count FROM query_logs WHERE created_at >= ?', [todayStart]);
+    const todayQueries = todayRows[0]?.count || 0;
+
+    const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
+    const [hourRows] = await dbPool.query('SELECT COUNT(*) as count FROM query_logs WHERE created_at > ?', [oneHourAgo]);
+    const hourlyRate = hourRows[0]?.count || 0;
+
+    return {
+      totalQueries: globalStats.total_queries || 0,
+      todayQueries,
+      hourlyRate
+    };
+  } catch (err) {
+    log(`[统计查询失败] ${err.message}`);
+    return null;
+  }
+}
 
 const PORT = 3001;
 
@@ -1425,6 +1483,9 @@ async function main() {
   const pool = new BrowserPool();
   const flow = new PurchaseFlow(pool);
 
+  // 初始化数据库连接
+  await initDb();
+
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -1434,45 +1495,33 @@ async function main() {
     res.json({ status: 'ok', ready: pool.ready });
   });
 
-  // ========== 统计数据：后端每5秒轮询 + SSE 推送 ==========
-  let cachedStats = null; // null 表示数据尚未就绪，避免 SSE 发送假零值
-  const statsClients = new Set(); // SSE 连接池
+  // ========== 统计数据：后端每1秒查询本地数据库 + SSE 推送 ==========
+  let cachedStats = null;
+  const statsClients = new Set();
 
-  // 启动时立即轮询一次，确保缓存尽快有真实数据
+  // 启动时立即查询一次
   (async () => {
-    try {
-      const resp = await fetch('http://43.139.12.117:3000/stats', { signal: AbortSignal.timeout(5000) });
-      const data = await resp.json();
-      if (data.code === 200 && data.data) {
-        cachedStats = data;
-        // 数据就绪后立即推送给所有等待的 SSE 客户端
-        const payload = `data: ${JSON.stringify(data.data)}\n\n`;
-        for (const client of statsClients) {
-          try { client.write(payload); } catch (_) { statsClients.delete(client); }
-        }
+    const data = await queryStats();
+    if (data) {
+      cachedStats = data;
+      const payload = `data: ${JSON.stringify(data)}\n\n`;
+      for (const client of statsClients) {
+        try { client.write(payload); } catch (_) { statsClients.delete(client); }
       }
-    } catch (_) {}
+    }
   })();
 
-  // 每5秒轮询数据库服务器
+  // 每1秒查询本地数据库
   setInterval(async () => {
-    try {
-      const resp = await fetch('http://43.139.12.117:3000/stats', {
-        signal: AbortSignal.timeout(5000),
-      });
-      const data = await resp.json();
-      if (data.code === 200 && data.data) {
-        cachedStats = data;
-        // 推送给所有 SSE 客户端
-        const payload = `data: ${JSON.stringify(data.data)}\n\n`;
-        for (const client of statsClients) {
-          try { client.write(payload); } catch (_) { statsClients.delete(client); }
-        }
+    const data = await queryStats();
+    if (data) {
+      cachedStats = data;
+      const payload = `data: ${JSON.stringify(data)}\n\n`;
+      for (const client of statsClients) {
+        try { client.write(payload); } catch (_) { statsClients.delete(client); }
       }
-    } catch (err) {
-      log(`[统计轮询失败] ${err.message}`);
     }
-  }, 5000);
+  }, 1000);
 
   // SSE 实时推送端点
   app.get('/api/proxy/stats-stream', (req, res) => {
@@ -1482,9 +1531,9 @@ async function main() {
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    // 有缓存数据立即推送，没有则等轮询来了再推
-    if (cachedStats && cachedStats.data) {
-      res.write(`data: ${JSON.stringify(cachedStats.data)}\n\n`);
+    // 有缓存数据立即推送
+    if (cachedStats) {
+      res.write(`data: ${JSON.stringify(cachedStats)}\n\n`);
     }
     statsClients.add(res);
     // 心跳保活
@@ -1497,7 +1546,7 @@ async function main() {
   // 普通查询接口（兼容）
   app.get('/api/proxy/stats', (req, res) => {
     if (cachedStats) {
-      res.json(cachedStats);
+      res.json({ code: 200, data: cachedStats });
     } else {
       res.status(503).json({ code: 503, msg: '统计数据尚未就绪' });
     }
