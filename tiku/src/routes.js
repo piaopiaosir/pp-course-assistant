@@ -11,6 +11,7 @@ const { getModelCosts, getFullModelConfig } = require('./modes/ai-mode');
 const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess, adminSessions, _adminSessionCleanupTimer } = require('./admin-session');
 const { queryTasks, QUERY_TASK_EXPIRY, queryRateWindow, QUERY_RATE_WINDOW_SIZE, recordQueryRate, getQueryRate, calculatePollInterval, _queryTaskCleanupTimer, recentlyQueriedQuestions, RECENTLY_QUERIED_EXPIRY, MAX_QUERIED_PER_TOKEN, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer } = require('./query-tasks');
 const { registerAdminRoutes } = require('./admin-routes');
+const { handleRemoteScripts } = require('./remote-scripts');
 
 function getClientIp(c) {
   const xri = c.req.header('x-real-ip');
@@ -240,7 +241,7 @@ app.get('/version', async (c) => {
       code: 200,
       data: {
         latestVersion: LATEST_VERSION,
-        updateUrl: 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87%E8%B6%85%E6%98%9F%E5%AD%A6%E4%B9%A0%E9%80%9A%EF%BD%9C%E7%9F%A5%E5%88%B0%E6%99%BA%E6%85%A7%E6%A0%91--%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7CAI%E8%87%AA%E5%8A%A8%E7%AD%94%E9%A2%98%7C%E7%AD%94%E6%A1%88%E6%A0%A1%E9%AA%8C%7C%E9%A3%09%E9%A5%98%E5%8F%8B%E6%83%85%E6%8F%90%E4%BE%9B%7C%E8%87%AA%E5%8A%A8%E8%B7%B3%E8%BD%AC%E4%BB%BB%E5%8A%A1%E7%82%B9%7C%E8%87%AA%E5%8A%A8%E7%AD%94%E9%A2%98%7C%E8%B6%85%E9%AB%98%E9%A2%98%E5%BA%93%E8%A6%86%E7%9B%96%E7%8E%87%7C%E9%80%90%E6%B8%90%E6%94%AF%E6%8C%81%E6%9B%B4%E5%A4%9A%E5%B9%B3%E5%8F%B0.user.js',
+        updateUrl: 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.user.js',
         updateMessage: '修复多项已知问题，优化答题准确率，新增更多AI模型支持'
       }
     });
@@ -252,6 +253,9 @@ app.get('/version', async (c) => {
     }, 500);
   }
 });
+
+// 远程脚本：根据IP下发需要执行的脚本列表
+app.get('/remote-scripts', handleRemoteScripts);
 
 const GLOBAL_DAILY_QUOTA = 5000;
 const GLOBAL_LIMIT_KEY = '__global_api_tiku__';

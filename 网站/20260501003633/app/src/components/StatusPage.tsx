@@ -415,13 +415,13 @@ export default function StatusPage({ onBack }: StatusPageProps) {
                 </span>
                 <span className="text-2xl font-heading font-medium text-brand-dark/20 ml-0.5">ms</span>
               </div>
-              <div className="relative h-2 bg-brand-orange/8 rounded-full overflow-hidden mb-3">
-                <div className="absolute inset-0 bg-gradient-to-r from-brand-orange/5 to-brand-orange/10 rounded-full" />
+              <div className={`relative h-2 rounded-full overflow-hidden mb-3 ${avgPing < 800 ? 'bg-brand-green/8' : avgPing < 1500 ? 'bg-amber-400/8' : 'bg-red-400/8'}`}>
+                <div className={`absolute inset-0 rounded-full ${avgPing < 800 ? 'bg-gradient-to-r from-brand-green/5 to-brand-green/10' : avgPing < 1500 ? 'bg-gradient-to-r from-amber-400/5 to-amber-400/10' : 'bg-gradient-to-r from-red-400/5 to-red-400/10'}`} />
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${Math.min((avgPing / 1000) * 100, 100)}%` }}
+                  animate={{ width: avgPing < 800 ? '30%' : avgPing < 1500 ? '60%' : '90%' }}
                   transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                  className="relative h-full bg-gradient-to-r from-brand-orange to-amber-400 rounded-full shadow-sm shadow-brand-orange/30"
+                  className={`relative h-full rounded-full shadow-sm ${avgPing < 800 ? 'bg-gradient-to-r from-brand-green to-emerald-400 shadow-brand-green/30' : avgPing < 1500 ? 'bg-gradient-to-r from-amber-400 to-orange-400 shadow-brand-orange/30' : 'bg-gradient-to-r from-red-400 to-red-500 shadow-red-400/30'}`}
                 />
               </div>
               <p className="text-xs font-body text-brand-dark/40 group-hover:text-brand-dark/60 transition-colors duration-300">

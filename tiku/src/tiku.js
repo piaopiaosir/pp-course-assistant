@@ -796,15 +796,24 @@ async function fetchUcuc(questionData) {
     // 去除题目中的所有符号，只保留中文、英文、数字
     const cleanQuestion = (questionData.question || '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
 
+    // 仅对UCUC支持的题型传入type，其他题型不传（让API自行识别）
+    const ucucRequestTypeMap = {
+      "0": "单选题",
+      "1": "多选题",
+      "2": "填空题",
+      "3": "判断题",
+      "4": "简答题"
+    };
+    const ucucRequestType = ucucRequestTypeMap[questionData.type];
+    const requestBody = { question: cleanQuestion, apiKey: apiKey };
+    if (ucucRequestType) requestBody.type = ucucRequestType;
+
     const response = await fetch("https://so.ucuc.net/prod-api/system/questionBank/search", {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        question: cleanQuestion,
-        apiKey: apiKey
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {

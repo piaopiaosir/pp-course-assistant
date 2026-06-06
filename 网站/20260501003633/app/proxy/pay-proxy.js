@@ -1639,6 +1639,21 @@ async function main() {
     }
   }, 60000);
 
+  // 获取缓存题目数量
+  app.get('/api/proxy/tiku-count', async (req, res) => {
+    try {
+      if (!dbPool) {
+        return res.json({ code: 200, data: { count: 0 } });
+      }
+      const [rows] = await dbPool.query('SELECT COUNT(*) as count FROM answer_cache');
+      const count = rows[0]?.count || 0;
+      res.json({ code: 200, data: { count } });
+    } catch (err) {
+      log(`[题库数量查询失败] ${err.message}`);
+      res.json({ code: 200, data: { count: 0 } });
+    }
+  });
+
   // 免费福利领取（后端转发，不暴露题库服务器地址）
   // 题库接口代理（解决 HTTPS 混合内容问题）
   app.post('/api/proxy/tiku', async (req, res) => {

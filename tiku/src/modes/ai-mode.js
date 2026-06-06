@@ -391,7 +391,7 @@ async function handleAIMode(c, params) {
     }
 
     // 使用 fetchAICustom 函数（OpenAI兼容API）
-    const aiResult = await fetchAICustom(questionData, apiKey302, modelConfig, 'https://aip.302ai.cn/v1/chat/completions', enableWebSearch, tavilySearch);
+    const aiResult = await fetchAICustom(questionData, apiKey302, modelConfig, 'https://api.302ai.com/v1/chat/completions', enableWebSearch, tavilySearch);
     answerData = aiResult;
   } else if (modelConfig.provider === 'deepseek') {
     log("━━━ 查询 DeepSeek 官方 API ━━━");

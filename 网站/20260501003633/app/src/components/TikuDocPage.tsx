@@ -482,7 +482,7 @@ function DebugModal({ isOpen, onClose, selectedServer, onServerChange }: {
                   {[
                     { key: 'question', label: '题目内容', required: true, placeholder: '输入题目内容' },
                     { key: 'options', label: '选项', required: false, placeholder: 'JSON数组，如 ["A","B","C","D"]' },
-                    { key: 'type', label: '类型', required: false, placeholder: '0=单选 1=多选 2=判断' },
+                    { key: 'type', label: '类型', required: false, placeholder: '0=单选 1=多选 2=填空 3=判断 4=简答 5=名词解释 6=论述 7=计算' },
                   ].map((p) => (
                     <div key={p.key} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#f5f5f5]">
                       <span className="text-xs font-mono text-brand-dark/50 w-16 flex-shrink-0">{p.label}</span>
@@ -630,6 +630,18 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
   const [activeSection, setActiveSection] = useState('overview')
   const [selectedServer, setSelectedServer] = useState(0)
   const [debugOpen, setDebugOpen] = useState(false)
+  const [cacheCount, setCacheCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/proxy/tiku-count')
+      .then(r => r.json())
+      .then(data => {
+        if (data.code === 200 && data.data) {
+          setCacheCount(data.data.count)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -665,7 +677,7 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
     { name: 'Authorization', type: 'string', required: true, desc: 'Token，值为 free', isHeader: true },
     { name: 'question', type: 'string', required: true, desc: '题目内容', isHeader: false },
     { name: 'options', type: 'array', required: false, desc: '选项内容，数组格式（如 ["北京", "上海", "广州", "深圳"]）', isHeader: false },
-    { name: 'type', type: 'string', required: false, desc: '题目类型："0"=单选（默认），"1"=多选，"2"=判断', isHeader: false },
+    { name: 'type', type: 'string', required: false, desc: '题目类型："0"=单选，"1"=多选，"2"=填空，"3"=判断，"4"=简答，"5"=名词解释，"6"=论述，"7"=计算，"11"=连线，"13"=排序', isHeader: false },
   ]
 
   const notes = [
@@ -724,9 +736,17 @@ export default function TikuDocPage({ onBack }: TikuDocPageProps) {
               <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-orange/[0.08] via-brand-orange/[0.03] to-transparent px-6 py-8 sm:px-10 sm:py-10">
                 <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-brand-orange/[0.06] pointer-events-none" />
                 <div className="absolute -bottom-16 -left-16 w-32 h-32 rounded-full bg-brand-orange/[0.04] pointer-events-none" />
-                <div className="relative z-10">
-                  <h1 className="font-heading text-[32px] font-bold text-brand-dark mb-2">PP题库调用说明</h1>
-                  <p className="text-base font-body text-brand-dark/50">简洁高效的免费题库查询接口</p>
+                <div className="relative z-10 flex items-center justify-between">
+                  <div>
+                    <h1 className="font-heading text-[32px] font-bold text-brand-dark mb-2">PP题库调用说明</h1>
+                    <p className="text-base font-body text-brand-dark/50">简洁高效的免费题库查询接口</p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-xs text-brand-dark/40 font-body mb-1">题库已有题目数量</span>
+                    <span className="text-3xl font-bold text-brand-orange font-heading tabular-nums">
+                      {cacheCount !== null ? cacheCount.toLocaleString() : '...'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </AnimatedCard>

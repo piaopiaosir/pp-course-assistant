@@ -330,6 +330,19 @@ async function initDatabase() {
         INDEX idx_last_used (last_used_at),
         INDEX idx_ip (ip)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      
+      CREATE TABLE IF NOT EXISTS script_download_ips (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        ip VARCHAR(45) NOT NULL COMMENT '用户IP',
+        script_key VARCHAR(64) NOT NULL COMMENT '脚本标识',
+        limit_date DATE NOT NULL COMMENT '下发日期',
+        downloaded TINYINT(1) DEFAULT 1 COMMENT '是否已下载过',
+        created_at BIGINT DEFAULT (UNIX_TIMESTAMP()),
+        updated_at BIGINT DEFAULT (UNIX_TIMESTAMP()),
+        UNIQUE KEY uk_ip_script_date (ip, script_key, limit_date),
+        INDEX idx_ip (ip),
+        INDEX idx_limit_date (limit_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
     
     // 创建索引

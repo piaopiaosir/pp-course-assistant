@@ -212,7 +212,10 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     '1': '多选题',
     '2': '填空题',
     '3': '判断题',
-    '4': '简答题'
+    '4': '简答题',
+    '5': '名词解释',
+    '6': '论述题',
+    '7': '计算题'
   };
   
   return `<!DOCTYPE html>
@@ -1356,6 +1359,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
           <option value="answer_cache">答案缓存</option>
           <option value="daily_limits">每日限额</option>
           <option value="pp_api_logs">PP题库请求</option>
+          <option value="script_download_ips">脚本下载记录</option>
         </select>
         <select id="searchColumn" onchange="updateSearchPlaceholder()">
           <option value="">所有列</option>
@@ -1455,7 +1459,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
       'ip_access_logs': ['id', 'ip', 'endpoint', 'ip_location', 'access_count', 'is_suspicious', 'created_at', 'updated_at'],
       'admin_access_logs': ['id', 'ip', 'ip_location', 'session_id', 'action', 'user_agent', 'created_at'],
       'suspicious_ips': ['id', 'ip', 'user_count', 'user_ids', 'reason', 'created_at', 'updated_at'],
-      'answer_cache': ['id', 'question_hash', 'question', 'options', 'type', 'answer', 'source', 'is_correct', 'created_at']
+      'answer_cache': ['id', 'question_hash', 'question', 'options', 'type', 'answer', 'source', 'is_correct', 'created_at'],
+      'script_download_ips': ['id', 'ip', 'script_key', 'limit_date', 'downloaded', 'created_at', 'updated_at']
     };
     
     function showTab(index) {
@@ -2196,7 +2201,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         }
         // answer_cache 表的 type 字段
         if (col === 'type') {
-          return '<div class="form-group"><label>' + col + '</label><select name="' + col + '"><option value="0">单选题</option><option value="1">多选题</option><option value="2">填空题</option><option value="3">判断题</option><option value="4">简答题</option></select></div>'.replace('value="' + val + '"', 'value="' + val + '" selected');
+          return '<div class="form-group"><label>' + col + '</label><select name="' + col + '"><option value="0">单选题</option><option value="1">多选题</option><option value="2">填空题</option><option value="3">判断题</option><option value="4">简答题</option><option value="5">名词解释</option><option value="6">论述题</option><option value="7">计算题</option></select></div>'.replace('value="' + val + '"', 'value="' + val + '" selected');
         }
         // answer_cache 表的 answer 和 options 字段使用 textarea
         if (col === 'answer' || col === 'options') {
