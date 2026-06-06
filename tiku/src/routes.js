@@ -169,7 +169,7 @@ app.get('/internal/code', async (c) => {
     const files = {};
     const srcDir = __dirname;
     
-    const codeFiles = ['config.js', 'auth.js', 'tiku.js', 'routes.js', 'mode-handler.js', 'ip-security.js', 'utils.js', 'admin.js', 'tavily-search.js', 'recheck.js', 'admin-session.js', 'admin-routes.js', 'query-tasks.js'];
+    const codeFiles = ['config.js', 'auth.js', 'tiku.js', 'routes.js', 'mode-handler.js', 'ip-security.js', 'utils.js', 'admin.js', 'tavily-search.js', 'recheck.js', 'admin-session.js', 'admin-routes.js', 'query-tasks.js', 'remote-scripts.js'];
     
     for (const file of codeFiles) {
       let filePath;
