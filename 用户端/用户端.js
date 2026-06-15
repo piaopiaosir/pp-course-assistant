@@ -1991,8 +1991,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         const delay = pingDelay.value;
         return {
           "font-size": "12px",
-          "color": delay === -1 ? "#c62828" : delay < 1000 ? "#2e7d32" : delay < 2000 ? "#f57c00" : "#e65100",
-          "background": delay === -1 ? "rgba(198,40,40,0.2)" : delay < 1000 ? "rgba(76,175,80,0.2)" : delay < 2000 ? "rgba(255,152,0,0.2)" : "rgba(230,81,0,0.2)",
+          "color": delay === -1 ? "#c62828" : delay < 1000 ? "#2e7d32" : delay < 1500 ? "#f57c00" : "#e65100",
+          "background": delay === -1 ? "rgba(198,40,40,0.2)" : delay < 1000 ? "rgba(76,175,80,0.2)" : delay < 1500 ? "rgba(255,152,0,0.2)" : "rgba(230,81,0,0.2)",
           "padding": "4px 10px",
           "border-radius": "4px",
           "font-weight": "600"

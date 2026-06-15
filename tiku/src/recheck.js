@@ -265,7 +265,8 @@ async function recheckQuestion(row) {
         await updateDatabase(row.question_hash, newAnswer, newSource);
         return { status: 'success', source: 'ai', answer: newAnswer };
       } else {
-        console.log(`✗ 校验失败: ${validation.reason}`);
+        console.log(`✗ 校验失败: ${validation.reason}，从数据库删除该题目`);
+        await deleteRecord(row.question_hash);
         return { status: 'invalid', reason: validation.reason };
       }
     } else {
@@ -277,6 +278,17 @@ async function recheckQuestion(row) {
     console.error(`✗ 处理异常:`, e.message);
     return { status: 'failed', reason: e.message };
   }
+}
+
+/**
+ * 删除数据库记录
+ */
+async function deleteRecord(questionHash) {
+  await db.prepare(
+    `DELETE FROM answer_cache WHERE question_hash = ?`
+  ).run(questionHash);
+
+  console.log(`✓ 已从数据库删除: ${questionHash.substring(0, 8)}`);
 }
 
 /**

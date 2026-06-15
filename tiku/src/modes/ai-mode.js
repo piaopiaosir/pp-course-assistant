@@ -266,10 +266,52 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
       return { code: 500, msg: "AI解析失败", data: null };
     }
 
-    // 超出最大轮数
-    console.log("⚠️ 超出最大工具调用轮数限制");
+    // 超出最大轮数：再做最后一轮不带工具的调用，强制AI基于已有上下文给出答案
+    console.log("⚠️ 超出最大工具调用轮数限制，进行最后一轮无工具调用...");
+    
+    const finalBody = { ...body, messages: messages };
+    // 删除 tools 参数，强制 AI 直接输出答案
+    delete finalBody.tools;
+    
+    try {
+      const finalResponse = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(finalBody)
+      });
+
+      const finalResult = await finalResponse.json();
+      console.log("📍 最后一轮响应状态:", finalResponse.status);
+
+      if (finalResult.choices && finalResult.choices[0]) {
+        const finalContent = finalResult.choices[0].message.content;
+        const finalParsed = extractJsonFromContent(finalContent);
+        if (finalParsed) {
+          if (Array.isArray(finalParsed.answer)) {
+            finalParsed.answer = finalParsed.answer.map(a => cleanAiAnswer(a, questionData.options));
+          }
+          finalParsed.answer = normalizeMatchingAnswer(finalParsed.answer, questionData.type);
+          finalParsed.answer = mergeSplitAnswers(finalParsed.answer, questionData.options);
+
+          const checkResult = checkAnswerReasonable(finalParsed.answer, questionData.type, questionData.options);
+          if (checkResult.reasonable) {
+            console.log("✅ 最后一轮成功获取答案:", JSON.stringify(finalParsed.answer));
+            console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            const source = getDisplayName(model);
+            return { code: 200, data: { answer: finalParsed.answer, source: source }, msg: "查询成功" };
+          }
+        }
+      }
+      console.log("❌ 最后一轮仍然失败");
+    } catch (e) {
+      console.log("❌ 最后一轮调用异常:", e.message);
+    }
+
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    return { code: 500, msg: "超出最大工具调用轮数", data: null };
+    return { code: 500, msg: "超出最大工具调用轮数，且最后一轮无工具调用仍然失败", data: null };
 
   } catch (e) {
     console.error("❌ AI查询失败（AI模式）:", e.message);

