@@ -374,7 +374,12 @@ async function handleAIMode(c, params) {
 
   // 免费模式不扣除次数
   if (!FREE_MODE) {
-    const cost = modelConfig.cost || 1;
+    let cost = modelConfig.cost || 1;
+    // 联网搜索额外消耗 +1 次
+    if (enableWebSearch) {
+      cost += 1;
+      log(`联网搜索额外消耗: +1次（总消耗: ${cost}次）`);
+    }
     log(`扣除次数: ${cost}（${modelConfig.name}）`);
     for (let i = 0; i < cost; i++) {
       const decrementResult = await decrementCount(token, userId, skipUserIdCheck);

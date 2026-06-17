@@ -1075,7 +1075,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-label">当前使用密钥</span>
             <span class="detail-value active">密钥 ${globalStats.tavily_current_key || 1}</span>
           </div>
-          ${Array.from({length: 30}, (_, i) => {
+          ${(() => { const TAVILY_KEY_COUNT = require('./tavily-search').TAVILY_KEY_COUNT; return Array.from({length: TAVILY_KEY_COUNT}, (_, i) => {
             const keyNum = i + 1;
             const usage = globalStats[`tavily_key_${keyNum}_usage`] || 0;
             const isCurrent = Number(globalStats.tavily_current_key) === keyNum;
@@ -1084,7 +1084,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-label">密钥 ${keyNum} 使用次数${isCurrent ? ' (当前)' : ''}</span>
             <span class="detail-value"${highlight}>${usage} <span class="detail-unit">次</span></span>
           </div>`;
-          }).join('\n')}
+          }).join('\n')})()}
           <div class="detail-item">
             <span class="detail-label">上次重置日期</span>
             <span class="detail-value">${escapeJsTemplate(globalStats.tavily_last_reset_date || '未重置')}</span>

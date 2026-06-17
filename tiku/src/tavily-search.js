@@ -6,7 +6,7 @@
 
 const { db, getEnv } = require('./config');
 
-// Tavily API密钥配置(30个) - 提取为模块级常量，避免重复定义
+// Tavily API密钥配置(50个) - 提取为模块级常量，避免重复定义
 const TAVILY_KEYS = [
   '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',
   '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',
@@ -37,15 +37,36 @@ const TAVILY_KEYS = [
   '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',
   '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',
   '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',
-  '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'
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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',
+  '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'
 ];
+const TAVILY_KEY_COUNT = TAVILY_KEYS.length;
 
 const MAX_RECURSION_DEPTH = 30;
 
 const INVALID_KEYS = new Set();
 
 function markKeyAsInvalid(keyIndex) {
-  if (keyIndex > 0 && keyIndex <= 30) {
+  if (keyIndex > 0 && keyIndex <= TAVILY_KEY_COUNT) {
     INVALID_KEYS.add(keyIndex);
     console.log(`🚫 标记Tavily密钥${keyIndex}为失效，当前失效密钥:`, [...INVALID_KEYS]);
   }
@@ -62,8 +83,8 @@ function isKeyInvalid(keyIndex) {
  */
 async function switchToNextAvailableKey(currentKeyIndex) {
   try {
-    // 从当前密钥的下一个开始查找（currentKeyIndex 是 1-30，数组索引是 0-29）
-    for (let i = currentKeyIndex; i < 30; i++) {
+    // 从当前密钥的下一个开始查找
+    for (let i = currentKeyIndex; i < TAVILY_KEY_COUNT; i++) {
       if (isKeyInvalid(i + 1)) {
         console.log(`⏭️ 跳过失效的密钥${i + 1}`);
         continue;
@@ -104,7 +125,7 @@ async function switchToNextAvailableKey(currentKeyIndex) {
 
 /**
  * 获取当前可用的Tavily API密钥
- * 支持30个密钥自动切换
+ * 支持50个密钥自动切换
  * 每月1号自动刷新额度（使用事务保证原子性）
  */
 async function getAvailableTavilyKey() {
@@ -141,7 +162,7 @@ async function getAvailableTavilyKey() {
     if (currentMonth !== lastResetDate) {
       // 新的一个月,重置所有密钥使用次数
       console.log(`🔄 Tavily月度重置: ${lastResetDate || '首次'} -> ${currentMonth}`);
-      const resetFields = Array.from({length: 30}, (_, i) => `tavily_key_${i + 1}_usage = 0`).join(', ');
+      const resetFields = Array.from({length: TAVILY_KEY_COUNT}, (_, i) => `tavily_key_${i + 1}_usage = 0`).join(', ');
       await conn.query(
         `UPDATE global_stats SET 
           ${resetFields}, tavily_current_key = 1, tavily_last_reset_date = ?,
@@ -162,7 +183,7 @@ async function getAvailableTavilyKey() {
       console.log(`⏭️ 当前密钥${currentKeyIndex}已失效，查找下一个可用密钥...`);
       let found = false;
       // 先往后找
-      for (let i = currentKeyIndex; i < 30; i++) {
+      for (let i = currentKeyIndex; i < TAVILY_KEY_COUNT; i++) {
         if (!isKeyInvalid(i + 1) && TAVILY_KEYS[i]) {
           currentKeyIndex = i + 1;
           await conn.query("UPDATE global_stats SET tavily_current_key = ? WHERE id = 1", [currentKeyIndex]);
@@ -474,5 +495,6 @@ module.exports = {
   formatSearchContext,
   getTavilyUsage,
   getAvailableTavilyKey,
-  WEB_SEARCH_TOOL
+  WEB_SEARCH_TOOL,
+  TAVILY_KEY_COUNT
 };
