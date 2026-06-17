@@ -285,9 +285,11 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
       const finalResult = await finalResponse.json();
       console.log("📍 最后一轮响应状态:", finalResponse.status);
+      console.log("📍 最后一轮完整响应:", JSON.stringify(finalResult, null, 2).substring(0, 2000));
 
       if (finalResult.choices && finalResult.choices[0]) {
         const finalContent = finalResult.choices[0].message.content;
+        console.log("📍 最后一轮 content:", finalContent?.substring(0, 500));
         const finalParsed = extractJsonFromContent(finalContent);
         if (finalParsed) {
           if (Array.isArray(finalParsed.answer)) {
@@ -302,8 +304,14 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
             const source = getDisplayName(model);
             return { code: 200, data: { answer: finalParsed.answer, source: source }, msg: "查询成功" };
+          } else {
+            console.log(`❌ 最后一轮答案校验失败: ${checkResult.reason}`);
           }
+        } else {
+          console.log("❌ 最后一轮 extractJsonFromContent 解析失败");
         }
+      } else {
+        console.log("❌ 最后一轮无有效 choices");
       }
       console.log("❌ 最后一轮仍然失败");
     } catch (e) {
