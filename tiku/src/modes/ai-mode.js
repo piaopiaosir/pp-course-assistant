@@ -514,6 +514,11 @@ async function handleAIMode(c, params) {
     answerData.data.num = remainingCount;
   }
 
+  // 联网搜索额外消耗提示
+  if (enableWebSearch && answerData.code === 200) {
+    answerData.msg = (answerData.msg || '查询成功') + ' | 联网搜索已开启，额外消耗次数+1';
+  }
+
   log(`✓ 返回响应: code=${answerData.code}, answer=${JSON.stringify(answerData.data?.answer)}`);
   return c.json(answerData);
 }
