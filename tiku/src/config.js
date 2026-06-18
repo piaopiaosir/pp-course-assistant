@@ -357,8 +357,8 @@ async function initDatabase() {
       if (columns.length === 0) {
         console.log('🔄 添加Tavily密钥管理字段...');
         const addColumns = [];
-        addColumns.push("ADD COLUMN tavily_current_key INT DEFAULT 1 COMMENT '当前使用的Tavily密钥索引(1-30)'");
-        for (let i = 1; i <= 30; i++) {
+        addColumns.push("ADD COLUMN tavily_current_key INT DEFAULT 1 COMMENT '当前使用的Tavily密钥索引(1-50)'");
+        for (let i = 1; i <= 50; i++) {
           addColumns.push(`ADD COLUMN tavily_key_${i}_usage INT DEFAULT 0 COMMENT 'Tavily密钥${i}使用次数'`);
         }
         addColumns.push("ADD COLUMN tavily_last_reset_date VARCHAR(7) DEFAULT '' COMMENT '上次重置日期(格式:2026-04)'");
@@ -369,23 +369,23 @@ async function initDatabase() {
       console.log('⚠️ Tavily字段迁移检查失败:', e.message);
     }
 
-    // 数据库迁移：添加Tavily密钥11-30使用次数字段
+    // 数据库迁移：添加Tavily密钥11-50使用次数字段
     try {
       const existingColumns = await db.prepare("SHOW COLUMNS FROM global_stats LIKE 'tavily_key%'").all();
       const existingNames = new Set(existingColumns.map(c => c.Field));
       const missingColumns = [];
-      for (let i = 11; i <= 30; i++) {
+      for (let i = 11; i <= 50; i++) {
         if (!existingNames.has(`tavily_key_${i}_usage`)) {
           missingColumns.push(`ADD COLUMN tavily_key_${i}_usage INT DEFAULT 0 COMMENT 'Tavily密钥${i}使用次数'`);
         }
       }
       if (missingColumns.length > 0) {
-        console.log(`🔄 添加Tavily密钥${30 - missingColumns.length + 1}-30使用次数字段...`);
+        console.log(`🔄 添加Tavily密钥${50 - missingColumns.length + 1}-50使用次数字段...`);
         await db.exec(`ALTER TABLE global_stats ${missingColumns.join(', ')}`);
-        console.log('✓ Tavily密钥11-30字段添加完成');
+        console.log('✓ Tavily密钥11-50字段添加完成');
       }
     } catch (e) {
-      console.log('⚠️ Tavily 11-30字段迁移失败:', e.message);
+      console.log('⚠️ Tavily 11-50字段迁移失败:', e.message);
     }
 
     console.log('✓ 数据库表初始化完成');
