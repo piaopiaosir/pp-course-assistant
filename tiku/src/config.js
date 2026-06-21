@@ -38,7 +38,7 @@ const DB_CONFIG = {
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'tiku',
   waitForConnections: true,
-  connectionLimit: 100,
+  connectionLimit: 400,
   queueLimit: 0,
   connectTimeout: 5000,
   enableKeepAlive: true,
@@ -68,6 +68,9 @@ const FREE_MODE = process.env.FREE_MODE === '1';
 
 // 服务器ID配置（用于区分不同服务器）
 const SERVER_ID = process.env.SERVER_ID || 'server1';
+
+// 赞助链接配置
+const SPONSOR_URL = process.env.SPONSOR_URL || 'https://hsfaka.cn/shop/IU2JDO1E';
 
 // ==================== MySQL 连接池 ====================
 const pool = mysql.createPool(DB_CONFIG);
@@ -123,7 +126,7 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS tokens (
         token VARCHAR(64) PRIMARY KEY,
         user_id VARCHAR(64),
-        remaining_count INT DEFAULT 500,
+        remaining_count DECIMAL(10,1) DEFAULT 500.0,
         is_blacklisted TINYINT(1) DEFAULT 0,
         is_free_token TINYINT(1) DEFAULT 0,
         last_ip VARCHAR(45),
@@ -391,6 +394,18 @@ async function initDatabase() {
       console.log('⚠️ Tavily 11-50字段迁移失败:', e.message);
     }
 
+    // 数据库迁移：remaining_count 从 INT 改为 DECIMAL(10,1) 支持小数
+    try {
+      const colInfo = await db.prepare("SHOW COLUMNS FROM tokens LIKE 'remaining_count'").all();
+      if (colInfo.length > 0 && colInfo[0].Type === 'int') {
+        console.log('🔄 迁移 remaining_count: INT → DECIMAL(10,1)...');
+        await db.exec("ALTER TABLE tokens MODIFY COLUMN remaining_count DECIMAL(10,1) DEFAULT 500.0");
+        console.log('✓ remaining_count 迁移完成');
+      }
+    } catch (e) {
+      console.log('⚠️ remaining_count 迁移失败:', e.message);
+    }
+
     console.log('✓ 数据库表初始化完成');
     
     // 初始化全局统计
@@ -563,6 +578,7 @@ module.exports = {
   INITIAL_COUNT,
   FREE_MODE,
   SERVER_ID,
+  SPONSOR_URL,
   LATEST_VERSION,
   db,
   pool,

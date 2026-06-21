@@ -184,14 +184,24 @@ export default function HelpPage({ onBack }: HelpPageProps) {
           <p className="text-xs sm:text-sm text-brand-dark/45 leading-relaxed">
             如果脚本依然没有运行，可以加入QQ群：
           </p>
-          <a
-            href="https://qm.qq.com/q/weTeLXfqJq"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1.5 sm:mt-2 text-base sm:text-lg font-semibold text-brand-orange hover:underline inline-block"
-          >
-            QQ群：152898956
-          </a>
+          <div className="flex flex-col gap-1.5 mt-1.5 sm:mt-2">
+            <a
+              href="https://qm.qq.com/q/weTeLXfqJq"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-base sm:text-lg font-semibold text-brand-orange hover:underline inline-block"
+            >
+              一群：152898956（已满）
+            </a>
+            <a
+              href="https://qm.qq.com/q/cea2QyHT9e"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-base sm:text-lg font-semibold text-brand-orange hover:underline inline-block"
+            >
+              二群：967021801
+            </a>
+          </div>
           <p className="text-xs text-brand-dark/30 mt-1">
             点击即可跳转加入群聊，联系时请描述清楚问题。
           </p>

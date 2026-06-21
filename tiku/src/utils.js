@@ -7,6 +7,11 @@ function sha256(message) {
   return crypto.createHash('sha256').update(message).digest('hex');
 }
 
+// 去除所有标点符号（用于选项/答案的模糊匹配）
+function stripPunctuation(str) {
+  return str.replace(/[，。！？、；：""''（）【】\s，.!?;:'"()\[\]]/g, '');
+}
+
 // 标准化答案（用于比较和缓存）
 function normalizeAnswer(answer, type = null) {
   let normalized = answer.trim()
@@ -24,9 +29,9 @@ function normalizeAnswer(answer, type = null) {
   // 判断题同义词标准化（提前处理，避免标点移除影响）
   if (type === "3" || !type) {
     const judgeAnswer = normalized.replace(/[，。！？、；：""''（）【】\s]/g, '').replace(/[,\.!?;:'"()\[\]]/g, '');
-    if (['对', '正确', '√', '✓', 'true', '是', 'yes'].includes(judgeAnswer)) {
+    if (['对', '正确', '√', '✓', 'true', 't', '是', 'yes'].includes(judgeAnswer)) {
       return '正确';
-    } else if (['错', '错误', '×', '✗', 'false', '否', 'no'].includes(judgeAnswer)) {
+    } else if (['错', '错误', '×', '✗', 'false', 'f', '否', 'no'].includes(judgeAnswer)) {
       return '错误';
     }
   }
@@ -65,7 +70,7 @@ function validateAnswer(type, answer, options = null) {
       return { valid: false, reason: "判断题答案为空" };
     }
     
-    const validValues = ["正确", "错误", "对", "错", "√", "×", "✓", "✗", "true", "false"];
+    const validValues = ["正确", "错误", "对", "错", "√", "×", "✓", "✗", "true", "false", "t", "f"];
     const normalizedAnswer = String(answer[0]).trim()
       .replace(/[，。！？、；：""''（）【】\s，.!?;:'"()\[\]]/g, '')
       .toLowerCase();
@@ -282,6 +287,7 @@ function normalizeOptions(options) {
 
 module.exports = {
   sha256,
+  stripPunctuation,
   normalizeAnswer,
   normalizeOptions,
   validateAnswer,

@@ -8,7 +8,7 @@
  */
 
 const { saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
-const { getEnv } = require('../config');
+const { getEnv, SPONSOR_URL } = require('../config');
 const { validateAnswer } = require('../utils');
 const { getModelConfig, getSupportedModels, getModelCosts, getFullModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
 
@@ -389,17 +389,15 @@ async function handleAIMode(c, params) {
       log(`联网搜索额外消耗: +1次（总消耗: ${cost}次）`);
     }
     log(`扣除次数: ${cost}（${modelConfig.name}）`);
-    for (let i = 0; i < cost; i++) {
-      const decrementResult = await decrementCount(token, userId, skipUserIdCheck);
-      if (!decrementResult.success) {
-        return c.json({
-          code: 403,
-          msg: decrementResult.message,
-          data: { num: decrementResult.remainingCount, answer: [] }
-        }, 403);
-      }
-      remainingCount = decrementResult.remainingCount;
+    const decrementResult = await decrementCount(token, userId, skipUserIdCheck, cost);
+    if (!decrementResult.success) {
+      return c.json({
+        code: 403,
+        msg: decrementResult.message,
+        data: { num: decrementResult.remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
+      }, 403);
     }
+    remainingCount = decrementResult.remainingCount;
     log(`剩余次数: ${remainingCount}`);
   } else {
     log("免费模式: 不扣除次数");

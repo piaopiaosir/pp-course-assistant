@@ -83,14 +83,18 @@ async function syncCode() {
             console.log(`  ✅ ${filename}`);
           }
           
-          // 写入 .env 文件前，自动修改 DB_HOST 为香港数据库IP
+          // 写入 .env 文件前，如果设置了 DB_SERVER 环境变量，则自动修改 DB_HOST
           let modifiedEnv = envFileContent;
-          const DB_SERVER = process.env.DB_SERVER || '38.76.188.68';
-          modifiedEnv = modifiedEnv.replace(
-            /^DB_HOST=.*$/m,
-            `DB_HOST=${DB_SERVER}`
-          );
-          console.log(`  🔧 已自动设置 DB_HOST=${DB_SERVER}`);
+          const DB_SERVER = process.env.DB_SERVER;
+          if (DB_SERVER) {
+            modifiedEnv = modifiedEnv.replace(
+              /^DB_HOST=.*$/m,
+              `DB_HOST=${DB_SERVER}`
+            );
+            console.log(`  🔧 已自动设置 DB_HOST=${DB_SERVER}`);
+          } else {
+            console.log(`  ℹ️ 未设置 DB_SERVER，保留原始 DB_HOST`);
+          }
           // 第二台服务器跳过题库密钥刷新
           if (!modifiedEnv.includes('SKIP_KEY_REFRESH=')) {
             modifiedEnv += '\nSKIP_KEY_REFRESH=true\n';

@@ -2,10 +2,10 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.0.1
+// @version      3.0.4
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
-// @icon         http://pan-yz.chaoxing.com/favicon.ico
+// @icon         https://wk.piao.one/assets/%E5%9B%BE%E5%B1%82%201-D6uQ9z8H.png
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
 // @match        *://*.edu.cn/*
@@ -455,6 +455,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   const CURRENT_SERVER_CONFIG = SERVER_CONFIGS[Math.floor(Math.random() * SERVER_CONFIGS.length)];
   let CURRENT_SERVER = CURRENT_SERVER_CONFIG.url;
+
+  
+  let SPONSOR_URL = '';
+
+  
+  const getSponsorLink = (url, text) => {
+    if (!url) return text || '';
+    return `<a href="${url}" target="_blank" style="color:#667eea;text-decoration:underline;">${text || '点我赞助获取新token'}</a>`;
+  };
 
   
   
@@ -1770,9 +1779,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     "height": "32px",
                     "background": "#ffffff",
                     "border-radius": "8px",
-                    "border": "1px solid #e5e7eb"
+                    "border": "1px solid #e5e7eb",
+                    "color": "#0052D9"
                   }
-                }, ""),
+                }, [
+                  vue.createElementVNode("svg", {
+                    xmlns: "http://www.w3.org/2000/svg",
+                    viewBox: "0 0 1024 1024",
+                    width: "18",
+                    height: "18",
+                    fill: "currentColor"
+                  }, [
+                    vue.createElementVNode("path", {
+                      d: "M832 64H192c-17.7 0-32 14.3-32 32v832c0 17.7 14.3 32 32 32h640c17.7 0 32-14.3 32-32V96c0-17.7-14.3-32-32-32zm-40 824H232V136h560v752zM304 448h248v56H304zm0-136h416v56H304zm0 272h416v56H304zm0 136h248v56H304z"
+                    })
+                  ])
+                ]),
                 vue.createElementVNode("div", {
                   style: {
                     "font-weight": "600",
@@ -1925,7 +1947,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const consumptionText = vue.computed(() => {
         watchUiUpdate();
         const answerParamsPart = __props.globalConfig.platformParams?.[__props.globalConfig.platformName]?.parts?.find(p => p.name === "答题参数");
-        if (!answerParamsPart) return "每题消耗: 1 次";
+        if (!answerParamsPart) return "每题消耗约: 0.8—1 次";
         
         const aiModeParam = answerParamsPart.params.find(p => p.name === "AI模式");
         const normalModeParam = answerParamsPart.params.find(p => p.name === "正常模式");
@@ -1938,9 +1960,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         const isVerifyModeActive = verifyModeParam && verifyModeParam.value;
         
         if (isNormalModeActive || (!isAiModeActive && !isVerifyModeActive)) {
-          return "每题消耗: 1 次";
+          return "每题消耗约: 1 次";
         } else if (isVerifyModeActive) {
-          return "每题消耗: 2 次";
+          return "每题消耗约: 2 次";
         } else if (isAiModeActive && aiTypeParam && aiModelParam) {
           const currentAiType = aiTypeParam.value;
           const currentAiModel = aiModelParam.value;
@@ -1948,9 +1970,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           const modelType = getModelType(currentAiType, currentAiModel);
           
           const cost = modelCosts.value[modelType] || 1;
-          return `每题消耗: ${cost} 次`;
+          return `每题消耗约: ${cost} 次`;
         }
-        return "每题消耗: 1 次";
+        return "每题消耗约: 1 次";
       });
       
       
@@ -2070,13 +2092,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                 configStore.tokenVerifyError = null;
                 logStore.addLog(`✅ Token验证成功，剩余次数: ${res.data.num}次`, 'success');
                 
+                
+                if (res.data.sponsorUrl) {
+                  SPONSOR_URL = res.data.sponsorUrl;
+                }
+                
                 if (res.data.newToken) {
                   vue.unref(configStore).queryApis[0].token = res.data.newToken;
                   logStore.addLog(`🎁 新用户免费Token已注册，可查询40次题目`, 'success');
                 }
                 
                 if (res.data.num <= 0) {
-                  logStore.addLog('💎 次数已用完，<a href="https://hsfaka.cn/shop/IU2JDO1E" target="_blank" style="color:#667eea;text-decoration:underline;">点击购买Token</a>', 'warning');
+                  logStore.addLog(`💎 次数已用完，${getSponsorLink(res.data.sponsorUrl, '点我赞助获取新token')}`, 'warning');
                 }
               } else if (res.code === 401) {
                 remainingCount.value = 0;
@@ -2090,7 +2117,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   logStore.addLog(`💡 检测到您有${res.data.existingTokens.length}个有效Token，请在下方选择使用`, 'warning');
                 } else {
                   existingTokens.value = [];
-                  logStore.addLog('💎 <a href="https://hsfaka.cn/shop/IU2JDO1E" target="_blank" style="color:#667eea;text-decoration:underline;">点击购买Token</a>', 'warning');
+                  logStore.addLog(`💎 ${getSponsorLink(res.data.sponsorUrl, '点我赞助获取新token')}`, 'warning');
                 }
               } else {
                 remainingCount.value = 0;
@@ -2101,10 +2128,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   const sponsorUrl = res.data.sponsorUrl;
                   const msgHtml = (res.msg || '').replace('[可切换赞助获取token，不限制账户]',
                     `[<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">可切换赞助获取token，不限制账户</a>]`);
-                  logStore.addLog('❌ 验证失败: ' + msgHtml, 'danger');
+                  logStore.addLog(`❌ 验证失败: ${msgHtml}`, 'danger');
                 } else {
                   logStore.addLog('❌ 验证失败: ' + (res.msg || '未知错误'), 'danger');
-                  logStore.addLog('💎 <a href="https://hsfaka.cn/shop/IU2JDO1E" target="_blank" style="color:#667eea;text-decoration:underline;">点击购买Token</a>', 'warning');
+                  logStore.addLog(`💎 ${getSponsorLink(res.data.sponsorUrl, '点我赞助获取新token')}`, 'warning');
                 }
               }
             } catch (e) {
@@ -2397,7 +2424,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                 
                 (!vue.unref(configStore).queryApis[0].token || verifyState.value.status === 'error' || (verifyState.value.status === 'success' && remainingCount.value <= 0)) ? (vue.openBlock(), vue.createElementBlock("a", {
                   key: 0,
-                  href: "https://hsfaka.cn/shop/IU2JDO1E",
+                  href: SPONSOR_URL,
                   target: "_blank",
                   style: {
                     "display": "inline-flex",
@@ -2413,7 +2440,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   }
                 }, [
                   vue.createElementVNode("span", null, "💎"),
-                  vue.createElementVNode("span", null, "点击购买Token")
+                  vue.createElementVNode("span", null, "点我赞助获取新token")
                 ])) : vue.createCommentVNode("", true)
               ])
             ], 4)) : vue.createCommentVNode("", true)
@@ -2478,10 +2505,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                 style: { "color": "#e65100", "font-size": "11px" }
               }, "⚠️ 次数不足 "),
               vue.createElementVNode("a", {
-                href: "https://hsfaka.cn/shop/IU2JDO1E",
+                href: SPONSOR_URL,
                 target: "_blank",
                 style: { "color": "#667eea", "font-size": "12px", "text-decoration": "underline" }
-              }, "点击购买")
+              }, "点我赞助获取新token")
             ])) : vue.createCommentVNode("", true)
           ])) : vue.createCommentVNode("", true),
           
@@ -3677,7 +3704,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   href: "https://qun.qq.com/universal-share/share?ac=1&authKey=aXTc3%2B9CzLY17EtOYLTOLRrsBQ%2FO961BD7jXTm39dq%2BYq3aUqIUXDhiyRFST5Rlj&busi_data=eyJncm91cENvZGUiOiIxNTI4OTg5NTYiLCJ0b2tlbiI6IlFuRDNReWF6S2N6NlR3dkN5OWxYVzU2c3Qwazd5bWFsS3BEZ0Ezb2hvSEVBaVFuUDJGbmgzWGlranloSFRvay8iLCJ1aW4iOiIyNDEzMDc2OTY1In0%3D&data=4HWsNkbY-XgM7w33fUZT7doIplKseoS8daXEIsxdBr8UoWE5nC0dFWEywJ_AZFA0mdf562GNoaKCuz9rTPo9nw&svctype=4&tempid=h5_group_info",
                   target: "_blank",
                   style: { "color": "#0052D9", "text-decoration": "underline" }
-                }, "152898956")
+                }, "一群152898956"),
+                vue.createTextVNode(" | "),
+                vue.createElementVNode("a", {
+                  href: "https://qm.qq.com/q/cea2QyHT9e",
+                  target: "_blank",
+                  style: { "color": "#0052D9", "text-decoration": "underline" }
+                }, "二群967021801")
               ]),
               vue.createElementVNode("p", {
                 style: {
@@ -8345,9 +8378,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
           <div style="color: #4b5563; font-size: 14px; line-height: 1.7; margin-bottom: 24px;">${message}</div>
 
-          <div style="background: #fafafa; border-radius: 8px; padding: 14px 16px; margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 13px; color: #9ca3af;">QQ群</span>
-            <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">152898956</span>
+          <div style="background: #fafafa; border-radius: 8px; padding: 14px 16px; margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; color: #9ca3af;">一群（已满）</span>
+              <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">152898956</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; color: #9ca3af;">二群</span>
+              <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">967021801</span>
+            </div>
           </div>
 
           <div style="display: flex; gap: 10px;">
@@ -8359,7 +8398,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     `;
     document.body.appendChild(dialog);
     document.getElementById('notice-qq-btn').onclick = () => {
-      window.open('https://qun.qq.com/universal-share/share?ac=1&authKey=aXTc3%2B9CzLY17EtOYLTOLRrsBQ%2FO961BD7jXTm39dq%2BYq3aUqIUXDhiyRFST5Rlj&busi_data=eyJncm91cENvZGUiOiIxNTI4OTg5NTYiLCJ0b2tlbiI6IlFuRDNReWF6S2N6NlR3dkN5OWxYVzU2c3Qwazd5bWFsS3BEZ0Ezb2hvSEVBaVFuUDJGbmgzWGlranloSFRvay8iLCJ1aW4iOiIyNDEzMDc2OTY1In0%3D&data=4HWsNkbY-XgM7w33fUZT7doIplKseoS8daXEIsxdBr8UoWE5nC0dFWEywJ_AZFA0mdf562GNoaKCuz9rTPo9nw&svctype=4&tempid=h5_group_info', '_blank');
+      window.open('https://qm.qq.com/q/cea2QyHT9e', '_blank');
     };
     document.getElementById('notice-close-btn').onclick = () => {
       _GM_setValue('closed_notice_type', noticeType);
@@ -11475,12 +11514,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           question.answer[0] = answerData.msg;
         } else if (answerData.code === 429 && answerData.data && answerData.data.limitedMode) {
           logStore.addLog(`第${index + 1}道题搜索失败: 今日免费查题已达上限`, "danger");
-          logStore.addLog('💎 <a href="https://hsfaka.cn/shop/IU2JDO1E" target="_blank" style="color:#667eea;text-decoration:underline;">点击购买Token</a>，享无限查题', 'warning');
+          logStore.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
           question.answer[0] = answerData.msg;
         } else if (answerData.code === 403 && answerData.data && answerData.data.sponsorUrl) {
           const sponsorUrl = answerData.data.sponsorUrl;
-          const msgHtml = answerData.msg.replace('[可切换赞助获取token，不限制账户]',
-            `[<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">可切换赞助获取token，不限制账户</a>]`);
+          const sponsorLink = `<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">点我赞助获取新token</a>`;
+          const msgHtml = answerData.msg.includes('[可切换赞助获取token，不限制账户]')
+            ? answerData.msg.replace('[可切换赞助获取token，不限制账户]',
+              `[<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">可切换赞助获取token，不限制账户</a>]`)
+            : `${answerData.msg}，${sponsorLink}`;
           logStore.addLog(`第${index + 1}道题搜索失败: ${msgHtml}`, "danger");
           question.answer[0] = (answerData.data.answer && answerData.data.answer[0]) || answerData.msg;
         } else {

@@ -140,6 +140,7 @@ function buildPrompt(questionData, enableWebSearch = false) {
   // 通用规则部分（所有题型共享）
   const commonRules = [
     '【关键规则】',
+    '- 最终答案必须放在content字段中输出。',
     '- <answer>标签只输出最终答案，不要将分析步骤放入answer数组。',
     '- <answer>标签内只放纯JSON，不要用markdown代码块包裹。',
     '- 不要根据题目关键词自由联想、推测或编造答案，必须基于知识认真推理后给出确定答案。'
@@ -807,6 +808,14 @@ async function fetchUcuc(questionData) {
     const ucucRequestType = ucucRequestTypeMap[questionData.type];
     const requestBody = { question: cleanQuestion, apiKey: apiKey };
     if (ucucRequestType) requestBody.type = ucucRequestType;
+    // 选择题上传选项
+    if ((questionData.type === "0" || questionData.type === "1") && questionData.options) {
+      const optionsArr = typeof questionData.options === 'string'
+        ? questionData.options.split('\n').filter(o => o.trim())
+        : questionData.options;
+      requestBody.options = JSON.stringify(optionsArr);
+      console.log(`📤 UCUC 上传选项: ${optionsArr.length} 个`);
+    }
 
     const response = await fetch("https://so.ucuc.net/prod-api/system/questionBank/search", {
       method: 'POST',
@@ -1408,7 +1417,7 @@ async function fetchAnswer(questionData) {
             opt === ans || opt === ansText || ansText.includes(opt)
           );
         });
-        
+
         if (invalidAnswers.length > 0) {
           console.log(`✗ 题库海 答案不在选项中: ${invalidAnswers.join(', ')}`);
           return { code: 404, msg: "题库海答案不在选项中", data: { answer: answers, options: questionData.options } };
@@ -2275,7 +2284,7 @@ function checkAnswerReasonable(answer, questionType, options) {
   
   // 判断题：答案必须是标准判断值，不能是大段解释文字
   if (questionType === "3") {
-    const judgeValues = ["正确", "错误", "对", "错", "√", "×", "✓", "✗", "true", "false"];
+    const judgeValues = ["正确", "错误", "对", "错", "√", "×", "✓", "✗", "true", "false", "t", "f"];
     const normalized = answer[0]?.trim()
       .replace(/[，。！？、；：""''（）【】\s，.!?;:'"()\[\]]/g, '')
       .toLowerCase();

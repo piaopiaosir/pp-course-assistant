@@ -12,7 +12,7 @@
 
 const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { normalizeAnswer, validateAnswer } = require('../utils');
-const { db, getEnv } = require('../config');
+const { db, getEnv, SPONSOR_URL } = require('../config');
 const { tavilySearch, formatSearchContext, WEB_SEARCH_TOOL } = require('../tavily-search');
 const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
 
@@ -477,17 +477,15 @@ async function handleVerifyMode(c, params) {
   if (!FREE_MODE) {
     const VERIFY_MODE_COST = 2;
     log(`扣除次数: ${VERIFY_MODE_COST}（校验模式）`);
-    for (let i = 0; i < VERIFY_MODE_COST; i++) {
-      const decrementResult = await decrementCount(token, userId, skipUserIdCheck);
-      if (!decrementResult.success) {
-        return c.json({
-          code: 403,
-          msg: decrementResult.message,
-          data: { num: decrementResult.remainingCount, answer: [] }
-        }, 403);
-      }
-      remainingCount = decrementResult.remainingCount;
+    const decrementResult = await decrementCount(token, userId, skipUserIdCheck, VERIFY_MODE_COST);
+    if (!decrementResult.success) {
+      return c.json({
+        code: 403,
+        msg: decrementResult.message,
+        data: { num: decrementResult.remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
+      }, 403);
     }
+    remainingCount = decrementResult.remainingCount;
     log(`剩余次数: ${remainingCount}`);
   } else {
     log("免费模式: 不扣除次数");

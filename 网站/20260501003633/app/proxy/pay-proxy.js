@@ -14,7 +14,7 @@ puppeteer.use(StealthPlugin());
 
 // ==================== MySQL 配置 ====================
 const DB_CONFIG = {
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || '103.236.94.191',
   port: parseInt(process.env.DB_PORT || '13306'),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'PIAOPIAONB',

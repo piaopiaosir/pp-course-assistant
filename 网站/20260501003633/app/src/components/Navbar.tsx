@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
-import logoImg from '../../image/39fbb82404ac23324d01c344f564955a.jpg'
+import logoImg from '../../image/图层 1.png'
 
 const NAV_ITEMS = [
   { label: '首页', id: 'home' },
@@ -114,7 +114,7 @@ export default function Navbar({ className = '', currentPage = 'home', onNavigat
       <div className="section-container flex items-center justify-between h-14 md:h-20">
         {/* Logo */}
         <button onClick={handleLogoClick} className="flex items-center gap-2 md:gap-2.5 group cursor-pointer flex-shrink-0">
-          <img src={logoImg} alt="Logo" className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-cover" />
+          <img src={logoImg} alt="Logo" className="w-8 h-8 md:w-9 md:h-9 object-contain shadow-md rounded-lg" />
           <span className="font-heading text-lg md:text-xl font-semibold tracking-tight text-brand-dark whitespace-nowrap">
             网课小助手
           </span>

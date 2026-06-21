@@ -131,7 +131,7 @@ async function getUserValidTokens(userId) {
   // 查询该用户绑定的所有有效token（未被黑名单，次数>0）
   const records = await db.prepare(`
     SELECT token, remaining_count, is_free_token FROM tokens 
-    WHERE user_id = ? AND is_blacklisted = 0 AND remaining_count > 0
+    WHERE user_id = ? AND is_blacklisted = 0 AND remaining_count >= 1
     ORDER BY is_free_token ASC, remaining_count DESC
   `).all(userId);
   // 免费模式下返回次数为99999
@@ -277,11 +277,11 @@ async function checkTokenStatus(token, userId = null, skipUserIdCheck = false) {
     }
   }
   
-  if (record.is_blacklisted === 1 || record.remaining_count <= 0) {
+  if (record.is_blacklisted === 1 || record.remaining_count < 1) {
     if (record.is_blacklisted !== 1) {
       await db.prepare("UPDATE tokens SET is_blacklisted = 1 WHERE token = ?").run(token);
     }
-    return { success: false, message: "次数已用完，请从新购买token", isBlacklisted: true };
+    return { success: false, message: `剩余次数不足（${record.remaining_count}次），请从新赞助获取新token`, isBlacklisted: true };
   }
   
   return { success: true, remainingCount: record.remaining_count };
@@ -381,8 +381,8 @@ async function getReferralStats(userId) {
   };
 }
 
-// 扣除次数（智慧树支持跳过用户ID验证）
-async function decrementCount(token, userId = null, skipUserIdCheck = false) {
+// 扣除次数（支持扣N次，先检查够不够再一次性扣）
+async function decrementCount(token, userId = null, skipUserIdCheck = false, count = 1) {
   const now = Math.floor(Date.now() / 1000);
   
   const record = await db.prepare("SELECT remaining_count, is_free_token, user_id FROM tokens WHERE token = ?").get(token);
@@ -403,8 +403,13 @@ async function decrementCount(token, userId = null, skipUserIdCheck = false) {
     }
   }
   
-  const newCount = record.remaining_count - 1;
-  
+  // 剩余次数不足，拒绝扣减
+  if (record.remaining_count < count) {
+    return { success: false, message: `剩余次数不足（${record.remaining_count}次，需${count}次）`, remainingCount: record.remaining_count };
+  }
+
+  const newCount = record.remaining_count - count;
+
   if (newCount === 0) {
     await db.prepare(
       "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1, last_used = ? WHERE token = ?"
@@ -413,8 +418,8 @@ async function decrementCount(token, userId = null, skipUserIdCheck = false) {
   }
   
   await db.prepare(
-    "UPDATE tokens SET remaining_count = remaining_count - 1, last_used = ? WHERE token = ?"
-  ).run(now, token);
+    "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ?"
+  ).run(count, now, token);
   
   return { success: true, remainingCount: newCount };
 }

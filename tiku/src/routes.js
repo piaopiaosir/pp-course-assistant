@@ -1,6 +1,6 @@
 const { Hono } = require('hono');
 const http = require('http');
-const { db, getEnv, getGlobalStats, PORT, FREE_MODE, LATEST_VERSION } = require('./config');
+const { db, getEnv, getGlobalStats, PORT, FREE_MODE, LATEST_VERSION, SPONSOR_URL } = require('./config');
 const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
 const { getTypeDescription, measureLatency, refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
 const { getLimitedDate } = require('./ip-security');
@@ -12,6 +12,9 @@ const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAd
 const { queryTasks, QUERY_TASK_EXPIRY, queryRateWindow, QUERY_RATE_WINDOW_SIZE, recordQueryRate, getQueryRate, calculatePollInterval, _queryTaskCleanupTimer, recentlyQueriedQuestions, RECENTLY_QUERIED_EXPIRY, MAX_QUERIED_PER_TOKEN, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer } = require('./query-tasks');
 const { registerAdminRoutes } = require('./admin-routes');
 const { handleRemoteScripts } = require('./remote-scripts');
+
+// workType 白名单：只允许这些平台使用题库服务
+const ALLOWED_WORK_TYPES = ['zhs', 'ouchn', 'cx', 'stuActive'];
 
 function getClientIp(c) {
   const xri = c.req.header('x-real-ip');
@@ -467,23 +470,21 @@ app.post('/report-answer-results', async (c) => {
     let failCount = 0;
     let rejectedCount = 0;
     
-    for (const result of results) {
+    const validTypes = ['0', '1', '3'];
+    
+    const reportPromises = results.map(async (result) => {
       const { question, options, type, isCorrect } = result;
       
-      const validTypes = ['0', '1', '3'];
       if (!validTypes.includes(type)) {
-        failCount++;
-        continue;
+        return 'fail';
       }
       
       if (!question || isCorrect === undefined || isCorrect === null) {
-        failCount++;
-        continue;
+        return 'fail';
       }
       
       if (isCorrect !== 0 && isCorrect !== 1) {
-        rejectedCount++;
-        continue;
+        return 'rejected';
       }
       
       const questionHash = generateQuestionHash(question, options, type);
@@ -504,11 +505,17 @@ app.post('/report-answer-results', async (c) => {
         wasRecentlyQueried
       );
       
-      if (reportResult.applied) {
-        successCount++;
-      } else if (reportResult.pending) {
-        successCount++;
+      if (reportResult.applied || reportResult.pending) {
+        return 'success';
       }
+      return 'fail';
+    });
+    
+    const reportResults = await Promise.all(reportPromises);
+    for (const r of reportResults) {
+      if (r === 'success') successCount++;
+      else if (r === 'fail') failCount++;
+      else if (r === 'rejected') rejectedCount++;
     }
     
     console.log(`[答案正确性上报] Token: ${token.substring(0, 8)}, 成功: ${successCount}, 失败: ${failCount}, 拒绝: ${rejectedCount}`);
@@ -703,7 +710,17 @@ app.get('/', async (c) => {
   if (userId && !/^\d{7,10}$/.test(userId)) {
     return c.json({ code: 400, msg: '非法用户ID' }, 400);
   }
-  
+
+  // workType 白名单校验
+  if (!workType || !ALLOWED_WORK_TYPES.includes(workType)) {
+    console.log(`[Token验证] 非法 workType: "${workType}"，拒绝请求`);
+    return c.json({
+      code: 403,
+      msg: `不支持的平台类型: ${workType || '(空)'}`,
+      data: { valid: false }
+    }, 403);
+  }
+
   const clientIp = getClientIp(c);
   
   console.log(`[Token验证] userId=${userId}, fid=${fid}, workType=${workType}, IP=${clientIp}`);
@@ -719,7 +736,7 @@ app.get('/', async (c) => {
       return c.json({
         code: 200,
         msg: '欢迎新用户！已为您生成Token，赠送40次查询额度',
-        data: { valid: true, num: FREE_MODE ? 999999 : 40, isNew: true, newToken: newToken }
+        data: { valid: true, num: FREE_MODE ? 999999 : 40, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
       });
     } else {
       const validTokens = await getUserValidTokens(userId);
@@ -737,7 +754,7 @@ app.get('/', async (c) => {
         return c.json({
           code: 401,
           msg: '请输入您的Token，或选择已有Token',
-          data: { valid: false, existingTokens: validTokens }
+        data: { valid: false, existingTokens: validTokens }
         }, 401);
       }
       if (fid) await recordUserId(userId, null, fid);
@@ -757,19 +774,19 @@ app.get('/', async (c) => {
     if (isBlacklisted) {
       return c.json({
         code: 403,
-        msg: '次数已用完，请从新购买token',
-        data: { valid: false, num: 0, isBlacklisted: true }
+        msg: '次数已用完，请从新赞助获取新token',
+        data: { valid: false, num: 0, isBlacklisted: true, sponsorUrl: SPONSOR_URL }
       }, 403);
     }
     
-    if (record && record.is_free_token === 1 && userId && workType && workType !== 'zhs') {
+    if (record && record.is_free_token === 1 && userId && workType !== 'zhs' && workType !== 'ouchn') {
       const tokenOwnerId = record.user_id;
       if (tokenOwnerId && tokenOwnerId !== userId) {
         console.log(`[Token验证] 免费Token不匹配: Token所有者=${tokenOwnerId}, 当前用户=${userId}`);
         return c.json({
           code: 403,
           msg: '免费token，限制本人学习通使用[可切换赞助获取token，不限制账户]',
-          data: { valid: false, num: 0, sponsorUrl: 'https://hsfaka.cn/shop/IU2JDO1E' }
+          data: { valid: false, num: 0, sponsorUrl: SPONSOR_URL }
         }, 403);
       }
     }
@@ -784,7 +801,7 @@ app.get('/', async (c) => {
     return c.json({
       code: 200,
       msg: isNew ? `Token验证成功，已初始化${FREE_MODE ? 999999 : record.remaining_count}次查询额度${cardInfo}` : 'Token验证成功',
-      data: { valid: true, num: FREE_MODE ? 999999 : record.remaining_count, isNew: isNew, cardName: verifyResult.cardName }
+      data: { valid: true, num: FREE_MODE ? 999999 : record.remaining_count, isNew: isNew, cardName: verifyResult.cardName, sponsorUrl: SPONSOR_URL }
     });
   } else {
     const validTokens = await getUserValidTokens(userId);
@@ -827,7 +844,18 @@ app.post('/', async (c) => {
     if (userId && !/^\d{7,10}$/.test(userId)) {
       return c.json({ code: 400, msg: '非法用户ID' }, 400);
     }
-    
+
+    // workType 白名单校验
+    const workType = (questionData?.workType || '').trim();
+    if (!workType || !ALLOWED_WORK_TYPES.includes(workType)) {
+      log(`⚠️ 非法 workType: "${workType}"，拒绝请求`);
+      return c.json({
+        code: 403,
+        msg: `不支持的平台类型: ${workType || '(空)'}`,
+        data: { answer: ['平台类型不支持'], num: 0 }
+      }, 403);
+    }
+
     log(`━━━ 开始处理请求 ━━━`);
     log(`enableWebSearch: ${enableWebSearch}`);
     log(`fid: ${fid || '未提供'}`);
@@ -857,9 +885,9 @@ app.post('/', async (c) => {
           limitedMode = true;
         } else {
           const tokenRecord = await initOrGetToken(token, userId, verifyResult.count, clientIp);
-          const workType = questionData.workType || '';
 
-          if (tokenRecord.record && tokenRecord.record.is_free_token === 1 && userId && workType && workType !== 'zhs') {
+          // 免费Token：只允许 zhs/ouchn 跳过用户ID校验，其他平台必须校验
+          if (tokenRecord.record && tokenRecord.record.is_free_token === 1 && userId && workType !== 'zhs' && workType !== 'ouchn') {
             const tokenOwnerId = tokenRecord.record.user_id;
 
             if (tokenOwnerId && tokenOwnerId !== userId) {
@@ -868,12 +896,12 @@ app.post('/', async (c) => {
               return c.json({
                 code: 403,
                 msg: '免费token，限制本人学习通使用[可切换赞助获取token，不限制账户]',
-                data: { answer: ['免费token限制本人学习通使用'], num: 0, sponsorUrl: 'https://hsfaka.cn/shop/IU2JDO1E' }
+                data: { answer: ['免费token限制本人学习通使用'], num: 0, sponsorUrl: SPONSOR_URL }
               }, 403);
             }
           }
 
-          const skipUserIdCheck = workType === 'zhs';
+          const skipUserIdCheck = workType === 'zhs' || workType === 'ouchn';
           const checkResult = await checkTokenStatus(token, userId, skipUserIdCheck);
           log(`次数检查: ${checkResult.success ? `✓ 剩余${checkResult.remainingCount}次` : "✗ " + checkResult.message}`);
 
@@ -893,7 +921,7 @@ app.post('/', async (c) => {
         return c.json({
           code: 429,
           msg: '今日免费查题100次已达上限，明日再试',
-          data: { limitedMode: true, answer: ['今日免费查题已达上限，明日再试'], num: 0, dailyQuotaUsed: quotaCheck.used }
+          data: { limitedMode: true, answer: ['今日免费查题已达上限，明日再试'], num: 0, dailyQuotaUsed: quotaCheck.used, sponsorUrl: SPONSOR_URL }
         }, 429);
       }
     }
@@ -946,7 +974,7 @@ app.post('/', async (c) => {
         
         log(`开始执行异步查询: ${taskId}`);
         
-        const skipUserIdCheck = (questionData.workType || '') === 'zhs';
+        const skipUserIdCheck = workType === 'zhs' || workType === 'ouchn';
         
         const response = await handleQuery(c, {
           token,

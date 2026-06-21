@@ -8,8 +8,8 @@
  */
 
 const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { validateAnswer } = require('../utils');
-const { getEnv } = require('../config');
+const { validateAnswer, stripPunctuation } = require('../utils');
+const { getEnv, SPONSOR_URL } = require('../config');
 const { MODEL_COLUMN_MAP } = require('../config/ai-models');
 
 // ==================== 正常模式 AI 补充 ====================
@@ -265,11 +265,11 @@ async function handleNormalMode(c, params) {
         return c.json({
           code: 403,
           msg: decrementResult.message,
-          data: { num: decrementResult.remainingCount, answer: [] }
+          data: { num: decrementResult.remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
-      log("扣除次数: 1");
+      log("扣除次数: 1（缓存命中）");
     }
 
     if (!limitedMode) {
@@ -285,7 +285,7 @@ async function handleNormalMode(c, params) {
     } else {
       return c.json({
         code: 200,
-        msg: "查询成功",
+        msg: "查询成功-缓存命中",
         data: {
           answer: cachedAnswerArr,
           source: "cache",
@@ -338,7 +338,7 @@ const aiResult = await fetchAISupplement(questionData);
             return c.json({
               code: 403,
               msg: decrementResult.message,
-              data: { num: remainingCount, answer: [] }
+              data: { num: remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
             }, 403);
           }
           remainingCount = decrementResult.remainingCount;
@@ -355,7 +355,15 @@ const aiResult = await fetchAISupplement(questionData);
         answerData = cleanAnswerData(answerData);
 
         // 最终校验：答案格式和选项匹配（使用清洗后的答案）
-        const validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+        let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+        if (!validation.valid) {
+          // 第二阶段：去除标点符号后重试
+          const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
+          if (fixed) {
+            answerData.data.answer = fixed;
+            validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+          }
+        }
         if (!validation.valid) {
           log(`✗ 答案校验失败: ${validation.reason}`);
           return c.json({
@@ -389,7 +397,7 @@ const aiResult = await fetchAISupplement(questionData);
   // 检查是否跳过 Hive-Net
   const skipHiveNet = getEnv('SKIP_HIVENET', 'false') === 'true';
 
-  // 策略：Hive-Net → 言溪 → UCUC → 题库海 → AI
+  // 策略：Hive-Net → UCUC → 言溪 → 题库海 → AI
   if (!skipHiveNet) {
     log("━━━ 1. 查询 Hive-Net ━━━");
     const hiveNetResult = await fetchHiveNet(questionData);
@@ -407,32 +415,14 @@ const aiResult = await fetchAISupplement(questionData);
       log(`✗ Hive-Net 无答案：${hiveNetResult.msg || '未找到'}`);
     }
   } else {
-    log("⏭️ Hive-Net 已禁用（SKIP_HIVENET=true），直接使用言溪题库");
-  }
-
-  if (!hasAnswer) {
-    log("━━━ 2. 查询 言溪题库 ━━━");
-    const yanxiResult = await fetchYanxi(questionData);
-
-    hasAnswer = yanxiResult.code === 200 &&
-                yanxiResult.data &&
-                yanxiResult.data.answer &&
-                (Array.isArray(yanxiResult.data.answer) ? yanxiResult.data.answer.length > 0 : true);
-
-    if (hasAnswer) {
-      log("✓ 言溪题库 有答案");
-      answerData = yanxiResult;
-      answerData.data.source = answerData.data.source || "yanxi";
-    } else {
-      log(`✗ 言溪题库 无答案：${yanxiResult.msg || '未找到'}`);
-    }
+    log("⏭️ Hive-Net 已禁用（SKIP_HIVENET=true），直接使用UCUC题库");
   }
 
   if (!hasAnswer) {
     // UCUC 题库只支持：单选题(0)、多选题(1)、判断题(3)
     const ucucSupportedTypes = ["0", "1", "3"];
     if (ucucSupportedTypes.includes(questionData.type)) {
-      log("━━━ 3. 查询 UCUC 题库 ━━━");
+      log("━━━ 2. 查询 UCUC 题库 ━━━");
       const ucucResult = await fetchUcuc(questionData);
 
       hasAnswer = ucucResult.code === 200 &&
@@ -449,6 +439,24 @@ const aiResult = await fetchAISupplement(questionData);
       }
     } else {
       log(`⏭️ 题型 "${questionData.type}" 不在 UCUC 支持范围内，跳过 UCUC 题库`);
+    }
+  }
+
+  if (!hasAnswer) {
+    log("━━━ 3. 查询 言溪题库 ━━━");
+    const yanxiResult = await fetchYanxi(questionData);
+
+    hasAnswer = yanxiResult.code === 200 &&
+                yanxiResult.data &&
+                yanxiResult.data.answer &&
+                (Array.isArray(yanxiResult.data.answer) ? yanxiResult.data.answer.length > 0 : true);
+
+    if (hasAnswer) {
+      log("✓ 言溪题库 有答案");
+      answerData = yanxiResult;
+      answerData.data.source = answerData.data.source || "yanxi";
+    } else {
+      log(`✗ 言溪题库 无答案：${yanxiResult.msg || '未找到'}`);
     }
   }
 
@@ -493,7 +501,15 @@ const aiResult = await fetchAISupplement(questionData);
     answerData = cleanAnswerData(answerData);
     
     // 校验答案格式和选项匹配
-    const validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+    let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+    if (!validation.valid) {
+      // 第二阶段：去除标点符号后重试
+      const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
+      if (fixed) {
+        answerData.data.answer = fixed;
+        validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+      }
+    }
     if (!validation.valid) {
       log(`✗ 答案校验失败: ${validation.reason}`);
       return c.json({
@@ -524,7 +540,7 @@ const aiResult = await fetchAISupplement(questionData);
         return c.json({
           code: 403,
           msg: decrementResult.message,
-          data: { num: remainingCount, answer: [] }
+          data: { num: remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
@@ -554,3 +570,28 @@ module.exports = {
   handleNormalMode,
   fetchAISupplement
 };
+
+// 去标点符号后重新匹配答案与选项
+function retryWithStrippedPunctuation(questionData, answers) {
+  if (!questionData.options || !answers || answers.length === 0) return null;
+  
+  const optionLines = Array.isArray(questionData.options)
+    ? questionData.options
+    : String(questionData.options).split('\n').filter(o => o.trim());
+  
+  const fixed = [];
+  for (const ans of answers) {
+    const ansText = String(ans).replace(/^[A-Za-z][.、)\s]+/, '').trim();
+    const match = optionLines.find(opt => {
+      const cleanOpt = String(opt).replace(/^[A-Za-z][.、)\s]+/, '').trim();
+      return stripPunctuation(cleanOpt) === stripPunctuation(ansText);
+    });
+    if (match) {
+      fixed.push(String(match).trim());
+      console.log(`✓ 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
+    } else {
+      return null; // 有答案匹配不上，放弃
+    }
+  }
+  return fixed;
+}
