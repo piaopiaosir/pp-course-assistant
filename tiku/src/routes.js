@@ -704,7 +704,8 @@ app.get('/', async (c) => {
   const token = c.req.query('token');
   const userId = c.req.query('userId') || c.req.query('u') || null;
   const fid = c.req.query('fid') || null;
-  const workType = c.req.query('workType') || null;
+  let workType = c.req.query('workType') || null;
+  if (['zy', 'ks', 'zj'].includes(workType)) workType = 'cx';
   const masterSecret = getEnv('MASTER_SECRET');
   
   if (userId && !/^\d{7,10}$/.test(userId)) {
@@ -839,14 +840,15 @@ app.post('/', async (c) => {
     const body = await c.req.json();
     const { token, questionData, verifyAnswer, checkOnly, userId, aiMode, model, enableWebSearch, fid } = body;
     const masterSecret = getEnv('MASTER_SECRET');
-    const hunyuanApiKey = getEnv('HUNYUAN_API_KEY');
+    const tokenhubApiKey = getEnv('TOKENHUB_API_KEY');
     
     if (userId && !/^\d{7,10}$/.test(userId)) {
       return c.json({ code: 400, msg: '非法用户ID' }, 400);
     }
 
     // workType 白名单校验
-    const workType = (questionData?.workType || '').trim();
+    let workType = (questionData?.workType || '').trim();
+    if (['zy', 'ks', 'zj'].includes(workType)) workType = 'cx';
     if (!workType || !ALLOWED_WORK_TYPES.includes(workType)) {
       log(`⚠️ 非法 workType: "${workType}"，拒绝请求`);
       return c.json({
@@ -985,7 +987,7 @@ app.post('/', async (c) => {
           aiMode,
           enableWebSearch,
           model,
-          hunyuanApiKey,
+          tokenhubApiKey,
           log,
           FREE_MODE,
           limitedMode,

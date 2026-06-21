@@ -177,8 +177,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     // AI模型来源 - 转换为小写 CSS 类名格式（HTML中不转义）
     const aiModelsMap = {
       'ai': 'ai',
-      'hunyuan-standard': 'hunyuan-standard',
-      'hunyuan-t1': 'hunyuan-t1',
+      'hy3-preview': 'hy3-preview',
       'deepseek-v3.2': 'deepseek-v3.2',
       'deepseek-v3.2-think': 'deepseek-v3.2-think',
       'deepseek-r1-0528': 'deepseek-r1-0528',
@@ -539,8 +538,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     
     /* AI模型 */
     .badge-ai { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
-    .badge-hunyuan-standard { background: rgba(102, 126, 234, 0.15); color: #667eea; }
-    .badge-hunyuan-t1 { background: rgba(118, 75, 162, 0.15); color: #764ba2; }
+    .badge-hy3-preview { background: rgba(102, 126, 234, 0.15); color: #667eea; }
     .badge-deepseek-v3\\.2 { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
     .badge-deepseek-v3\\.2-think { background: rgba(244, 114, 182, 0.15); color: #f472b6; }
     .badge-deepseek-r1-0528 { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
@@ -1192,12 +1190,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #ea580c;">${globalStats.minimax_m3_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">混元 Standard</span>
-            <span class="detail-value" style="color: #667eea;">${globalStats.hunyuan_standard_calls || 0}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">混元 T1</span>
-            <span class="detail-value" style="color: #764ba2;">${globalStats.hunyuan_t1_calls || 0}</span>
+            <span class="detail-label">Hy3-preview</span>
+            <span class="detail-value" style="color: #667eea;">${globalStats.hy3_preview_calls || 0}</span>
           </div>
         </div>
       </div>
@@ -1491,7 +1485,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         deepseek_v3: '#ec4899', deepseek_r1: '#8b5cf6', deepseek_v4_flash: '#3b82f6',
         deepseek_v4_pro: '#2563eb', kimi_k26: '#7c3aed', kimi_k25: '#9333ea',
         qwen3_5: '#0ea5e9', qwen3_6: '#38bdf8', qwen3_7: '#7dd3fc', minimax_m25: '#f97316',
-        minimax_m27: '#fb923c', minimax_m3: '#ea580c', hunyuan_standard: '#667eea', hunyuan_t1: '#764ba2',
+        minimax_m27: '#fb923c', minimax_m3: '#ea580c', hy3_preview: '#667eea',
         gpt_54_mini: '#10b981', gpt_54_nano: '#059669', gemini_31: '#0891b2', gemini_35: '#06b6d4',
         glm_5: '#7c3aed', glm_51: '#8b5cf6', glm_47: '#6366f1'
       };
@@ -1522,8 +1516,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         { label: 'MiniMax-M2.5', value: globalStats.minimax_m25_calls||0, color: colors.minimax_m25 },
         { label: 'MiniMax-M2.7', value: globalStats.minimax_m27_calls||0, color: colors.minimax_m27 },
         { label: 'MiniMax-M3', value: globalStats.minimax_m3_calls||0, color: colors.minimax_m3 },
-        { label: 'Hunyuan Standard', value: globalStats.hunyuan_standard_calls||0, color: colors.hunyuan_standard },
-        { label: 'Hunyuan T1', value: globalStats.hunyuan_t1_calls||0, color: colors.hunyuan_t1 },
+        { label: 'Hy3-preview', value: globalStats.hy3_preview_calls||0, color: colors.hy3_preview },
         { label: 'GPT-5.4-mini', value: globalStats.gpt_54_mini_calls||0, color: colors.gpt_54_mini },
         { label: 'GPT-5.4-nano', value: globalStats.gpt_54_nano_calls||0, color: colors.gpt_54_nano },
         { label: 'Gemini 3.1', value: globalStats.gemini_31_calls||0, color: colors.gemini_31 },

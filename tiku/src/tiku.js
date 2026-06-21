@@ -1139,7 +1139,7 @@ async function getGlobalStats() {
       yanxi_remaining: 0, yanxi_calls_count: 0, 
       ai_calls_count: 0, 
       deepseek_calls_count: 0, deepseek_thinking_calls_count: 0,
-      hunyuan_calls_count: 0, hunyuan_t1_calls_count: 0,
+      hunyuan_calls_count: 0,
       thinking_calls_count: 0, 
       cache_hits_count: 0, total_queries: 0 
     };

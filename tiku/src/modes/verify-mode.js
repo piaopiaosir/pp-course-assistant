@@ -447,7 +447,7 @@ async function fetchDeepSeekThinking(questionData) {
  * @param {Object} params.questionData - 题目数据
  * @param {boolean} params.verifyAnswer - 是否校验答案
  * @param {boolean} params.checkOnly - 是否仅检测
- * @param {string} params.hunyuanApiKey - 混元API密钥
+ * @param {string} params.hunyuanApiKey - TokenHub API密钥
  * @param {Object} params.checkResult - 校验结果
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式

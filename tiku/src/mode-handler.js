@@ -19,7 +19,7 @@ const { generateQuestionHash, getTypeDescription } = require('./tiku');
  * @param {boolean} params.checkOnly - 是否仅检测（校验模式）
  * @param {string} params.aiMode - AI模式标识（ai模式）
  * @param {string} params.model - AI模型标识符（ai模式）
- * @param {string} params.hunyuanApiKey - 混元API密钥
+ * @param {string} params.tokenhubApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
  * @param {Function} params.decrementCount - 扣除次数函数
@@ -35,7 +35,7 @@ async function handleQuery(c, params) {
     aiMode,
     enableWebSearch,
     model,
-    hunyuanApiKey,
+    tokenhubApiKey,
     log,
     FREE_MODE,
     limitedMode,
@@ -67,7 +67,7 @@ async function handleQuery(c, params) {
       questionHash,
       verifyAnswer,
       checkOnly,
-      hunyuanApiKey,
+      hunyuanApiKey: tokenhubApiKey,
       log,
       FREE_MODE,
       decrementCount,
@@ -100,7 +100,7 @@ async function handleQuery(c, params) {
       userId,
       questionData,
       questionHash,
-      hunyuanApiKey,
+      hunyuanApiKey: tokenhubApiKey,
       log,
       FREE_MODE,
       limitedMode,

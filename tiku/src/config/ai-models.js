@@ -106,24 +106,16 @@ const AI_MODELS = {
     cost: 2,
     statsColumn: 'minimax_m3_calls'
   },
-  'hunyuan-t1': {
-    id: 'hunyuan-t1',
-    apiModel: 'hunyuan-t1-latest',
+  'hy3-preview': {
+    id: 'hy3-preview',
+    apiModel: 'hy3-preview',
     provider: 'tencent',
-    displayName: 'hunyuan-t1',
-    max_tokens: 8192,
-    cost: 1,
-    statsColumn: 'hunyuan_t1_calls'
-  },
-  'hunyuan-standard': {
-    id: 'hunyuan-standard',
-    apiModel: 'hunyuan-standard-256K',
-    provider: 'tencent',
-    displayName: 'hunyuan-standard',
+    displayName: 'Hy3-preview',
     temperature: 0.6,
-    max_tokens: 2048,
+    max_tokens: 8192,
+    thinking: { type: "enabled" },
     cost: 1,
-    statsColumn: 'hunyuan_standard_calls'
+    statsColumn: 'hy3_preview_calls'
   },
   'gpt-5.4-mini': {
     id: 'gpt-5.4-mini',
@@ -167,7 +159,7 @@ const AI_MODELS = {
   },
   'GLM-5': {
     id: 'GLM-5',
-    apiModel: 'Pro/zai-org/GLM-5',
+    apiModel: 'glm-5',
     provider: '302ai',
     displayName: 'GLM-5',
     temperature: 1.0,
@@ -262,7 +254,7 @@ function getModelCosts() {
 function getFullModelConfig() {
   const typeModelMap = {
     'DeepSeek': ['V4-Flash', 'V4-Pro', 'V3.2', 'R1'],
-    'HunYuan': ['Standard', 'T1'],
+    'HunYuan': ['Hy3-preview'],
     'Qwen': ['3.5-plus', '3.6-plus', '3.7-Max'],
     'MiniMax': ['M3', 'M2.7', 'M2.5'],
     'GLM': ['5.1', '5.0', '4.7'],
@@ -273,7 +265,7 @@ function getFullModelConfig() {
 
   const defaultModels = {
     'DeepSeek': 'V4-Flash',
-    'HunYuan': 'Standard',
+    'HunYuan': 'Hy3-preview',
     'Qwen': '3.7-Max',
     'MiniMax': 'M3',
     'GLM': '5.1',
@@ -290,8 +282,7 @@ function getFullModelConfig() {
       'R1': 'DeepSeek-R1-0528'
     },
     'HunYuan': {
-      'Standard': 'hunyuan-standard',
-      'T1': 'hunyuan-t1'
+      'Hy3-preview': 'hy3-preview'
     },
     'Qwen': {
       '3.7-Max': 'qwen3.7-max',

@@ -34,11 +34,11 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
   const model = modelConfig.model;
 
-  const apiUrl = customApiUrl || "https://api.hunyuan.cloud.tencent.com/v1/chat/completions";
+  const apiUrl = customApiUrl || "https://tokenhub.tencentmaas.com/v1/chat/completions";
   const apiName = customApiUrl ? "302.AI" : "腾讯云";
 
   if (!apiKey) {
-    const errorMsg = customApiUrl ? "未配置 302AI_API_KEY" : "未配置 HUNYUAN_API_KEY";
+    const errorMsg = customApiUrl ? "未配置 302AI_API_KEY" : "未配置 TOKENHUB_API_KEY";
     console.log(`❌ ${errorMsg}`);
     return { code: 500, msg: errorMsg, data: null };
   }
@@ -364,14 +364,11 @@ async function handleAIMode(c, params) {
   log("━━━ AI模式（仅使用AI） ━━━");
   log(`AI模型: ${model}`);
 
-  const modelConfig = getModelConfig(model);
+  let modelConfig = getModelConfig(model);
   if (!modelConfig) {
-    log(`✗ 不支持的AI模型: ${model}`);
-    return c.json({
-      code: 400,
-      msg: `不支持的AI模型: ${model}`,
-      data: { answer: [], num: 999999 }
-    }, 400);
+    log(`⚠ 未知AI模型: ${model}，回退为 deepseek-v4-flash`);
+    modelConfig = getModelConfig('deepseek-v4-flash');
+    model = 'deepseek-v4-flash';
   }
 
   log(`AI提供商: ${modelConfig.provider}`);
@@ -408,20 +405,20 @@ async function handleAIMode(c, params) {
   
   // 根据模型提供商选择AI服务
   if (modelConfig.provider === 'tencent') {
-    log("━━━ 查询 腾讯云 AI ━━━");
-    const hunyuanApiKey = getEnv('HUNYUAN_API_KEY', '');
+    log("━━━ 查询 腾讯云 TokenHub AI ━━━");
+    const tokenhubApiKey = getEnv('TOKENHUB_API_KEY', '');
 
-    if (!hunyuanApiKey) {
-      log("✗ HUNYUAN_API_KEY 未配置");
+    if (!tokenhubApiKey) {
+      log("✗ TOKENHUB_API_KEY 未配置");
       return c.json({
         code: 500,
-        msg: "AI模式需要配置HUNYUAN_API_KEY",
+        msg: "AI模式需要配置TOKENHUB_API_KEY",
         data: { answer: [], num: remainingCount }
       }, 500);
     }
 
     // 使用 fetchAICustom 函数（自定义参数配置）
-    const aiResult = await fetchAICustom(questionData, hunyuanApiKey, modelConfig, null, enableWebSearch, tavilySearch);
+    const aiResult = await fetchAICustom(questionData, tokenhubApiKey, modelConfig, null, enableWebSearch, tavilySearch);
     answerData = aiResult;
 
     if (aiResult.code === 200) {

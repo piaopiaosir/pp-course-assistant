@@ -224,7 +224,7 @@ async function fetchAISupplement(questionData) {
  * @param {string} params.userId - 用户ID
  * @param {Object} params.questionData - 题目数据
  * @param {Object} params.checkResult - 校验结果
- * @param {string} params.hunyuanApiKey - 混元API密钥
+ * @param {string} params.hunyuanApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
  * @param {Function} params.decrementCount - 扣除次数函数
@@ -478,7 +478,7 @@ const aiResult = await fetchAISupplement(questionData);
     }
   }
 
-  // AI补充：只在配置了hunyuanApiKey时才使用
+  // AI补充：只在配置了hunyuanApiKey（TokenHub）时才使用
   if (!hasAnswer && hunyuanApiKey) {
     log("━━━ 5. 查询 AI ━━━");
     const aiResult = await fetchAISupplement(questionData);
