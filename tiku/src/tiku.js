@@ -845,44 +845,6 @@ async function fetchUcuc(questionData) {
       return { code: 404, msg: result.msg || "UCUC题库未找到答案", data: null };
     }
 
-    // UCUC 题型校验：返回的题型必须与用户请求的题型一致
-    const ucucType = result.data.type;
-    // UCUC 题型到数字类型的映射（只支持这几种题型）
-    const ucucTypeMapping = {
-      "单选题": "0",
-      "多选题": "1",
-      "填空题": "2",
-      "判断题": "3",
-      "简答题": "4",
-      "名词解释": "5"
-    };
-
-    const isUserRequestJudge = questionData.type === "3";
-    const mappedUcucType = ucucType ? ucucTypeMapping[ucucType] : undefined;
-    // UCUC未知类型：返回了题型但不在映射表中，或未返回题型
-    const ucucTypeUnknown = !ucucType || !mappedUcucType;
-
-    if (ucucType && questionData.type) {
-      console.log(`📥 UCUC 返回题型: "${ucucType}" -> "${mappedUcucType}"`);
-      console.log(`📥 客户端请求题型: "${questionData.type}" (${getTypeDescription(questionData.type)})`);
-
-      if (mappedUcucType === questionData.type) {
-        // 题型完全匹配
-        console.log(`✓ UCUC 题型校验通过: ${ucucType}`);
-      } else if (ucucTypeUnknown) {
-        // 未知类型，降级校验：后续通过答案数量和选项内容判断
-        console.log(`⚠️ UCUC 返回未知题型"${ucucType}"，降级为根据答案内容校验`);
-      } else {
-        // 已知类型但不匹配（如返回"单选"但客户端是"多选"），直接跳过
-        console.log(`✗ UCUC 题型不匹配: 返回"${ucucType}"(${mappedUcucType})，期望"${getTypeDescription(questionData.type)}"(${questionData.type})，跳过`);
-        return { code: 404, msg: `UCUC题型不匹配: 返回${ucucType}，期望${getTypeDescription(questionData.type)}`, data: null };
-      }
-    } else if (!ucucType) {
-      console.log(`⚠️ UCUC 未返回题型，降级为根据答案内容校验`);
-    } else if (!questionData.type) {
-      console.log(`⚠️ 客户端未上报题型，跳过题型校验`);
-    }
-
     // 更新剩余次数
     if (result.data.remainingCount !== undefined) {
       await updateUcucRemaining(result.data.remainingCount);
@@ -930,71 +892,30 @@ async function fetchUcuc(questionData) {
     console.log(`✓ UCUC 题库找到答案:`, JSON.stringify(answers));
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-    // 判断是否需要校验选项（单选/多选）
-    // UCUC返回未知类型或未返回题型时，根据答案数量和选项内容判断
-    const needOptions = ["0", "1"].includes(questionData.type);
-    const ucucTypeUndefined = ucucTypeUnknown;
+    // 单选题：只允许1个答案
+    if (questionData.type === "0" && answers.length > 1) {
+      console.log(`✗ UCUC 题库 答案异常: 单选题返回了${answers.length}个答案，跳过`);
+      return { code: 404, msg: "UCUC题库答案与题型不匹配(单选返回多答案)", data: { answer: answers } };
+    }
 
-    if (needOptions) {
-      // UCUC返回未知类型或未返回题型时，降级校验
-      if (ucucTypeUndefined) {
-        
-        // 单选题：只允许1个答案
-        if (questionData.type === "0" && answers.length > 1) {
-          console.log(`✗ UCUC 题库 答案异常: 用户请求单选，但UCUC返回了${answers.length}个答案，跳过`);
-          return { code: 404, msg: "UCUC题库答案与题型不匹配(单选返回多答案)", data: { answer: answers } };
-        }
+    // 多选题：不允许只有1个答案
+    if (questionData.type === "1" && answers.length === 1) {
+      console.log(`✗ UCUC 题库 答案异常: 多选题只返回了1个答案，跳过`);
+      return { code: 404, msg: "UCUC题库答案与题型不匹配(多选返回单答案)", data: { answer: answers } };
+    }
 
-        // 多选题：不允许只有1个答案
-        if (questionData.type === "1" && answers.length === 1) {
-          console.log(`✗ UCUC 题库 答案异常: 用户请求多选，但UCUC只返回了1个答案，跳过`);
-          return { code: 404, msg: "UCUC题库答案与题型不匹配(多选返回单答案)", data: { answer: answers } };
-        }
-
-        // 多选题：不允许全选
-        if (questionData.type === "1" && questionData.options) {
-          let optionLines = [];
-          if (Array.isArray(questionData.options)) {
-            optionLines = questionData.options;
-          } else if (typeof questionData.options === 'string') {
-            optionLines = questionData.options.split(/[,\n]+/).filter(o => o.trim());
-          }
-          if (answers.length >= optionLines.length) {
-            console.log(`✗ UCUC 题库 答案异常: 用户请求多选，但UCUC返回了全部${answers.length}个选项，跳过`);
-            return { code: 404, msg: "UCUC题库答案校验失败(多选题全选)", data: { answer: answers } };
-          }
-        }
-      } else {
-        // UCUC返回了题型，正常校验
-        // 单选题返回多个答案，跳过
-        if (questionData.type === "0" && answers.length > 1) {
-          console.log(`✗ UCUC 题库 答案异常: 单选题返回了${answers.length}个答案，跳过`);
-          return { code: 404, msg: "UCUC题库答案与题型不匹配(单选返回多答案)", data: { answer: answers } };
-        }
-
-        // 多选题只返回1个答案，跳过
-        if (questionData.type === "1" && answers.length === 1) {
-          console.log(`✗ UCUC 题库 答案异常: 多选题只返回了1个答案，跳过`);
-          return { code: 404, msg: "UCUC题库答案与题型不匹配(多选返回单答案)", data: { answer: answers } };
-        }
-
-        // 多选题全选校验
-        if (questionData.type === "1" && questionData.options) {
-          let optionLines = [];
-          if (Array.isArray(questionData.options)) {
-            optionLines = questionData.options;
-          } else if (typeof questionData.options === 'string') {
-            optionLines = questionData.options.split(/[,\n]+/).filter(o => o.trim());
-          }
-          if (answers.length >= optionLines.length) {
-            console.log(`✗ UCUC 题库 答案异常: 多选题返回了全部${answers.length}个选项，跳过`);
-            return { code: 404, msg: "UCUC题库答案校验失败(多选题全选)", data: { answer: answers } };
-          }
-        }
+    // 判断题格式校验
+    if (questionData.type === "3") {
+      const judgeKeywords = /^(正确|错误|对|错|true|false|√|×|是|否|T|F)$/i;
+      const allAnswersValid = answers.every(ans => judgeKeywords.test(ans.replace(/^[A-Z][.、]\s*/, '').trim()));
+      if (!allAnswersValid) {
+        console.log(`✗ UCUC 题库答案不符合判断题格式: ${answers.join(', ')}`);
+        return { code: 404, msg: "UCUC题库答案不符合判断题格式", data: { answer: answers } };
       }
     }
 
     // 答案必须在选项中（单选/多选）
+    const needOptions = ["0", "1"].includes(questionData.type);
     if (needOptions && questionData.options) {
       let optionLines = [];
       if (Array.isArray(questionData.options)) {
@@ -1017,20 +938,7 @@ async function fetchUcuc(questionData) {
       if (invalidAnswers.length > 0) {
         console.log(`✗ UCUC 题库答案不在选项中: ${invalidAnswers.join(', ')}`);
         return { code: 404, msg: "UCUC题库答案不在选项中", data: { answer: answers } };
-      } else if (ucucTypeUndefined) {
-        console.log(`✓ UCUC题型未知，但答案数量和选项内容都符合用户请求，通过校验`);
       }
-    }
-
-    // 判断题降级校验：UCUC返回未知类型时，检查答案是否为判断题标准值
-    if (ucucTypeUndefined && isUserRequestJudge) {
-      const judgeKeywords = /^(正确|错误|对|错|true|false|√|×|是|否|T|F)$/i;
-      const allAnswersValid = answers.every(ans => judgeKeywords.test(ans.replace(/^[A-Z][.、]\s*/, '').trim()));
-      if (!allAnswersValid) {
-        console.log(`✗ UCUC 题库答案不符合判断题格式: ${answers.join(', ')}`);
-        return { code: 404, msg: "UCUC题库答案不符合判断题格式", data: { answer: answers } };
-      }
-      console.log(`✓ UCUC题型未知，但答案符合判断题格式，通过校验`);
     }
 
     // 判断题标准化
@@ -1423,7 +1331,22 @@ async function fetchAnswer(questionData) {
           return { code: 404, msg: "题库海答案不在选项中", data: { answer: answers, options: questionData.options } };
         }
       }
-      
+
+      // 判断题格式校验
+      if (questionData.type === "3") {
+        const judgeKeywords = /^(正确|错误|对|错|true|false|√|×|是|否|T|F)$/i;
+        const allAnswersValid = answers.every(ans => judgeKeywords.test(String(ans).replace(/^[A-Z][.、]\s*/, '').trim()));
+        if (!allAnswersValid) {
+          console.log(`✗ 题库海 答案不符合判断题格式: ${answers.join(', ')}`);
+          return { code: 404, msg: "题库海答案不符合判断题格式", data: { answer: answers } };
+        }
+      }
+
+      // 判断题标准化
+      if (questionData.type === "3") {
+        answers = answers.map(ans => normalizeAnswer(ans, "3"));
+      }
+
       console.log("✓ 题库海 找到答案:", JSON.stringify(answers));
       // 统一answer为数组格式（题库海API可能返回逗号分隔的字符串）
       let normalizedAnswer = result.data.answer;
@@ -2247,6 +2170,16 @@ async function fetchYanxi(questionData) {
       }
     }
     
+    // 判断题格式校验
+    if (questionData.type === "3") {
+      const judgeKeywords = /^(正确|错误|对|错|true|false|√|×|是|否|T|F)$/i;
+      const allAnswersValid = answers.every(ans => judgeKeywords.test(String(ans).replace(/^[A-Z][.、]\s*/, '').trim()));
+      if (!allAnswersValid) {
+        console.log(`✗ 言溪题库答案不符合判断题格式: ${answers.join(', ')}`);
+        return { code: 404, msg: "言溪题库答案不符合判断题格式", data: { answer: answers } };
+      }
+    }
+
     // 判断题标准化：将答案统一为 "正确" 或 "错误"
     if (questionData.type === "3") {
       answers = answers.map(ans => normalizeAnswer(ans, "3"));

@@ -419,8 +419,8 @@ const aiResult = await fetchAISupplement(questionData);
   }
 
   if (!hasAnswer) {
-    // UCUC 题库只支持：单选题(0)、多选题(1)、判断题(3)
-    const ucucSupportedTypes = ["0", "1", "3"];
+    // UCUC 题库支持：单选题(0)、多选题(1)、填空题(2)、判断题(3)、简答题(4)
+    const ucucSupportedTypes = ["0", "1", "2", "3", "4"];
     if (ucucSupportedTypes.includes(questionData.type)) {
       log("━━━ 2. 查询 UCUC 题库 ━━━");
       const ucucResult = await fetchUcuc(questionData);
