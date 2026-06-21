@@ -184,8 +184,8 @@ async function executeWebSearch(query) {
   
   const searchResult = await tavilySearch(query, {
     maxResults: 10,
-    searchDepth: 'advanced',
-    includeAnswer: true
+    includeAnswer: true,
+    autoParameters: true
   });
 
   if (searchResult.error) {

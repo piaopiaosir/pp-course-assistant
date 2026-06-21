@@ -269,8 +269,9 @@ async function tavilySearch(query, options = {}, _depth = 0) {
 
   const {
     maxResults = 5,
-    searchDepth = 'advanced',
-    includeAnswer = true
+    searchDepth = 'basic',
+    includeAnswer = true,
+    autoParameters = false
   } = options;
 
   try {
@@ -289,7 +290,8 @@ async function tavilySearch(query, options = {}, _depth = 0) {
         query: query,
         max_results: maxResults,
         search_depth: searchDepth,
-        include_answer: includeAnswer
+        include_answer: includeAnswer,
+        auto_parameters: autoParameters
       })
     });
 
@@ -351,9 +353,9 @@ async function tavilySearch(query, options = {}, _depth = 0) {
         }
       }
       
-      // 432: 搜索失败（可能是敏感词或频率限制），尝试切换密钥
-      if (response.status === 432) {
-        console.log(`⚠️ Tavily密钥${keyIndex}搜索失败(HTTP 432),尝试切换密钥...`);
+      // 432/433: 搜索失败（可能是敏感词或频率限制），尝试切换密钥
+      if (response.status === 432 || response.status === 433) {
+        console.log(`⚠️ Tavily密钥${keyIndex}搜索失败(HTTP ${response.status}),尝试切换密钥...`);
         const nextKey = await switchToNextAvailableKey(keyIndex);
         if (nextKey) {
           console.log(`🔄 已切换到密钥${nextKey.index},重新执行搜索...`);
@@ -387,9 +389,12 @@ async function tavilySearch(query, options = {}, _depth = 0) {
       console.log("📍 Tavily直接答案:", result.answer);
     }
 
-    // 更新使用次数(根据搜索深度扣费: basic=1次, advanced=2次)
+    // 更新使用次数(根据Tavily实际使用的搜索深度扣费)
+    // auto_parameters开启后，实际search_depth以响应中auto_parameters.search_depth为准
+    const actualSearchDepth = result.auto_parameters?.search_depth || searchDepth;
+    console.log(`📍 实际搜索深度: ${actualSearchDepth}`);
     if (keyIndex > 0) {
-      const cost = searchDepth === 'advanced' ? 2 : 1;
+      const cost = actualSearchDepth === 'advanced' ? 2 : 1;
       await updateTavilyKeyUsage(keyIndex, cost);
     }
 

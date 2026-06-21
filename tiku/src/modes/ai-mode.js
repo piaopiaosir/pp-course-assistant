@@ -175,8 +175,8 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
             
             const searchResult = await tavilySearch(fnArgs.query || questionData.question, {
               maxResults: 10,
-              searchDepth: 'advanced',
-              includeAnswer: true
+              includeAnswer: true,
+              autoParameters: true
             });
 
             if (searchResult.error) {
@@ -184,21 +184,16 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
               toolResult = `搜索失败: ${searchResult.error}`;
             } else {
               console.log(`✅ 联网搜索完成，获得${searchResult.results?.length || 0}条结果`);
-              
-              // 格式化搜索结果（取全部20条）
-              const formattedResults = searchResult.results?.map((r, i) => 
-                `[${i + 1}] ${r.title}\n${r.content}\n来源: ${r.url}`
-              ) || [];
 
-              // 构建返回结果
+              // 只使用Tavily的answer摘要，不传results列表（省token）
               const resultParts = [];
               if (searchResult.answer) {
-                resultParts.push(`【直接答案】${searchResult.answer}`);
+                resultParts.push(`【搜索结果】${searchResult.answer}`);
+              } else {
+                resultParts.push('无搜索结果');
               }
-              resultParts.push(formattedResults.join('\n\n') || '无搜索结果');
-              // 关键提示：告诉AI判断是否足够
               resultParts.push('\n【判断提示】请立即判断：如果上述搜索结果已经能确定答案，就直接输出<answer>标签，不要再继续搜索。只有当结果完全无关或不足时，才考虑再次搜索（用更精确的关键词）。');
-              
+
               toolResult = resultParts.join('\n\n');
             }
           } else {
