@@ -9,7 +9,7 @@
 
 const { saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
 const { getEnv, SPONSOR_URL } = require('../config');
-const { validateAnswer } = require('../utils');
+const { validateAnswer, retryWithStrippedPunctuation } = require('../utils');
 const { getModelConfig, getSupportedModels, getModelCosts, getFullModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
 
 // ==================== AI模式专用AI调用 ====================
@@ -294,7 +294,13 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
     // 超出最大轮数：再做最后一轮不带工具的调用，强制AI基于已有上下文给出答案
     console.log("⚠️ 超出最大工具调用轮数限制，进行最后一轮无工具调用...");
     
-    const finalBody = { ...body, messages: messages };
+    // 追加一条强硬的 system 消息，强制 AI 直接输出答案（防止它继续尝试输出 tool_calls）
+    const finalMessages = [...messages, {
+      role: "system",
+      content: "【最终指令】已超出工具调用轮数上限，你现在必须基于已有信息直接给出最终答案。禁止再尝试调用任何工具，立即输出 <analysis>分析</analysis><answer>{\"answer\":[\"答案\"]}</answer>。"
+    }];
+    
+    const finalBody = { ...body, messages: finalMessages };
     // 删除 tools 参数，强制 AI 直接输出答案
     delete finalBody.tools;
     
@@ -519,8 +525,18 @@ async function handleAIMode(c, params) {
   answerData = cleanAnswerData(answerData);
 
   // 答案校验：返回给用户前先校验答案（使用清洗后的答案）
-  const answers = answerData.data.answer;
-  const validation = validateAnswer(questionData.type, answers, questionData.options);
+  let answers = answerData.data.answer;
+  let validation = validateAnswer(questionData.type, answers, questionData.options);
+
+  if (!validation.valid && (questionData.type === "0" || questionData.type === "1") && validation.reason.includes('答案不在选项中')) {
+    // 选择题答案不在选项中：去除标点符号后重试匹配
+    const fixed = retryWithStrippedPunctuation(questionData, answers);
+    if (fixed) {
+      answerData.data.answer = fixed;
+      answers = fixed;
+      validation = validateAnswer(questionData.type, answers, questionData.options);
+    }
+  }
 
   if (!validation.valid) {
     log(`✗ AI答案校验失败: ${validation.reason}`);

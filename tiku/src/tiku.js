@@ -17,6 +17,8 @@ function extractJsonFromContent(content) {
     try {
       const parsed = JSON.parse(tagContent);
       if (parsed.answer !== undefined) return parsed;
+      // 如果解析结果是纯数组（AI直接返回了答案数组），包装为 { answer: [...] }
+      if (Array.isArray(parsed)) return { answer: parsed };
     } catch (e) { /* 继续尝试 */ }
     // 标签内不是纯JSON，尝试从标签内容中用方法1/2提取
     const tagResult = extractJsonFromArray(tagContent);
@@ -148,9 +150,10 @@ function buildPrompt(questionData, enableWebSearch = false) {
 
   // 通用规则部分（所有题型共享）
   const commonRules = [
-    '【关键规则】',
+    '【关键规则，必须遵守】',
     '- 最终答案必须放在content字段中输出。',
     '- <answer>标签只输出最终答案，不要将分析步骤放入answer数组。',
+    '- 最终答案必须放在<answer>标签内，格式为 {"answer":["答案内容"]}',
     '- <answer>标签内只放纯JSON，不要用markdown代码块包裹。',
     '- 不要根据题目关键词自由联想、推测或编造答案，必须基于知识认真推理后给出确定答案。'
   ];
@@ -477,10 +480,10 @@ function mergeSplitAnswers(aiAnswers, originalOptions) {
       continue;
     }
 
-    // 检查哪些AI答案是这个选项的子串
+    // 检查哪些AI答案是这个选项的子串（排除已被其他选项完全匹配的答案）
     const subAnswers = aiAnswers.filter(ans => {
       const t = ans.trim();
-      return t.length > 0 && trimmedOpt.includes(t) && t !== trimmedOpt;
+      return t.length > 0 && trimmedOpt.includes(t) && t !== trimmedOpt && !used.has(t);
     });
 
     if (subAnswers.length >= 1) {

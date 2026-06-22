@@ -8,7 +8,7 @@
  */
 
 const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { validateAnswer, stripPunctuation } = require('../utils');
+const { validateAnswer, retryWithStrippedPunctuation } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
 const { MODEL_COLUMN_MAP, getModelConfig } = require('../config/ai-models');
 
@@ -201,6 +201,17 @@ async function fetchAISupplement(questionData) {
                     };
                   }
 
+                  // 深度思考答案合理，选择题目去标点重试
+                  if ((questionData.type === "0" || questionData.type === "1")) {
+                    const thinkingValidation = validateAnswer(questionData.type, thinkingParsed.answer, questionData.options);
+                    if (!thinkingValidation.valid && thinkingValidation.reason.includes('答案不在选项中')) {
+                      const fixed = retryWithStrippedPunctuation(questionData, thinkingParsed.answer);
+                      if (fixed) {
+                        thinkingParsed.answer = fixed;
+                      }
+                    }
+                  }
+
                   // 深度思考答案合理，返回
                   console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
                   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -215,6 +226,17 @@ async function fetchAISupplement(questionData) {
             console.log("✗ 深度思考解析失败，使用原答案");
           } catch (thinkingError) {
             console.log("✗ 深度思考请求失败:", thinkingError.message);
+          }
+        }
+        
+        // 选择题去标点重试
+        if ((questionData.type === "0" || questionData.type === "1")) {
+          const firstValidation = validateAnswer(questionData.type, parsed.answer, questionData.options);
+          if (!firstValidation.valid && firstValidation.reason.includes('答案不在选项中')) {
+            const fixed = retryWithStrippedPunctuation(questionData, parsed.answer);
+            if (fixed) {
+              parsed.answer = fixed;
+            }
           }
         }
         
@@ -294,7 +316,8 @@ async function handleNormalMode(c, params) {
     // 受限模式或免费模式不扣除次数
     let remainingCount = 999999;
     if (!FREE_MODE && !limitedMode) {
-      const decrementResult = await decrementCount(token, userId, skipUserIdCheck);
+      const cacheCost = 0.8;
+      const decrementResult = await decrementCount(token, userId, skipUserIdCheck, cacheCost);
       if (!decrementResult.success) {
         return c.json({
           code: 403,
@@ -303,7 +326,7 @@ async function handleNormalMode(c, params) {
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
-      log("扣除次数: 1（缓存命中）");
+      log(`扣除次数: ${cacheCost}（缓存命中）`);
     }
 
     if (!limitedMode) {
@@ -366,8 +389,8 @@ const aiResult = await fetchAISupplement(questionData);
 
         // 免费模式不扣除次数
         if (!FREE_MODE) {
-          log("扣除次数: 1");
-          const decrementResult = await decrementCount(token, userId, skipUserIdCheck);
+          const normalCost = 1;
+          const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
           if (!decrementResult.success) {
             return c.json({
               code: 403,
@@ -376,6 +399,7 @@ const aiResult = await fetchAISupplement(questionData);
             }, 403);
           }
           remainingCount = decrementResult.remainingCount;
+          log(`扣除次数: ${normalCost}`);
           log(`剩余次数: ${remainingCount}`);
         } else {
           log("免费模式: 不扣除次数");
@@ -390,8 +414,8 @@ const aiResult = await fetchAISupplement(questionData);
 
         // 最终校验：答案格式和选项匹配（使用清洗后的答案）
         let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-        if (!validation.valid) {
-          // 第二阶段：去除标点符号后重试
+        if (!validation.valid && (questionData.type === "0" || questionData.type === "1") && validation.reason.includes('答案不在选项中')) {
+          // 选择题答案不在选项中：去除标点符号后重试匹配
           const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
           if (fixed) {
             answerData.data.answer = fixed;
@@ -536,8 +560,8 @@ const aiResult = await fetchAISupplement(questionData);
     
     // 校验答案格式和选项匹配
     let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-    if (!validation.valid) {
-      // 第二阶段：去除标点符号后重试
+    if (!validation.valid && (questionData.type === "0" || questionData.type === "1") && validation.reason.includes('答案不在选项中')) {
+      // 选择题答案不在选项中：去除标点符号后重试匹配
       const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
       if (fixed) {
         answerData.data.answer = fixed;
@@ -568,8 +592,8 @@ const aiResult = await fetchAISupplement(questionData);
 
     // 免费模式不扣除次数
     if (!FREE_MODE) {
-      log("扣除次数: 1");
-      const decrementResult = await decrementCount(token, userId, skipUserIdCheck);
+      const normalCost = 1;
+      const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
       if (!decrementResult.success) {
         return c.json({
           code: 403,
@@ -578,6 +602,7 @@ const aiResult = await fetchAISupplement(questionData);
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
+      log(`扣除次数: ${normalCost}`);
       log(`剩余次数: ${remainingCount}`);
     } else {
       log("免费模式: 不扣除次数");
@@ -604,28 +629,3 @@ module.exports = {
   handleNormalMode,
   fetchAISupplement
 };
-
-// 去标点符号后重新匹配答案与选项
-function retryWithStrippedPunctuation(questionData, answers) {
-  if (!questionData.options || !answers || answers.length === 0) return null;
-  
-  const optionLines = Array.isArray(questionData.options)
-    ? questionData.options
-    : String(questionData.options).split('\n').filter(o => o.trim());
-  
-  const fixed = [];
-  for (const ans of answers) {
-    const ansText = String(ans).replace(/^[A-Za-z][.、)\s]+/, '').trim();
-    const match = optionLines.find(opt => {
-      const cleanOpt = String(opt).replace(/^[A-Za-z][.、)\s]+/, '').trim();
-      return stripPunctuation(cleanOpt) === stripPunctuation(ansText);
-    });
-    if (match) {
-      fixed.push(String(match).trim());
-      console.log(`✓ 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
-    } else {
-      return null; // 有答案匹配不上，放弃
-    }
-  }
-  return fixed;
-}

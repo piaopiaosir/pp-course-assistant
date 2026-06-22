@@ -11,7 +11,7 @@
  */
 
 const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { normalizeAnswer, validateAnswer, stripPunctuation } = require('../utils');
+const { normalizeAnswer, validateAnswer, retryWithStrippedPunctuation } = require('../utils');
 const { db, getEnv, SPONSOR_URL } = require('../config');
 const { tavilySearch, WEB_SEARCH_TOOL } = require('../tavily-search');
 const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
@@ -942,8 +942,8 @@ async function handleVerifyMode(c, params) {
   // 最终校验：答案格式和选项匹配（仅对有答案的情况校验，使用清洗后的答案）
   if (answerData && answerData.data && answerData.data.answer && answerData.data.answer.length > 0) {
     let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-    if (!validation.valid) {
-      // 第二阶段：去除标点符号后重试
+    if (!validation.valid && (questionData.type === "0" || questionData.type === "1") && validation.reason.includes('答案不在选项中')) {
+      // 选择题答案不在选项中：去除标点符号后重试匹配
       const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
       if (fixed) {
         answerData.data.answer = fixed;
@@ -961,31 +961,6 @@ async function handleVerifyMode(c, params) {
   }
 
   return c.json(answerData);
-}
-
-// 去标点符号后重新匹配答案与选项
-function retryWithStrippedPunctuation(questionData, answers) {
-  if (!questionData.options || !answers || answers.length === 0) return null;
-  
-  const optionLines = Array.isArray(questionData.options)
-    ? questionData.options
-    : String(questionData.options).split('\n').filter(o => o.trim());
-  
-  const fixed = [];
-  for (const ans of answers) {
-    const ansText = String(ans).replace(/^[A-Za-z][.、)\s]+/, '').trim();
-    const match = optionLines.find(opt => {
-      const cleanOpt = String(opt).replace(/^[A-Za-z][.、)\s]+/, '').trim();
-      return stripPunctuation(cleanOpt) === stripPunctuation(ansText);
-    });
-    if (match) {
-      fixed.push(String(match).trim());
-      console.log(`✓ 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
-    } else {
-      return null;
-    }
-  }
-  return fixed;
 }
 
 module.exports = {

@@ -285,11 +285,37 @@ function normalizeOptions(options) {
   return [];
 }
 
+// 去标点符号后重新匹配答案与选项（仅用于选择题答案不在选项中的重试）
+function retryWithStrippedPunctuation(questionData, answers) {
+  if (!questionData.options || !answers || answers.length === 0) return null;
+  
+  const optionLines = Array.isArray(questionData.options)
+    ? questionData.options
+    : String(questionData.options).split('\n').filter(o => o.trim());
+  
+  const fixed = [];
+  for (const ans of answers) {
+    const ansText = String(ans).replace(/^[A-Za-z][.、)\s]+/, '').trim();
+    const match = optionLines.find(opt => {
+      const cleanOpt = String(opt).replace(/^[A-Za-z][.、)\s]+/, '').trim();
+      return stripPunctuation(cleanOpt) === stripPunctuation(ansText);
+    });
+    if (match) {
+      fixed.push(String(match).trim());
+      console.log(`✓ 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
+    } else {
+      return null; // 有答案匹配不上，放弃
+    }
+  }
+  return fixed;
+}
+
 module.exports = {
   sha256,
   stripPunctuation,
   normalizeAnswer,
   normalizeOptions,
   validateAnswer,
-  getTypeDescription
+  getTypeDescription,
+  retryWithStrippedPunctuation
 };
