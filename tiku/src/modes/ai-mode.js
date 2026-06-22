@@ -45,14 +45,34 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
   const typeDesc = getTypeDescription(questionData.type);
 
-  const { system, user } = buildPrompt(questionData, enableWebSearch);
+  const { system, user, imageUrls } = buildPrompt(questionData, enableWebSearch);
+
+  // 如果模型支持视觉且有图片URL，使用多模态格式
+  const supportsVision = modelConfig.supportsVision && imageUrls && imageUrls.length > 0;
+
+  // 构建用户消息content（支持多模态图片）
+  let userContent;
+  if (supportsVision) {
+    userContent = [
+      { type: "text", text: user },
+      ...imageUrls.map(url => ({
+        type: "image_url",
+        image_url: { url }
+      }))
+    ];
+  } else {
+    if (imageUrls && imageUrls.length > 0) {
+      console.log(`⚠️ 当前模型不支持视觉，图片将以文本形式传递（可能无法识别）`);
+    }
+    userContent = user;
+  }
 
   // AI模式独立参数配置（每个模型独立）
   const body = {
     model: model,
     messages: [
       { role: "system", content: system },
-      { role: "user", content: user }
+      { role: "user", content: userContent }
     ]
   };
   
@@ -102,6 +122,10 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
   console.log("📍 最大Token:", modelConfig.max_tokens);
   console.log("📍 Prompt长度:", system.length + user.length, "字符");
   console.log("📍 联网搜索:", enableWebSearch ? "已启用" : "未启用");
+  if (imageUrls && imageUrls.length > 0) {
+    console.log("📍 图片URL:", imageUrls.join(', '));
+    console.log("📍 多模态:", supportsVision ? "已启用(视觉模型)" : "未启用(模型不支持视觉)");
+  }
 
   try {
     console.log("AI查询中...");
@@ -118,7 +142,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
     // ========== 多轮工具调用循环 ==========
     const MAX_TOOL_ROUNDS = 1;  // 最多1轮工具调用
-    let messages = body.messages || [{ role: "system", content: system }, { role: "user", content: user }];
+    let messages = [{ role: "system", content: system }, { role: "user", content: userContent }];
     let webSearchUsed = false;  // 标记是否使用了联网搜索
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -423,7 +447,7 @@ async function handleAIMode(c, params) {
       log(`✗ ${modelConfig.name} 请求失败: ${aiResult.msg || '未知错误'}`);
     }
   } else if (modelConfig.provider === '302ai') {
-    log("━━━ 查询 302.AI ChatGPT ━━━");
+    log(`━━━ 查询 302.AI (${modelConfig.name}) ━━━`);
     const apiKey302 = getEnv('302AI_API_KEY', '');
 
     if (!apiKey302) {

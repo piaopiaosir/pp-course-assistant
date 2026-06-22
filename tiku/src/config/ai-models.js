@@ -43,34 +43,37 @@ const AI_MODELS = {
   },
   'qwen3.6-plus': {
     id: 'qwen3.6-plus',
-    apiModel: 'Qwen/Qwen3.6-Plus',
+    apiModel: 'qwen3.6-plus',
     provider: '302ai',
     displayName: 'Qwen3.6-Plus',
     temperature: 0.6,
     max_tokens: 8192,
     enable_thinking: true,
+    supportsVision: true,
     cost: 2,
     statsColumn: 'qwen3_6_calls'
   },
   'qwen3.7-max': {
     id: 'qwen3.7-max',
-    apiModel: 'Qwen/Qwen3.7-Max',
+    apiModel: 'qwen3.7-max',
     provider: '302ai',
     displayName: 'Qwen3.7-Max',
     temperature: 0.6,
     max_tokens: 8192,
     enable_thinking: true,
+    supportsVision: true,
     cost: 3,
     statsColumn: 'qwen3_7_calls'
   },
   'qwen3.5-plus': {
     id: 'qwen3.5-plus',
-    apiModel: 'Qwen/Qwen3.5-Plus',
+    apiModel: 'qwen3.5-plus',
     provider: '302ai',
     displayName: 'Qwen3.5-Plus',
     temperature: 0.6,
     max_tokens: 8192,
     enable_thinking: true,
+    supportsVision: true,
     cost: 1,
     statsColumn: 'qwen3_5_calls'
   },
@@ -81,6 +84,7 @@ const AI_MODELS = {
     displayName: 'MiniMax-M2.5',
     temperature: 0.6,
     max_completion_tokens: 8192,
+    supportsVision: true,
     cost: 1,
     statsColumn: 'minimax_m25_calls'
   },
@@ -91,6 +95,7 @@ const AI_MODELS = {
     displayName: 'MiniMax-M2.7',
     temperature: 0.6,
     max_completion_tokens: 8192,
+    supportsVision: true,
     cost: 1,
     statsColumn: 'minimax_m27_calls'
   },
@@ -103,6 +108,7 @@ const AI_MODELS = {
     max_completion_tokens: 8192,
     thinking: { type: "adaptive" },
     reasoning_split: true,
+    supportsVision: true,
     cost: 2,
     statsColumn: 'minimax_m3_calls'
   },
@@ -124,6 +130,7 @@ const AI_MODELS = {
     displayName: 'GPT-5.4-mini',
     temperature: 0.6,
     max_tokens: 2048,
+    supportsVision: true,
     cost: 3,
     statsColumn: 'gpt_54_mini_calls'
   },
@@ -134,6 +141,7 @@ const AI_MODELS = {
     displayName: 'GPT-5.4-nano',
     temperature: 0.6,
     max_tokens: 2048,
+    supportsVision: true,
     cost: 1,
     statsColumn: 'gpt_54_nano_calls'
   },
@@ -144,6 +152,7 @@ const AI_MODELS = {
     displayName: 'Gemini-3.1',
     temperature: 0.6,
     max_tokens: 2048,
+    supportsVision: true,
     cost: 1,
     statsColumn: 'gemini_31_calls'
   },
@@ -154,6 +163,7 @@ const AI_MODELS = {
     displayName: 'Gemini-3.5',
     temperature: 0.6,
     max_tokens: 2048,
+    supportsVision: true,
     cost: 2,
     statsColumn: 'gemini_35_calls'
   },
@@ -165,6 +175,7 @@ const AI_MODELS = {
     temperature: 1.0,
     max_tokens: 8192,
     thinking: { type: "enabled" },
+    supportsVision: true,
     cost: 4,
     statsColumn: 'glm_5_calls'
   },
@@ -176,6 +187,7 @@ const AI_MODELS = {
     temperature: 1.0,
     max_tokens: 8192,
     thinking: { type: "enabled" },
+    supportsVision: true,
     cost: 4,
     statsColumn: 'glm_51_calls'
   },
@@ -187,6 +199,7 @@ const AI_MODELS = {
     temperature: 1.0,
     max_tokens: 8192,
     thinking: { type: "enabled" },
+    supportsVision: true,
     cost: 2,
     statsColumn: 'glm_47_calls'
   },
@@ -197,6 +210,7 @@ const AI_MODELS = {
     displayName: 'Kimi-K2.6',
     max_tokens: 8192,
     thinking: { type: "enabled" },
+    supportsVision: true,
     cost: 4,
     statsColumn: 'kimi_k26_calls'
   },
@@ -207,6 +221,7 @@ const AI_MODELS = {
     displayName: 'Kimi-K2.5',
     max_tokens: 8192,
     thinking: { type: "enabled" },
+    supportsVision: true,
     cost: 3,
     statsColumn: 'kimi_k25_calls'
   }
@@ -235,6 +250,7 @@ function getModelConfig(modelId) {
     reasoning_split: entry.reasoning_split,
     enable_thinking: entry.enable_thinking,
     reasoning_effort: entry.reasoning_effort,
+    supportsVision: entry.supportsVision || false,
     cost: entry.cost
   };
 }

@@ -15,6 +15,7 @@ const { normalizeAnswer, validateAnswer } = require('../utils');
 const { db, getEnv, SPONSOR_URL } = require('../config');
 const { tavilySearch, formatSearchContext, WEB_SEARCH_TOOL } = require('../tavily-search');
 const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
+const { grantVerifyThinking, consumeVerifyThinking } = require('../query-tasks');
 
 // ==================== 校验模式第一次查询（非深度思考） ====================
 
@@ -41,13 +42,27 @@ async function fetchVerifyFirstAI(questionData) {
   }
   
   const typeDesc = getTypeDescription(questionData.type);
-  const { system: systemPrompt, user: userPrompt } = buildPrompt(questionData, false);
+  const { system: systemPrompt, user: userPrompt, imageUrls } = buildPrompt(questionData, false);
+
+  // 构建用户消息content（支持多模态图片 - DeepSeek V4 支持视觉）
+  let userContent;
+  if (imageUrls && imageUrls.length > 0) {
+    userContent = [
+      { type: "text", text: userPrompt },
+      ...imageUrls.map(url => ({
+        type: "image_url",
+        image_url: { url }
+      }))
+    ];
+  } else {
+    userContent = userPrompt;
+  }
 
   const body = {
     model: modelConfig.model,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
+      { role: "user", content: userContent }
     ],
     temperature: 0.6,
     max_tokens: 8192,
@@ -237,10 +252,22 @@ async function fetchDeepSeekThinking(questionData) {
   }
   
   const typeDesc = getTypeDescription(questionData.type);
-  const { system: systemPrompt, user: basePrompt } = buildPrompt(questionData, true);
+  const { system: systemPrompt, user: basePrompt, imageUrls } = buildPrompt(questionData, true);
 
   try {
-    const userMessage = basePrompt;
+    // 构建用户消息content（支持多模态图片 - DeepSeek V4 支持视觉）
+    let userMessage;
+    if (imageUrls && imageUrls.length > 0) {
+      userMessage = [
+        { type: "text", text: basePrompt },
+        ...imageUrls.map(url => ({
+          type: "image_url",
+          image_url: { url }
+        }))
+      ];
+    } else {
+      userMessage = basePrompt;
+    }
 
     const messages = [
       { role: "system", content: systemPrompt },
@@ -474,7 +501,8 @@ async function handleVerifyMode(c, params) {
   let remainingCount = 999999;
 
   // 免费模式不扣除次数
-  if (!FREE_MODE) {
+  // checkOnly=false 是校验模式的下半场（深度思考），检查是否有免扣资格（第一次请求已扣过）
+  if (!FREE_MODE && checkOnly !== false) {
     const VERIFY_MODE_COST = 2;
     log(`扣除次数: ${VERIFY_MODE_COST}（校验模式）`);
     const decrementResult = await decrementCount(token, userId, skipUserIdCheck, VERIFY_MODE_COST);
@@ -487,6 +515,23 @@ async function handleVerifyMode(c, params) {
     }
     remainingCount = decrementResult.remainingCount;
     log(`剩余次数: ${remainingCount}`);
+  } else if (checkOnly === false) {
+    // 校验模式下半场：必须持有第一次请求发放的免扣资格
+    const hasGrant = consumeVerifyThinking(token, questionHash);
+    if (!hasGrant) {
+      log("校验模式下半场：无免扣资格，拒绝请求");
+      return c.json({
+        code: 403,
+        msg: "请先完成校验模式第一步",
+        data: { num: 0, answer: [], sponsorUrl: SPONSOR_URL }
+      }, 403);
+    }
+    log("校验模式下半场（深度思考），免扣资格已消耗");
+    // 查询当前剩余次数（不扣除）
+    const tokenRecord = await db.prepare(
+      "SELECT remaining_count FROM tokens WHERE token = ?"
+    ).get(token);
+    remainingCount = tokenRecord ? tokenRecord.remaining_count : 999999;
   } else {
     log("免费模式: 不扣除次数");
   }
@@ -775,6 +820,9 @@ async function handleVerifyMode(c, params) {
         // 如果是检测模式（checkOnly=true），返回202通知客户端
         if (checkOnly) {
           log("━━━ 检测模式：返回202状态码，通知客户端启动思维模式 ━━━");
+          // 发放深度思考免扣资格，第二次请求(checkOnly=false)凭此免扣次数
+          grantVerifyThinking(token, questionHash);
+          log("✓ 已发放深度思考免扣资格");
           return c.json({
             code: 202,
             status: "thinking",

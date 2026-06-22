@@ -7,7 +7,7 @@
  * - fetchAISupplement: 正常模式AI补充（含深度思考备用）
  */
 
-const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
+const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { validateAnswer, stripPunctuation } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
 const { MODEL_COLUMN_MAP } = require('../config/ai-models');
@@ -38,13 +38,27 @@ async function fetchAISupplement(questionData) {
   }
   
   const typeDesc = getTypeDescription(questionData.type);
-  const { system: systemPrompt, user: userPrompt } = buildPrompt(questionData, false);
+  const { system: systemPrompt, user: userPrompt, imageUrls } = buildPrompt(questionData, false);
+
+  // 构建用户消息content（支持多模态图片 - DeepSeek V4 支持视觉）
+  let userContent;
+  if (imageUrls && imageUrls.length > 0) {
+    userContent = [
+      { type: "text", text: userPrompt },
+      ...imageUrls.map(url => ({
+        type: "image_url",
+        image_url: { url }
+      }))
+    ];
+  } else {
+    userContent = userPrompt;
+  }
 
   const body = {
     model: model,
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
+      { role: "user", content: userContent }
     ],
     temperature: 0.6,
     max_tokens: 8192,
@@ -57,6 +71,10 @@ async function fetchAISupplement(questionData) {
   console.log("📍 实际模型:", model);
   console.log("📍 API平台:", apiName);
   console.log("📍 Prompt长度:", systemPrompt.length + userPrompt.length, "字符");
+  if (imageUrls && imageUrls.length > 0) {
+    console.log("📍 图片URL:", imageUrls.join(', '));
+    console.log("📍 多模态: 已启用");
+  }
   
   try {
     console.log("AI查询中...");
@@ -118,7 +136,7 @@ async function fetchAISupplement(questionData) {
             model: AI_MODEL_NORMAL_THINKING,
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
+              { role: "user", content: userContent }
             ],
             max_tokens: 8192,
             reasoning_effort: "high",
