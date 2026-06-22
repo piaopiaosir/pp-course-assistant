@@ -98,6 +98,13 @@ async function fetchAISupplement(questionData) {
     
     const result = await response.json();
     
+    // token统计
+    let totalPromptTokens = result.usage?.prompt_tokens || 0;
+    let totalCompletionTokens = result.usage?.completion_tokens || 0;
+    if (result.usage) {
+      console.log(`📊 token统计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+    }
+    
     console.log("━━━━━━━━━ AI响应日志（正常模式） ━━━━━━━━━");
     console.log("📍 响应状态:", response.status);
     console.log("📍 响应数据:", JSON.stringify(result).substring(0, 200));
@@ -159,6 +166,13 @@ async function fetchAISupplement(questionData) {
             
             const thinkingResult = await thinkingResponse.json();
             
+            // 累加深度思考token
+            if (thinkingResult.usage) {
+              totalPromptTokens += thinkingResult.usage.prompt_tokens || 0;
+              totalCompletionTokens += thinkingResult.usage.completion_tokens || 0;
+              console.log(`📊 深度思考token: 输入=${thinkingResult.usage.prompt_tokens || 0}, 输出=${thinkingResult.usage.completion_tokens || 0}`);
+            }
+            
             if (thinkingResult.choices && thinkingResult.choices[0] && thinkingResult.choices[0].message) {
               const thinkingContent = thinkingResult.choices[0].message.content;
               const thinkingParsed = extractJsonFromContent(thinkingContent);
@@ -178,6 +192,7 @@ async function fetchAISupplement(questionData) {
                     // 深度思考答案也不合理，返回错误
                     console.log(`⚠️ 深度思考答案异常: ${thinkingCheckResult.reason}`);
                     console.log("✗ 深度思考答案校验失败");
+                    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
                     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
                     return {
                       code: 500,
@@ -187,6 +202,7 @@ async function fetchAISupplement(questionData) {
                   }
 
                   // 深度思考答案合理，返回
+                  console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
                   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
                   return {
                     code: 200,
@@ -202,6 +218,7 @@ async function fetchAISupplement(questionData) {
           }
         }
         
+        console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
         
         return {
@@ -213,12 +230,14 @@ async function fetchAISupplement(questionData) {
     }
     
     console.log("❌ AI解析失败: 响应中未找到有效答案");
+    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     
     return { code: 500, msg: "AI解析失败", data: null };
     
   } catch (e) {
     console.error("❌ AI查询失败:", e.message);
+    console.log("📊 本次AI调用token总计: 输入=0, 输出=0 (异常)");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     
     return { 

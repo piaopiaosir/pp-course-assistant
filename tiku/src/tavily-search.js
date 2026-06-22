@@ -277,8 +277,19 @@ async function tavilySearch(query, options = {}, _depth = 0) {
   try {
     console.log(`━━━ Tavily搜索中... (使用密钥${keyIndex || '默认'}) ━━━`);
     console.log("📍 搜索问题:", query);
-    console.log("📍 搜索深度:", searchDepth);
+    console.log("📍 搜索深度:", autoParameters ? '自动(auto_parameters)' : searchDepth);
     console.log("📍 最大结果数:", maxResults);
+    
+    const requestBody = {
+      query: query,
+      max_results: maxResults,
+      include_answer: includeAnswer,
+      auto_parameters: autoParameters
+    };
+    // autoParameters开启时不传search_depth，让API自动决定；否则使用指定深度
+    if (!autoParameters) {
+      requestBody.search_depth = searchDepth;
+    }
     
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -286,13 +297,7 @@ async function tavilySearch(query, options = {}, _depth = 0) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${TAVILY_API_KEY}`
       },
-      body: JSON.stringify({
-        query: query,
-        max_results: maxResults,
-        search_depth: searchDepth,
-        include_answer: includeAnswer,
-        auto_parameters: autoParameters
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {

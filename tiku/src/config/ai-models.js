@@ -49,12 +49,13 @@ const AI_MODELS = {
     statsColumn: 'qwen3_6_calls'
   },
   'qwen3.7-max': {
-    id: 'qwen3.7-max',
+    id: 'qwen3.7-max-2026-06-08',
     apiModel: 'qwen3.7-max',
     provider: '302ai',
     displayName: 'Qwen3.7-Max',
     temperature: 0.6,
     enable_thinking: true,
+    supportsVision: true,
     cost: 3,
     statsColumn: 'qwen3_7_calls'
   },

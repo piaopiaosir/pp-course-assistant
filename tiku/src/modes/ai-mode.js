@@ -138,6 +138,8 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
     const MAX_TOOL_ROUNDS = 1;  // 最多1轮工具调用
     let messages = [{ role: "system", content: system }, { role: "user", content: userContent }];
     let webSearchUsed = false;  // 标记是否使用了联网搜索
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       console.log(`━━━ 第${round + 1}轮调用 ━━━`);
@@ -155,6 +157,13 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
       });
 
       const result = await response.json();
+
+      // 累加token统计
+      if (result.usage) {
+        totalPromptTokens += result.usage.prompt_tokens || 0;
+        totalCompletionTokens += result.usage.completion_tokens || 0;
+        console.log(`📍 本轮token: 输入=${result.usage.prompt_tokens || 0}, 输出=${result.usage.completion_tokens || 0}`);
+      }
 
       console.log("━━━━━━━━━ AI响应日志（AI模式） ━━━━━━━━━");
       console.log("📍 响应状态:", response.status);
@@ -258,10 +267,12 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
         if (!checkResult.reasonable) {
           console.log(`⚠️ AI模式答案校验失败: ${checkResult.reason}`);
+          console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
           console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
           return { code: 500, msg: `AI答案校验失败: ${checkResult.reason}`, data: null };
         }
 
+        console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         const source = getDisplayName(model);
@@ -275,6 +286,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
       // 如果解析失败
       console.log("❌ AI解析失败: 响应中未找到有效答案");
+      console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
       return { code: 500, msg: "AI解析失败", data: null };
     }
@@ -297,6 +309,12 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
       });
 
       const finalResult = await finalResponse.json();
+      // 累加最后一轮token
+      if (finalResult.usage) {
+        totalPromptTokens += finalResult.usage.prompt_tokens || 0;
+        totalCompletionTokens += finalResult.usage.completion_tokens || 0;
+        console.log(`📍 最后一轮token: 输入=${finalResult.usage.prompt_tokens || 0}, 输出=${finalResult.usage.completion_tokens || 0}`);
+      }
       console.log("📍 最后一轮响应状态:", finalResponse.status);
       console.log("📍 最后一轮完整响应:", JSON.stringify(finalResult, null, 2).substring(0, 2000));
 
@@ -314,6 +332,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
           const checkResult = checkAnswerReasonable(finalParsed.answer, questionData.type, questionData.options);
           if (checkResult.reasonable) {
             console.log("✅ 最后一轮成功获取答案:", JSON.stringify(finalParsed.answer));
+            console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
             const source = getDisplayName(model);
             return { code: 200, data: { answer: finalParsed.answer, source: source }, msg: "查询成功" };
@@ -331,11 +350,13 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
       console.log("❌ 最后一轮调用异常:", e.message);
     }
 
+    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     return { code: 500, msg: "超出最大工具调用轮数，且最后一轮无工具调用仍然失败", data: null };
 
   } catch (e) {
     console.error("❌ AI查询失败（AI模式）:", e.message);
+    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     return {

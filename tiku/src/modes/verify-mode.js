@@ -13,7 +13,7 @@
 const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { normalizeAnswer, validateAnswer, stripPunctuation } = require('../utils');
 const { db, getEnv, SPONSOR_URL } = require('../config');
-const { tavilySearch, formatSearchContext, WEB_SEARCH_TOOL } = require('../tavily-search');
+const { tavilySearch, WEB_SEARCH_TOOL } = require('../tavily-search');
 const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
 const { grantVerifyThinking, consumeVerifyThinking } = require('../query-tasks');
 
@@ -94,6 +94,12 @@ async function fetchVerifyFirstAI(questionData) {
     
     const result = await response.json();
     
+    // token统计
+    const usage = result.usage;
+    if (usage) {
+      console.log(`📊 token统计: 输入=${usage.prompt_tokens || 0}, 输出=${usage.completion_tokens || 0}`);
+    }
+    
     console.log("━━━━━━━━━ AI响应日志（校验模式第一次） ━━━━━━━━━");
     console.log("📍 响应状态:", response.status);
     console.log("📍 响应数据:", JSON.stringify(result).substring(0, 200));
@@ -111,6 +117,7 @@ async function fetchVerifyFirstAI(questionData) {
           parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
           console.log("✅ AI解析成功:", JSON.stringify(parsed.answer));
         
+        console.log(`📊 本次AI调用token总计: 输入=${usage?.prompt_tokens || 0}, 输出=${usage?.completion_tokens || 0}`);
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
         
         return {
@@ -122,12 +129,14 @@ async function fetchVerifyFirstAI(questionData) {
     }
     
     console.log("❌ AI解析失败: 响应中未找到有效答案");
+    console.log(`📊 本次AI调用token总计: 输入=${usage?.prompt_tokens || 0}, 输出=${usage?.completion_tokens || 0}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     
     return { code: 500, msg: "AI解析失败", data: null };
     
   } catch (e) {
     console.error("❌ AI查询失败:", e.message);
+    console.log("📊 本次AI调用token总计: 输入=0, 输出=0 (异常)");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     
     return { 
@@ -212,17 +221,16 @@ async function executeWebSearch(query) {
     console.log(`📍 Tavily直接答案: ${searchResult.answer}`);
   }
 
-  // 构建结构化的搜索结果
-  const formattedResults = [];
+  // 只使用Tavily的answer摘要，不传results列表（省token）
+  const resultParts = [];
   if (searchResult.answer) {
-    formattedResults.push(`【Tavily直接答案】${searchResult.answer}`);
+    resultParts.push(`【搜索结果】${searchResult.answer}`);
+  } else {
+    resultParts.push('无搜索结果');
   }
-  formattedResults.push(formatSearchContext(searchResult.results));
+  resultParts.push('\n【判断提示】请立即判断：如果上述搜索结果已经能确定答案，就直接输出<answer>标签，不要再继续搜索。只有当结果完全无关或不足时，才考虑再次搜索（用更精确的关键词）。');
 
-  // 关键提示：告诉AI判断是否足够
-  formattedResults.push('\n【判断提示】请立即判断：如果上述搜索结果已经能确定答案，就直接输出<answer>标签，不要再继续搜索。只有当结果完全无关或不足时，才考虑再次搜索（用更精确的关键词）。');
-
-  return formattedResults.join('\n\n');
+  return resultParts.join('\n\n');
 }
 
 /**
@@ -269,6 +277,9 @@ async function fetchDeepSeekThinking(questionData) {
 
     const MAX_TOOL_ROUNDS = 2;
 
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+
     console.log("━━━━━━━━━ AI深度思考(工具调用模式) ━━━━━━━━━");
     console.log("📍 题目:", questionData.question);
     console.log("📍 题型:", typeDesc);
@@ -289,11 +300,20 @@ async function fetchDeepSeekThinking(questionData) {
 
       const result = await callAIWithTools(apiKey, modelConfig.model, messages);
       
+      // 累加token统计
+      if (result.usage) {
+        totalPromptTokens += result.usage.prompt_tokens || 0;
+        totalCompletionTokens += result.usage.completion_tokens || 0;
+        console.log(`📍 本轮token: 输入=${result.usage.prompt_tokens || 0}, 输出=${result.usage.completion_tokens || 0}`);
+      }
+
       console.log("📍 响应状态:", result.choices ? result.choices[0]?.finish_reason : 'N/A');
       console.log("📍 完整响应:", JSON.stringify(result, null, 2).substring(0, 2000));
 
       if (!result.choices || !result.choices[0]) {
         console.log("✗ AI返回无效响应");
+        console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
         return { code: 500, msg: "AI返回无效响应", data: null };
       }
 
@@ -359,6 +379,13 @@ async function fetchDeepSeekThinking(questionData) {
             
             const finalResult = await callAIWithTools(apiKey, modelConfig.model, messages);
             
+            // 累加最终轮token统计
+            if (finalResult.usage) {
+              totalPromptTokens += finalResult.usage.prompt_tokens || 0;
+              totalCompletionTokens += finalResult.usage.completion_tokens || 0;
+              console.log(`📍 最终轮token: 输入=${finalResult.usage.prompt_tokens || 0}, 输出=${finalResult.usage.completion_tokens || 0}`);
+            }
+            
             if (finalResult.choices && finalResult.choices[0]) {
               const finalContent = finalResult.choices[0].message?.content || '';
               console.log(`📍 AI最终返回内容(retry=${retryAttempt}):`, finalContent?.substring(0, 500) || '(空)');
@@ -382,6 +409,7 @@ async function fetchDeepSeekThinking(questionData) {
           if (finalParsed) {
             const usedSearch = messages.some(m => m.role === "tool");
             console.log(`✅ AI深度思考答案 (${usedSearch ? '使用了联网搜索' : '未使用联网搜索'}):`, JSON.stringify(finalParsed.answer));
+            console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
             console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
             return {
               code: 200,
@@ -420,6 +448,7 @@ async function fetchDeepSeekThinking(questionData) {
         // 计算是否使用了搜索
         const usedSearch = messages.some(m => m.role === "tool");
         console.log(`✅ AI深度思考答案 (${usedSearch ? '使用了联网搜索' : '未使用联网搜索'}):`, JSON.stringify(parsed.answer));
+        console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         return {
@@ -446,11 +475,13 @@ async function fetchDeepSeekThinking(questionData) {
     }
 
     console.log("✗ AI深度思考：超过最大轮数仍未获得有效答案");
+    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     return { code: 500, msg: "AI深度思考解析失败", data: null };
     
   } catch (e) {
     console.error("✗ AI深度思考请求失败:", e.message);
+    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     return { code: 500, msg: `AI深度思考失败: ${e.message}`, data: null };
   }
