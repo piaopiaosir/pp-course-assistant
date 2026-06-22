@@ -210,16 +210,10 @@ app.get('/internal/code', async (c) => {
     }
     
     let envFile = '';
-    const envPaths = [
-      path.join(srcDir, '..', '.env'),
-      path.join(srcDir, '..', '..', '.env')
-    ];
-    for (const envPath of envPaths) {
-      if (fs.existsSync(envPath)) {
-        envFile = fs.readFileSync(envPath, 'utf-8');
-        console.log(`[内部同步] 读取 .env: ${envPath}`);
-        break;
-      }
+    const envPath = path.join(srcDir, '..', '.env');
+    if (fs.existsSync(envPath)) {
+      envFile = fs.readFileSync(envPath, 'utf-8');
+      console.log(`[内部同步] 读取 .env: ${envPath}`);
     }
     
     return c.json({

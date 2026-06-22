@@ -16,9 +16,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 加载环境变量
-const envPath = fs.existsSync(path.join(__dirname, '../../.env'))
-  ? path.join(__dirname, '../../.env')
-  : path.join(__dirname, '../.env');
+const envPath = path.join(__dirname, '../.env');
 require('dotenv').config({ path: envPath });
 
 const { db, pool } = require('./config');

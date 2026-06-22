@@ -13,9 +13,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 加载 .env 文件
-const envPath = fs.existsSync(path.join(__dirname, '../../.env')) 
-  ? path.join(__dirname, '../../.env') 
-  : path.join(__dirname, '../.env');
+const envPath = path.join(__dirname, '../.env');
 require('dotenv').config({ path: envPath });
 console.log('✓ 环境变量加载自:', envPath);
 

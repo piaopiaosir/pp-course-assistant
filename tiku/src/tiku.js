@@ -954,6 +954,30 @@ async function fetchUcuc(questionData) {
         console.log(`✗ UCUC 题库答案不符合判断题格式: ${answers.join(', ')}`);
         return { code: 404, msg: "UCUC题库答案不符合判断题格式", data: { answer: answers } };
       }
+
+      // 判断题多答案校验：标准化后不能同时包含"正确"和"错误"
+      if (answers.length > 1) {
+        const normalizedJudgments = answers.map(a => {
+          const t = a.replace(/^[A-Z][.、]\s*/, '').trim();
+          if (/^(正确|对|true|√|是|T)$/i.test(t)) return 'correct';
+          if (/^(错误|错|false|×|否|F)$/i.test(t)) return 'wrong';
+          return 'unknown';
+        });
+        const hasCorrect = normalizedJudgments.includes('correct');
+        const hasWrong = normalizedJudgments.includes('wrong');
+        if (hasCorrect && hasWrong) {
+          console.log(`✗ UCUC 题库判断题答案矛盾: 同时包含正确和错误 → ${answers.join(', ')}`);
+          return { code: 404, msg: "UCUC题库判断题答案矛盾(同时包含正确和错误)", data: { answer: answers } };
+        }
+        // 全部正确 → 统一为 ["正确"]；全部错误 → 统一为 ["错误"]
+        if (hasCorrect) {
+          console.log(`✓ UCUC 判断题多答案统一为正确: ${answers.join(', ')} → ["正确"]`);
+          answers = ["正确"];
+        } else if (hasWrong) {
+          console.log(`✓ UCUC 判断题多答案统一为错误: ${answers.join(', ')} → ["错误"]`);
+          answers = ["错误"];
+        }
+      }
     }
 
     // 答案必须在选项中（单选/多选）

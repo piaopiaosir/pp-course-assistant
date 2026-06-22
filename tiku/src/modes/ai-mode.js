@@ -80,11 +80,6 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
   if (modelConfig.temperature !== undefined) {
     body.temperature = modelConfig.temperature;
   }
-  if (modelConfig.max_completion_tokens !== undefined) {
-    body.max_completion_tokens = modelConfig.max_completion_tokens;
-  } else if (modelConfig.max_tokens !== undefined) {
-    body.max_tokens = modelConfig.max_tokens;
-  }
   if (modelConfig.top_p !== undefined) {
     body.top_p = modelConfig.top_p;
   }
@@ -119,7 +114,6 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
   console.log("📍 API平台:", apiName);
   console.log("📍 实际模型:", model);
   console.log("📍 温度:", modelConfig.temperature);
-  console.log("📍 最大Token:", modelConfig.max_tokens);
   console.log("📍 Prompt长度:", system.length + user.length, "字符");
   console.log("📍 联网搜索:", enableWebSearch ? "已启用" : "未启用");
   if (imageUrls && imageUrls.length > 0) {

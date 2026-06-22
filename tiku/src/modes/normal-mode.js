@@ -10,7 +10,7 @@
 const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { validateAnswer, stripPunctuation } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
-const { MODEL_COLUMN_MAP } = require('../config/ai-models');
+const { MODEL_COLUMN_MAP, getModelConfig } = require('../config/ai-models');
 
 // ==================== 正常模式 AI 补充 ====================
 
@@ -40,15 +40,14 @@ async function fetchAISupplement(questionData) {
   const typeDesc = getTypeDescription(questionData.type);
   const { system: systemPrompt, user: userPrompt, imageUrls } = buildPrompt(questionData, false);
 
-  // 构建用户消息content（支持多模态图片 - DeepSeek V4 支持视觉）
+  // 根据模型是否支持视觉选择消息格式
+  const modelCfg = getModelConfig(AI_MODEL_NORMAL);
+  const supportsVision = modelCfg?.supportsVision && imageUrls && imageUrls.length > 0;
   let userContent;
-  if (imageUrls && imageUrls.length > 0) {
+  if (supportsVision) {
     userContent = [
       { type: "text", text: userPrompt },
-      ...imageUrls.map(url => ({
-        type: "image_url",
-        image_url: { url }
-      }))
+      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
     ];
   } else {
     userContent = userPrompt;
@@ -61,7 +60,6 @@ async function fetchAISupplement(questionData) {
       { role: "user", content: userContent }
     ],
     temperature: 0.6,
-    max_tokens: 8192,
     thinking: { type: "disabled" }  // thinking disabled模式下支持temperature
   };
   
@@ -73,7 +71,7 @@ async function fetchAISupplement(questionData) {
   console.log("📍 Prompt长度:", systemPrompt.length + userPrompt.length, "字符");
   if (imageUrls && imageUrls.length > 0) {
     console.log("📍 图片URL:", imageUrls.join(', '));
-    console.log("📍 多模态: 已启用");
+    console.log("📍 多模态:", supportsVision ? "已启用" : "未启用(模型不支持视觉)");
   }
   
   try {
@@ -138,7 +136,6 @@ async function fetchAISupplement(questionData) {
               { role: "system", content: systemPrompt },
               { role: "user", content: userContent }
             ],
-            max_tokens: 8192,
             reasoning_effort: "high",
             thinking: { type: "enabled" }
           };

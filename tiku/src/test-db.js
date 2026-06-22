@@ -1,8 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const envPath = fs.existsSync(path.join(__dirname, '../../.env'))
-  ? path.join(__dirname, '../../.env')
-  : path.join(__dirname, '../.env');
+const envPath = path.join(__dirname, '../.env');
 require('dotenv').config({ path: envPath });
 
 const mysql = require('mysql2/promise');

@@ -11,7 +11,7 @@
  */
 
 const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { normalizeAnswer, validateAnswer } = require('../utils');
+const { normalizeAnswer, validateAnswer, stripPunctuation } = require('../utils');
 const { db, getEnv, SPONSOR_URL } = require('../config');
 const { tavilySearch, formatSearchContext, WEB_SEARCH_TOOL } = require('../tavily-search');
 const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP } = require('../config/ai-models');
@@ -44,15 +44,13 @@ async function fetchVerifyFirstAI(questionData) {
   const typeDesc = getTypeDescription(questionData.type);
   const { system: systemPrompt, user: userPrompt, imageUrls } = buildPrompt(questionData, false);
 
-  // 构建用户消息content（支持多模态图片 - DeepSeek V4 支持视觉）
+  // 根据模型是否支持视觉选择消息格式
+  const supportsVision = modelConfig?.supportsVision && imageUrls && imageUrls.length > 0;
   let userContent;
-  if (imageUrls && imageUrls.length > 0) {
+  if (supportsVision) {
     userContent = [
       { type: "text", text: userPrompt },
-      ...imageUrls.map(url => ({
-        type: "image_url",
-        image_url: { url }
-      }))
+      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
     ];
   } else {
     userContent = userPrompt;
@@ -65,7 +63,6 @@ async function fetchVerifyFirstAI(questionData) {
       { role: "user", content: userContent }
     ],
     temperature: 0.6,
-    max_tokens: 8192,
     thinking: { type: "disabled" }
   };
   
@@ -149,14 +146,12 @@ async function fetchVerifyFirstAI(questionData) {
  * @param {string} apiKey - DeepSeek官方API密钥
  * @param {string} model - 模型名
  * @param {Array} messages - 消息历史
- * @param {number} maxTokens - 最大token数
  * @returns {Object} API响应JSON
  */
-async function callAIWithTools(apiKey, model, messages, maxTokens = 8192) {
+async function callAIWithTools(apiKey, model, messages) {
   const body = {
     model,
     messages,
-    max_tokens: maxTokens,
     tools: [WEB_SEARCH_TOOL],
     tool_choice: "auto"  // AI自主决定是否调用工具
   };
@@ -255,24 +250,22 @@ async function fetchDeepSeekThinking(questionData) {
   const { system: systemPrompt, user: basePrompt, imageUrls } = buildPrompt(questionData, true);
 
   try {
-    // 构建用户消息content（支持多模态图片 - DeepSeek V4 支持视觉）
-    let userMessage;
-    if (imageUrls && imageUrls.length > 0) {
-      userMessage = [
-        { type: "text", text: basePrompt },
-        ...imageUrls.map(url => ({
-          type: "image_url",
-          image_url: { url }
-        }))
-      ];
-    } else {
-      userMessage = basePrompt;
-    }
-
-    const messages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage }
+    // 根据模型是否支持视觉选择消息格式
+  const supportsVision = modelConfig?.supportsVision && imageUrls && imageUrls.length > 0;
+  let userMessage;
+  if (supportsVision) {
+    userMessage = [
+      { type: "text", text: basePrompt },
+      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
     ];
+  } else {
+    userMessage = basePrompt;
+  }
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userMessage }
+  ];
 
     const MAX_TOOL_ROUNDS = 2;
 
@@ -917,7 +910,15 @@ async function handleVerifyMode(c, params) {
 
   // 最终校验：答案格式和选项匹配（仅对有答案的情况校验，使用清洗后的答案）
   if (answerData && answerData.data && answerData.data.answer && answerData.data.answer.length > 0) {
-    const validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+    let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+    if (!validation.valid) {
+      // 第二阶段：去除标点符号后重试
+      const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
+      if (fixed) {
+        answerData.data.answer = fixed;
+        validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
+      }
+    }
     if (!validation.valid) {
       log(`✗ 答案校验失败: ${validation.reason}`);
       return c.json({
@@ -929,6 +930,31 @@ async function handleVerifyMode(c, params) {
   }
 
   return c.json(answerData);
+}
+
+// 去标点符号后重新匹配答案与选项
+function retryWithStrippedPunctuation(questionData, answers) {
+  if (!questionData.options || !answers || answers.length === 0) return null;
+  
+  const optionLines = Array.isArray(questionData.options)
+    ? questionData.options
+    : String(questionData.options).split('\n').filter(o => o.trim());
+  
+  const fixed = [];
+  for (const ans of answers) {
+    const ansText = String(ans).replace(/^[A-Za-z][.、)\s]+/, '').trim();
+    const match = optionLines.find(opt => {
+      const cleanOpt = String(opt).replace(/^[A-Za-z][.、)\s]+/, '').trim();
+      return stripPunctuation(cleanOpt) === stripPunctuation(ansText);
+    });
+    if (match) {
+      fixed.push(String(match).trim());
+      console.log(`✓ 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
+    } else {
+      return null;
+    }
+  }
+  return fixed;
 }
 
 module.exports = {
