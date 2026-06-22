@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.0.2
+// @version      3.0.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://wk.piao.one/assets/%E5%9B%BE%E5%B1%82%201-D6uQ9z8H.png
@@ -9653,8 +9653,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       
       logStore.addLog(`等待页面加载完成，开始扫描任务点`, "info");
       
-      FrameScanner.collectDeep(documentElement).subscribe((allIframes) => {
-        _currentWatchSubscription = rxjs.from(allIframes).pipe(concatMap((iframe) => handleSingleFrame(iframe))).subscribe({
+      FrameScanner.collectDeep(documentElement).subscribe(async (allIframes) => {
+        stopSimulatePlayIfNeeded();
+        // 第一步：收集所有iframe并分类
+        const classified = [];
+        for (const iframe of allIframes) {
+          const type = await classifyFrame(iframe);
+          if (type !== 'skip') {
+            classified.push({ iframe, type });
+          }
+        }
+        // 第二步：按顺序串行执行
+        _currentWatchSubscription = rxjs.from(classified).pipe(concatMap(({ iframe, type }) => executeFrame(iframe, type))).subscribe({
           complete: async () => {
             if (thisTaskId === _globalTaskId) {
               const autoSwitch = configStore.platformParams.cx.parts[2].params[1].value;
@@ -11212,136 +11222,146 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         }
       });
     };
-    // 处理单个iframe：识别内容类型并路由到对应处理器
-    const handleSingleFrame = async (iframe) => {
-      var _a, _b;
-      
-      stopSimulatePlayIfNeeded();
-      
+    // 分类iframe任务类型：先收集所有iframe并分类，再按顺序执行
+    // 返回类型: 'skip' | 'assignment' | 'video' | 'audio' | 'slideshow' | 'ebook'
+    const classifyFrame = async (iframe) => {
       const iframeSrc = iframe.src;
       const iframeDocument = iframe.contentDocument;
       const iframeWindow = iframe.contentWindow;
       
-      if (!iframeDocument || !iframeWindow) {
-        return Promise.resolve();
-      }
-      
-      if (iframeSrc.includes("javascript:")) {
-        return Promise.resolve();
-      }
-      
+      if (!iframeDocument || !iframeWindow) return 'skip';
+      if (iframeSrc.includes("javascript:")) return 'skip';
       
       const lastTaskId = _processedIframeTasks.get(iframe);
       const currentTaskId = _globalTaskId;
-      if (lastTaskId === currentTaskId) {
-        
-        return Promise.resolve();
-      }
+      if (lastTaskId === currentTaskId) return 'skip';
       _processedIframeTasks.set(iframe, currentTaskId);
       
       await awaitFrameReady(iframe);
       
-      
-      
+      // 检查祖先是否已完成
       let element = iframe.parentElement;
-      let hasAncestorFinished = false;
       while (element) {
         if (element.classList && element.classList.contains("ans-job-finished")) {
-          hasAncestorFinished = true;
-          break;
+          logStore.addLog("任务点已完成，跳过", "success");
+          return 'skip';
         }
         element = element.parentElement;
       }
       
-      if (hasAncestorFinished) {
-        logStore.addLog("任务点已完成，跳过", "success");
-        return Promise.resolve();
-      }
-      
-      
-      const matchSrc = iframeSrc.includes("api/work");
-      if (matchSrc) {
+      // 检查 src 含 api/work 且页面内容显示已完成
+      if (iframeSrc.includes("api/work")) {
         try {
           const pageContent = iframeDocument.documentElement.innerText || "";
-          if (pageContent.includes("已完成") || pageContent.includes("待批阅")) {
-            return Promise.resolve();
-          }
-        } catch (e) {
-          
-        }
+          if (pageContent.includes("已完成") || pageContent.includes("待批阅")) return 'skip';
+        } catch (e) {}
       }
       
-      
+      // 检查 aria-label 显示已完成
       const checkElement = iframe.closest(".ans-job-icon") || iframe.parentElement?.querySelector(".ans-job-icon");
       if (checkElement) {
         const ariaLabel = checkElement.getAttribute("aria-label") || "";
         if (ariaLabel.includes("已完成")) {
           logStore.addLog("任务点已完成，跳过", "success");
-          return Promise.resolve();
+          return 'skip';
         }
       }
       
+      const _src = iframe.getAttribute('_src') || '';
+      const matchSrc = iframeSrc.includes("api/work");
+      const matchSrcAttr = _src.includes("api/work");
+      const isMediaIframe = iframeSrc.includes("video") || iframeSrc.includes("audio");
       
-      {
-        const _src = iframe.getAttribute('_src') || '';
-        const matchSrc = iframeSrc.includes("api/work");
-        const matchSrcAttr = _src.includes("api/work");
-        
-        
-        const normalMode = configStore.platformParams.cx?.parts?.[2]?.params?.[2]?.value ?? true;  
-        const onlyVideo = configStore.platformParams.cx?.parts?.[2]?.params?.[3]?.value ?? false;    
-        const onlyAnswer = configStore.platformParams.cx?.parts?.[2]?.params?.[4]?.value ?? false;   
-        
-        
-        if (matchSrcAttr && !matchSrc) {
-          return Promise.resolve();
+      // _src含api/work但src不含 → 跳过（iframe尚未初始化完成），但视频/音频除外
+      if (matchSrcAttr && !matchSrc) {
+        if (!isMediaIframe) {
+          return 'skip';
         }
-        
-        
-        if (matchSrc || matchSrcAttr) {
+        // 视频/音频 iframe 不跳过，继续往下走媒体分类
+      }
+      
+      // 作业类：src 含 api/work，且不是视频/音频
+      if (matchSrc && !isMediaIframe) {
+        return 'assignment';
+      }
+      
+      // 媒体类：有 ans-job-icon
+      const ansJobIcon = iframe.parentElement?.querySelector(".ans-job-icon");
+      if (ansJobIcon) {
+        if (isMediaIframe) {
+          return iframeSrc.includes("video") ? 'video' : 'audio';
+        }
+        if (iframeDocument.querySelector("#img.imglook") || iframeDocument.querySelector(".swiper-container")) {
+          return 'slideshow';
+        }
+        if (iframeSrc.includes("modules/innerbook")) {
+          return 'ebook';
+        }
+      }
+      
+      return 'skip';
+    };
+    
+    // 执行已分类的iframe任务
+    const executeFrame = async (iframe, frameType) => {
+      const iframeSrc = iframe.src;
+      const iframeDocument = iframe.contentDocument;
+      const iframeWindow = iframe.contentWindow;
+      
+      const onlyVideo = configStore.platformParams.cx?.parts?.[2]?.params?.[3]?.value ?? false;
+      const onlyAnswer = configStore.platformParams.cx?.parts?.[2]?.params?.[4]?.value ?? false;
+      
+      switch (frameType) {
+        case 'assignment':
           if (onlyVideo) {
-            
             if (!hasLoggedSkipTip) {
               logStore.addLog("仅视频模式，跳过答题", "primary");
               hasLoggedSkipTip = true;
             }
-            return Promise.resolve();
+            return;
           }
           return handleAssignment(iframe, iframeDocument, iframeWindow);
-        }
         
-        
-        const ansJobIcon = (_b = iframe.parentElement) == null ? void 0 : _b.querySelector(".ans-job-icon");
-        
-        if (ansJobIcon) {
+        case 'video':
+        case 'audio':
           if (onlyAnswer) {
-            
             if (!hasLoggedSkipTip) {
               logStore.addLog("仅答题模式，跳过视频等其他内容", "primary");
               hasLoggedSkipTip = true;
             }
-            return Promise.resolve();
-          }
-          
-          const isMediaType = iframeSrc.includes("video") || iframeSrc.includes("audio");
-          if (isMediaType) {
-            if (_completedMediaIframes.has(iframe)) {
-              logStore.addLog("媒体任务点已完成，跳过重复处理", "success");
-              return Promise.resolve();
-            }
-            const mediaType = iframeSrc.includes("video") ? "video" : "audio";
-            await handleMediaContent(mediaType, iframeDocument, iframe);
-            _completedMediaIframes.add(iframe);
             return;
-          } else if (iframeDocument.querySelector("#img.imglook") || iframeDocument.querySelector(".swiper-container")) {
-            return handleSlideshow(iframeWindow);
-          } else if (iframeSrc.includes("modules/innerbook")) {
-            return handleEbook(iframeWindow);
           }
-        }
+          if (_completedMediaIframes.has(iframe)) {
+            logStore.addLog("媒体任务点已完成，跳过重复处理", "success");
+            return;
+          }
+          await handleMediaContent(frameType, iframeDocument, iframe);
+          _completedMediaIframes.add(iframe);
+          return;
+        
+        case 'slideshow':
+          if (onlyAnswer) {
+            if (!hasLoggedSkipTip) {
+              logStore.addLog("仅答题模式，跳过视频等其他内容", "primary");
+              hasLoggedSkipTip = true;
+            }
+            return;
+          }
+          return handleSlideshow(iframeWindow);
+        
+        case 'ebook':
+          if (onlyAnswer) {
+            if (!hasLoggedSkipTip) {
+              logStore.addLog("仅答题模式，跳过视频等其他内容", "primary");
+              hasLoggedSkipTip = true;
+            }
+            return;
+          }
+          return handleEbook(iframeWindow);
+        
+        default:
+          return;
       }
-      
-      return Promise.resolve();
     };
     init();
     monitorIframes();
