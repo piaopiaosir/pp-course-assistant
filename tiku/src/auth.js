@@ -1,4 +1,4 @@
-const { db, getEnv, INITIAL_COUNT, getCardTypes, FREE_MODE } = require('./config');
+const { db, pool, getEnv, INITIAL_COUNT, getCardTypes, FREE_MODE } = require('./config');
 const { sha256 } = require('./utils');
 
 // 检查用户ID是否已存在
@@ -277,18 +277,18 @@ async function checkTokenStatus(token, userId = null, skipUserIdCheck = false) {
     }
   }
   
-  if (record.is_blacklisted === 1 || record.remaining_count < 1) {
+  if (record.is_blacklisted === 1 || record.remaining_count < 0.1) {
     if (record.is_blacklisted !== 1) {
       await db.prepare("UPDATE tokens SET is_blacklisted = 1 WHERE token = ?").run(token);
     }
     return { success: false, message: `剩余次数不足（${record.remaining_count}次），请从新赞助获取新token`, isBlacklisted: true };
   }
   
-  return { success: true, remainingCount: record.remaining_count };
+  return { success: true, remainingCount: record.remaining_count, user_id: record.user_id };
 }
 
-// 完全随机数：均匀分布在 [min, max] 区间
-function weightedRandom(min, max) {
+// 均匀随机整数：分布在 [min, max] 区间
+function randomInt(min, max) {
   return Math.floor(min + Math.random() * (max - min + 1));
 }
 
@@ -327,31 +327,58 @@ async function processReferral(referrerId, refereeId) {
   }
   
   // 随机奖励：推荐人20-100次，被推荐人20-50次（完全随机）
-  const REFERRER_REWARD = weightedRandom(20, 100);
-  const REFEREE_REWARD = weightedRandom(20, 50);
+  const REFERRER_REWARD = randomInt(20, 100);
+  const REFEREE_REWARD = randomInt(20, 50);
   
   console.log(`推荐奖励随机：推荐人+${REFERRER_REWARD}次，被推荐人+${REFEREE_REWARD}次`);
   
-  // 记录推荐关系（INSERT IGNORE 防并发竞态：若 referee_id 已存在则跳过）
-  const insertResult = await db.prepare(
-    "INSERT IGNORE INTO referrals (referrer_id, referee_id, referrer_reward, referee_reward, created_at) VALUES (?, ?, ?, ?, ?)"
-  ).run(referrerId, refereeId, REFERRER_REWARD, REFEREE_REWARD, now);
-  
-  if (insertResult.changes === 0) {
-    return { success: false, message: "您已经填写过推荐人了" };
-  }
-  
-  // 给推荐人增加次数（只更新最新使用的Token）
-  await db.prepare(
-    "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = (SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1)"
-  ).run(REFERRER_REWARD, referrerId);
-  
-  // 给被推荐人增加次数（用户一定有Token，因为使用脚本时会自动创建）
-  const refereeToken = await db.prepare("SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1").get(refereeId);
-  if (refereeToken) {
-    await db.prepare(
-      "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?"
-    ).run(REFEREE_REWARD, refereeToken.token);
+  // 使用事务保证原子性：INSERT推荐记录 + 更新双方Token余额
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    // 记录推荐关系（INSERT IGNORE 防并发竞态：若 referee_id 已存在则跳过）
+    const [insertResult] = await conn.execute(
+      "INSERT IGNORE INTO referrals (referrer_id, referee_id, referrer_reward, referee_reward, created_at) VALUES (?, ?, ?, ?, ?)",
+      [referrerId, refereeId, REFERRER_REWARD, REFEREE_REWARD, now]
+    );
+    
+    if (insertResult.affectedRows === 0) {
+      await conn.rollback();
+      return { success: false, message: "您已经填写过推荐人了" };
+    }
+    
+    // 给推荐人增加次数（只更新最新使用的Token）
+    const [referrerRows] = await conn.execute(
+      "SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1",
+      [referrerId]
+    );
+    if (referrerRows.length > 0) {
+      await conn.execute(
+        "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?",
+        [REFERRER_REWARD, referrerRows[0].token]
+      );
+    }
+    
+    // 给被推荐人增加次数
+    const [refereeRows] = await conn.execute(
+      "SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1",
+      [refereeId]
+    );
+    if (refereeRows.length > 0) {
+      await conn.execute(
+        "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?",
+        [REFEREE_REWARD, refereeRows[0].token]
+      );
+    }
+    
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    console.error("推荐事务失败:", e.message);
+    return { success: false, message: "推荐处理失败，请稍后重试" };
+  } finally {
+    conn.release();
   }
   
   return { 
@@ -381,8 +408,8 @@ async function getReferralStats(userId) {
   };
 }
 
-// 扣除次数（支持扣N次，先检查够不够再一次性扣）
-async function decrementCount(token, userId = null, skipUserIdCheck = false, count = 1) {
+// 扣除次数（原子操作，使用 UPDATE ... WHERE remaining_count >= ? 避免竞态条件）
+async function decrementCount(token, userId = null, skipUserIdCheck = false, count = 1, checkOnly = false) {
   const now = Math.floor(Date.now() / 1000);
   
   const record = await db.prepare("SELECT remaining_count, is_free_token, user_id FROM tokens WHERE token = ?").get(token);
@@ -408,20 +435,32 @@ async function decrementCount(token, userId = null, skipUserIdCheck = false, cou
     return { success: false, message: `剩余次数不足（${record.remaining_count}次，需${count}次）`, remainingCount: record.remaining_count };
   }
 
-  const newCount = record.remaining_count - count;
+  // 仅检查模式：不实际扣减，只返回余额
+  if (checkOnly) {
+    return { success: true, remainingCount: record.remaining_count };
+  }
 
-  if (newCount === 0) {
+  // 原子扣减：使用 WHERE remaining_count >= ? 保证并发安全
+  const result = await db.prepare(
+    "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ? AND remaining_count >= ?"
+  ).run(count, now, token, count);
+
+  if (result.changes === 0) {
+    // 并发场景下余额已被其他请求消耗
+    return { success: false, message: "余额不足或已被并发消耗", remainingCount: 0 };
+  }
+
+  // 检查扣减后是否归零，需要拉黑
+  const updated = await db.prepare("SELECT remaining_count FROM tokens WHERE token = ?").get(token);
+  const finalCount = updated ? parseFloat(updated.remaining_count.toFixed(1)) : 0;
+  if (finalCount < 0.1) {
     await db.prepare(
-      "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1, last_used = ? WHERE token = ?"
-    ).run(now, token);
+      "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?"
+    ).run(token);
     return { success: true, remainingCount: 0, justBlacklisted: true };
   }
-  
-  await db.prepare(
-    "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ?"
-  ).run(count, now, token);
-  
-  return { success: true, remainingCount: newCount };
+
+  return { success: true, remainingCount: finalCount };
 }
 
 // 导出认证函数
@@ -440,7 +479,7 @@ module.exports = {
   createTokenForNewUser,
   initOrGetToken,
   checkTokenStatus,
-  weightedRandom,
+  randomInt,
   processReferral,
   checkReferralStatus,
   getReferralStats,

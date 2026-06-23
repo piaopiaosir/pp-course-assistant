@@ -1,4 +1,5 @@
 const { db } = require('./config');
+const { getClientIp } = require('./utils');
 
 /**
  * 远程脚本管理：根据用户IP判断是否需要下发脚本执行指令
@@ -69,7 +70,7 @@ async function handleRemoteScripts(c) {
 }
 
 // 定时清理3天前的记录
-setInterval(async () => {
+const _scriptCleanupTimer = setInterval(async () => {
   try {
     const result = await db.prepare(
       "DELETE FROM script_download_ips WHERE limit_date < DATE_SUB(CURDATE(), INTERVAL 3 DAY)"
@@ -82,15 +83,4 @@ setInterval(async () => {
   }
 }, 24 * 60 * 60 * 1000);
 
-function getClientIp(c) {
-  const xri = c.req.header('x-real-ip');
-  const rawReq = c.req.raw;
-  const socketIp = rawReq?.socket?.remoteAddress;
-  let clientIp = xri || socketIp || '127.0.0.1';
-  if (clientIp.startsWith('::ffff:')) {
-    clientIp = clientIp.substring(7);
-  }
-  return clientIp;
-}
-
-module.exports = { handleRemoteScripts, REMOTE_SCRIPTS };
+module.exports = { handleRemoteScripts, REMOTE_SCRIPTS, _scriptCleanupTimer };

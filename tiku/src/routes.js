@@ -2,32 +2,35 @@ const { Hono } = require('hono');
 const http = require('http');
 const { db, getEnv, getGlobalStats, PORT, FREE_MODE, LATEST_VERSION, SPONSOR_URL } = require('./config');
 const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
-const { getTypeDescription, measureLatency, refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
+const { refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
+const { getTypeDescription, getClientIp } = require('./utils');
 const { getLimitedDate } = require('./ip-security');
 const { generateLoginHTML, generateAdminHTML } = require('./admin');
 const { isIpBanned, recordIpViolation, logIpAccess, checkRateLimit, isIpWhitelisted, getIpWhitelist, clearWhitelistCache, checkLimitedDailyQuota, incrementLimitedCount } = require('./ip-security');
 const { handleQuery } = require('./mode-handler');
 const { getModelCosts, getFullModelConfig } = require('./modes/ai-mode');
-const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess, adminSessions, _adminSessionCleanupTimer } = require('./admin-session');
-const { queryTasks, QUERY_TASK_EXPIRY, queryRateWindow, QUERY_RATE_WINDOW_SIZE, recordQueryRate, getQueryRate, calculatePollInterval, _queryTaskCleanupTimer, recentlyQueriedQuestions, RECENTLY_QUERIED_EXPIRY, MAX_QUERIED_PER_TOKEN, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer } = require('./query-tasks');
-const { registerAdminRoutes } = require('./admin-routes');
+const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess, _adminSessionCleanupTimer } = require('./admin/session');
+const { queryTasks, queryRateWindow, recordQueryRate, getQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recentlyQueriedQuestions, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer } = require('./query-tasks');
+const { registerAdminRoutes } = require('./admin/routes');
 const { handleRemoteScripts } = require('./remote-scripts');
+
+// 显式初始化数据库（建表+迁移）
+const { initDatabase } = require('./config/db-init');
+initDatabase();
 
 // workType 白名单：只允许这些平台使用题库服务
 const ALLOWED_WORK_TYPES = ['zhs', 'ouchn', 'cx', 'stuActive'];
 
-function getClientIp(c) {
-  const xri = c.req.header('x-real-ip');
-  const rawReq = c.req.raw;
-  const socketIp = rawReq?.socket?.remoteAddress;
-  let clientIp = xri || socketIp || '127.0.0.1';
-  if (clientIp.startsWith('::ffff:')) {
-    clientIp = clientIp.substring(7);
-  }
-  return clientIp;
-}
-
 const app = new Hono();
+
+// 请求体大小限制（1MB）
+app.use('*', async (c, next) => {
+  const contentLength = c.req.header('content-length');
+  if (contentLength && parseInt(contentLength) > 1024 * 1024) {
+    return c.json({ code: 413, msg: '请求体过大（最大1MB）' }, 413);
+  }
+  await next();
+});
 
 app.use('*', async (c, next) => {
   try {
@@ -45,25 +48,10 @@ app.use('*', async (c, next) => {
       return await next();
     }
     
-    const xff = c.req.header('x-forwarded-for');
-    const xri = c.req.header('x-real-ip');
-    
-    const rawReq = c.req.raw;
-    const socketIp = rawReq?.socket?.remoteAddress;
-    const connectionIp = rawReq?.connection?.remoteAddress;
-    
-    let cleanIp = socketIp || connectionIp || '';
-    if (cleanIp.startsWith('::ffff:')) {
-      cleanIp = cleanIp.substring(7);
-    }
-    
-    const ip = xff?.split(',')[0]?.trim() || 
-               xri || 
-               cleanIp ||
-               '127.0.0.1';
+    const ip = getClientIp(c);
     
     if (!path.startsWith('/query-task/') && !path.startsWith('/internal/')) {
-      console.log(`[IP] socket=${socketIp}, conn=${connectionIp}, XFF=${xff}, 最终=${ip}`);
+      console.log(`[IP] 最终=${ip}`);
     }
     
     if (isIpWhitelisted(ip)) {
@@ -134,7 +122,7 @@ app.get('/poll-interval', async (c) => {
   return c.json({
     code: 200,
     msg: 'success',
-    data: { pollInterval: calculatePollInterval() }
+    data: { pollInterval: POLL_INTERVAL }
   });
 });
 
@@ -162,7 +150,10 @@ app.get('/query-task/:taskId', async (c) => {
 
 app.get('/internal/code', async (c) => {
   const apiKey = c.req.header('X-Internal-Key') || c.req.query('key');
-  const correctKey = getEnv('INTERNAL_API_KEY', 'internal-secret-key-2024');
+  const correctKey = getEnv('INTERNAL_API_KEY');
+  if (!correctKey) {
+    return c.json({ error: '内部API未配置' }, 403);
+  }
   
   if (apiKey !== correctKey) {
     return c.json({ code: 401, msg: '无效的内部API密钥', data: null }, 401);
@@ -172,7 +163,7 @@ app.get('/internal/code', async (c) => {
     const files = {};
     const srcDir = __dirname;
     
-    const codeFiles = ['config.js', 'auth.js', 'tiku.js', 'routes.js', 'mode-handler.js', 'ip-security.js', 'utils.js', 'admin.js', 'tavily-search.js', 'recheck.js', 'admin-session.js', 'admin-routes.js', 'query-tasks.js', 'remote-scripts.js'];
+    const codeFiles = ['config.js', 'auth.js', 'tiku.js', 'routes.js', 'mode-handler.js', 'ip-security.js', 'utils.js', 'admin.js', 'admin-helpers.js', 'admin-login.js', 'admin-panel.js', 'tavily-search.js', 'recheck.js', 'admin-session.js', 'admin-routes.js', 'query-tasks.js', 'remote-scripts.js'];
     
     for (const file of codeFiles) {
       let filePath;
@@ -439,7 +430,7 @@ app.post('/report-answer-results', async (c) => {
     let userId = null;
     if (token !== 'anonymous') {
       const tokenStatus = await checkTokenStatus(token);
-      if (tokenStatus.valid) {
+      if (tokenStatus.success) {
         userId = tokenStatus.user_id;
       }
     }
@@ -483,7 +474,7 @@ app.post('/report-answer-results', async (c) => {
       
       const questionHash = generateQuestionHash(question, options, type);
       
-      const wasRecentlyQueried = isRecentlyQueried(token, questionHash);
+      const wasRecentlyQueried = isRecentlyQueried(questionHash);
       
       if (!wasRecentlyQueried) {
         console.log(`⚠️ 题目不在最近查询记录中 ${questionHash.substring(0, 8)}，记录但不立即应用`);
@@ -578,15 +569,19 @@ app.post('/welfare', async (c) => {
     }
 
     if (targetUserId) {
-      const user = await db.prepare('SELECT welfare_claimed FROM user_ids WHERE user_id = ?').get(targetUserId);
-      if (user && user.welfare_claimed === 1) {
+      // 原子操作：同时检查并设置 welfare_claimed，防止并发重复领取
+      const claimResult = await db.prepare(
+        'UPDATE user_ids SET welfare_claimed = 1 WHERE user_id = ? AND (welfare_claimed = 0 OR welfare_claimed IS NULL)'
+      ).run(targetUserId);
+      if (claimResult.changes === 0) {
         return c.json({ code: 400, msg: '您已领取过免费次数，每人仅限一次' }, 400);
       }
     } else {
       return c.json({ code: 400, msg: '该Token未绑定用户ID，无法领取次数' }, 400);
     }
 
-    if (targetToken.is_blacklisted === 1) {
+    // 仅在剩余次数不足时解封（H-13修复：不无条件解封）
+    if (targetToken.is_blacklisted === 1 && targetToken.remaining_count < 0.1) {
       await db.prepare('UPDATE tokens SET is_blacklisted = 0 WHERE token = ?').run(targetToken.token);
       console.log(`[福利领取] Token ${targetToken.token.substring(0, 8)}*** 已自动解封`);
     }
@@ -595,7 +590,7 @@ app.post('/welfare', async (c) => {
     if (mode === 'random') {
       const rand = Math.random();
       if (rand < 0.6) {
-        addedCount = Math.floor(Math.random() * 200);
+        addedCount = 1 + Math.floor(Math.random() * 200);
       } else if (rand < 0.9) {
         addedCount = 200 + Math.floor(Math.random() * 101);
       } else {
@@ -1084,7 +1079,7 @@ console.log(`📍 地址: http://localhost:${PORT}`);
 console.log(`📊 管理面板: http://localhost:${PORT}/admin`);
 
 // PP题库请求日志7天自动清理
-setInterval(async () => {
+const _ppLogCleanupTimer = setInterval(async () => {
   try {
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
     const result = await db.prepare('DELETE FROM pp_api_logs WHERE last_used_at < ?').run(sevenDaysAgo);
@@ -1116,8 +1111,11 @@ console.log();
 const allTimers = [
   _queryTaskCleanupTimer,
   _recentlyQueriedCleanupTimer,
+  _verifyThinkingGrantCleanupTimer,
   _adminSessionCleanupTimer,
-  ...require('./ip-security')._timers
+  _ppLogCleanupTimer,
+  ...require('./ip-security')._timers,
+  require('./remote-scripts')._scriptCleanupTimer
 ];
 
 function gracefulShutdown() {
@@ -1217,10 +1215,10 @@ server.listen(PORT, () => {
       http.request({
         hostname: url.hostname,
         port: url.port || 3001,
-        path: '/sync?key=' + encodeURIComponent(getEnv('INTERNAL_API_KEY', 'internal-secret-key-2024')),
+        path: '/sync?key=' + encodeURIComponent(getEnv('INTERNAL_API_KEY') || ''),
         method: 'POST',
         headers: {
-          'X-Internal-Key': getEnv('INTERNAL_API_KEY', 'internal-secret-key-2024')
+          'X-Internal-Key': getEnv('INTERNAL_API_KEY') || ''
         },
         timeout: 5000
       }, (res) => {

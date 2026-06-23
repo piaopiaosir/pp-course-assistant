@@ -8,9 +8,9 @@
  */
 
 const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { validateAnswer, retryWithStrippedPunctuation } = require('../utils');
+const { validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
-const { MODEL_COLUMN_MAP, getModelConfig } = require('../config/ai-models');
+const { MODEL_COLUMN_MAP, getModelConfig, calculateCostFromTokens } = require('../config/ai-models');
 
 // ==================== 正常模式 AI 补充 ====================
 
@@ -87,16 +87,7 @@ async function fetchAISupplement(questionData) {
       await incrementModelCalls(modelColumn);
     }
     
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${useApiKey}`
-      },
-      body: JSON.stringify(body)
-    });
-    
-    const result = await response.json();
+    const { result } = await callAIApi({ apiUrl, apiKey: useApiKey, body });
     
     // token统计
     let totalPromptTokens = result.usage?.prompt_tokens || 0;
@@ -155,16 +146,7 @@ async function fetchAISupplement(questionData) {
             }
             console.log("深度思考查询中...");
             
-            const thinkingResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${useApiKey}`
-              },
-              body: JSON.stringify(thinkingBody)
-            });
-            
-            const thinkingResult = await thinkingResponse.json();
+            const { result: thinkingResult } = await callAIApi({ apiUrl: "https://api.deepseek.com/v1/chat/completions", apiKey: useApiKey, body: thinkingBody });
             
             // 累加深度思考token
             if (thinkingResult.usage) {
@@ -246,7 +228,9 @@ async function fetchAISupplement(questionData) {
         return {
           code: 200,
           data: { answer: parsed.answer, source: "DeepSeek-V4-Flash" },
-          msg: "查询成功"
+          msg: "查询成功",
+          tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens },
+          modelId: model
         };
       }
     }
@@ -255,7 +239,7 @@ async function fetchAISupplement(questionData) {
     console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
     
-    return { code: 500, msg: "AI解析失败", data: null };
+    return { code: 500, msg: "AI解析失败", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, modelId: model };
     
   } catch (e) {
     console.error("❌ AI查询失败:", e.message);
@@ -265,7 +249,9 @@ async function fetchAISupplement(questionData) {
     return { 
       code: 500, 
       msg: `AI查询失败: ${e.message}`, 
-      data: null 
+      data: null,
+      tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      modelId: model
     };
   }
 }
@@ -326,7 +312,7 @@ async function handleNormalMode(c, params) {
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
-      log(`扣除次数: ${cacheCost}（缓存命中）`);
+      log(`扣除次数: ${cacheCost}（缓存命中，按0.8次计费）`);
     }
 
     if (!limitedMode) {
@@ -374,7 +360,7 @@ async function handleNormalMode(c, params) {
     log("⏭️ 排序题直接使用AI补充（跳过题库）");
     if (hunyuanApiKey) {
       log("━━━ 查询 AI ━━━");
-const aiResult = await fetchAISupplement(questionData);
+      const aiResult = await fetchAISupplement(questionData);
 
     if (aiResult.code === 200 && aiResult.data && aiResult.data.answer) {
       log("✓ AI 返回成功");
@@ -389,7 +375,15 @@ const aiResult = await fetchAISupplement(questionData);
 
         // 免费模式不扣除次数
         if (!FREE_MODE) {
-          const normalCost = 1;
+          let normalCost = 1;
+          if (answerData.tokenUsage) {
+            const { promptTokens, completionTokens } = answerData.tokenUsage;
+            if (promptTokens > 0 || completionTokens > 0) {
+              normalCost = calculateCostFromTokens(answerData.modelId || 'deepseek-v4-flash', promptTokens, completionTokens);
+              log(`📊 token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
+              log(`💰 按token计费: 扣除${normalCost}次`);
+            }
+          }
           const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
           if (!decrementResult.success) {
             return c.json({
@@ -413,20 +407,15 @@ const aiResult = await fetchAISupplement(questionData);
         answerData = cleanAnswerData(answerData);
 
         // 最终校验：答案格式和选项匹配（使用清洗后的答案）
-        let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-        if (!validation.valid && (questionData.type === "0" || questionData.type === "1") && validation.reason.includes('答案不在选项中')) {
-          // 选择题答案不在选项中：去除标点符号后重试匹配
-          const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
-          if (fixed) {
-            answerData.data.answer = fixed;
-            validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-          }
+        const { valid, reason, answers: fixedAnswers } = validateAndCleanAnswer(questionData.type, answerData.data.answer, questionData.options);
+        if (fixedAnswers !== answerData.data.answer) {
+          answerData.data.answer = fixedAnswers;
         }
-        if (!validation.valid) {
-          log(`✗ 答案校验失败: ${validation.reason}`);
+        if (!valid) {
+          log(`✗ 答案校验失败: ${reason}`);
           return c.json({
             code: 422,
-            msg: `答案校验失败: ${validation.reason}`,
+            msg: `答案校验失败: ${reason}`,
             data: { answer: [], num: remainingCount }
           }, 422);
         }
@@ -454,9 +443,12 @@ const aiResult = await fetchAISupplement(questionData);
 
   // 检查是否跳过 Hive-Net
   const skipHiveNet = getEnv('SKIP_HIVENET', 'false') === 'true';
+  // Hive-Net 仅支持单选(0)和多选(1)
+  const hivenetSupportedTypes = ["0", "1"];
+  const skipHiveNetByType = !hivenetSupportedTypes.includes(questionData.type);
 
   // 策略：Hive-Net → UCUC → 言溪 → 题库海 → AI
-  if (!skipHiveNet) {
+  if (!skipHiveNet && !skipHiveNetByType) {
     log("━━━ 1. 查询 Hive-Net ━━━");
     const hiveNetResult = await fetchHiveNet(questionData);
 
@@ -473,7 +465,9 @@ const aiResult = await fetchAISupplement(questionData);
       log(`✗ Hive-Net 无答案：${hiveNetResult.msg || '未找到'}`);
     }
   } else {
-    log("⏭️ Hive-Net 已禁用（SKIP_HIVENET=true），直接使用UCUC题库");
+    log(skipHiveNetByType 
+      ? `⏭️ Hive-Net 不支持题型${questionData.type}，跳过` 
+      : "⏭️ Hive-Net 已禁用（SKIP_HIVENET=true），直接使用UCUC题库");
   }
 
   if (!hasAnswer) {
@@ -536,8 +530,8 @@ const aiResult = await fetchAISupplement(questionData);
     }
   }
 
-  // AI补充：只在配置了hunyuanApiKey（TokenHub）时才使用
-  if (!hasAnswer && hunyuanApiKey) {
+  // AI补充：检查是否配置了 DeepSeek API Key
+  if (!hasAnswer && getEnv('DEEPSEEK_API_KEY')) {
     log("━━━ 5. 查询 AI ━━━");
     const aiResult = await fetchAISupplement(questionData);
 
@@ -559,20 +553,15 @@ const aiResult = await fetchAISupplement(questionData);
     answerData = cleanAnswerData(answerData);
     
     // 校验答案格式和选项匹配
-    let validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-    if (!validation.valid && (questionData.type === "0" || questionData.type === "1") && validation.reason.includes('答案不在选项中')) {
-      // 选择题答案不在选项中：去除标点符号后重试匹配
-      const fixed = retryWithStrippedPunctuation(questionData, answerData.data.answer);
-      if (fixed) {
-        answerData.data.answer = fixed;
-        validation = validateAnswer(questionData.type, answerData.data.answer, questionData.options);
-      }
+    const { valid, reason, answers: fixedAnswers } = validateAndCleanAnswer(questionData.type, answerData.data.answer, questionData.options);
+    if (fixedAnswers !== answerData.data.answer) {
+      answerData.data.answer = fixedAnswers;
     }
-    if (!validation.valid) {
-      log(`✗ 答案校验失败: ${validation.reason}`);
+    if (!valid) {
+      log(`✗ 答案校验失败: ${reason}`);
       return c.json({
         code: 422,
-        msg: `答案校验失败: ${validation.reason}`,
+        msg: `答案校验失败: ${reason}`,
         data: { answer: [], num: remainingCount }
       }, 422);
     }
@@ -592,7 +581,16 @@ const aiResult = await fetchAISupplement(questionData);
 
     // 免费模式不扣除次数
     if (!FREE_MODE) {
-      const normalCost = 1;
+      let normalCost = 1;
+      // 如果来源是AI，按token消耗计费
+      if (answerData.tokenUsage) {
+        const { promptTokens, completionTokens } = answerData.tokenUsage;
+        if (promptTokens > 0 || completionTokens > 0) {
+          normalCost = calculateCostFromTokens(answerData.modelId || 'deepseek-v4-flash', promptTokens, completionTokens);
+          log(`📊 token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
+          log(`💰 按token计费: 扣除${normalCost}次`);
+        }
+      }
       const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
       if (!decrementResult.success) {
         return c.json({

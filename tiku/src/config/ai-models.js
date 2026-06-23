@@ -319,6 +319,60 @@ function getDisplayName(apiModelName) {
   return MODEL_DISPLAY_MAP[apiModelName] || apiModelName;
 }
 
+// ==================== 模型价格表（元/百万Tokens，不考虑缓存命中价格） ====================
+const MODEL_PRICING = {
+  'DeepSeek-V3.2': { inputPerMillion: 2.03, outputPerMillion: 3.01 },
+  'DeepSeek-R1-0528': { inputPerMillion: 4.20, outputPerMillion: 16.10 },
+  'deepseek-v4-flash': { inputPerMillion: 1.00, outputPerMillion: 2.00 },
+  'deepseek-v4-pro': { inputPerMillion: 3.00, outputPerMillion: 6.00 },
+  'qwen3.6-plus': { inputPerMillion: 2.10, outputPerMillion: 12.60 },
+  'qwen3.7-max': { inputPerMillion: 12.60, outputPerMillion: 37.10 },
+  'qwen3.5-plus': { inputPerMillion: 0.84, outputPerMillion: 4.83 },
+  'minimax-m2.5': { inputPerMillion: 2.10, outputPerMillion: 8.40 },
+  'minimax-m2.7': { inputPerMillion: 2.10, outputPerMillion: 8.40 },
+  'minimax-m3': { inputPerMillion: 4.20, outputPerMillion: 16.80 },
+  'hy3-preview': { inputPerMillion: 1.20, outputPerMillion: 4.00 },
+  'gpt-5.4-mini': { inputPerMillion: 5.25, outputPerMillion: 31.50 },
+  'gpt-5.4-nano': { inputPerMillion: 1.40, outputPerMillion: 8.75 },
+  'gemini-3.1-flash-lite': { inputPerMillion: 1.75, outputPerMillion: 10.50 },
+  'gemini-3.5-flash': { inputPerMillion: 10.50, outputPerMillion: 63.00 },
+  'GLM-5': { inputPerMillion: 4.20, outputPerMillion: 18.20 },
+  'GLM-5.1': { inputPerMillion: 9.80, outputPerMillion: 30.80 },
+  'GLM-4.7': { inputPerMillion: 2.002, outputPerMillion: 7.994 },
+  'kimi-k2.6': { inputPerMillion: 6.65, outputPerMillion: 28.00 },
+  'kimi-k2.5': { inputPerMillion: 4.389, outputPerMillion: 23.10 }
+};
+
+// 套餐综合单价（加权平均）：0.007 元/次
+const PRICE_PER_COUNT = 0.007;
+
+/**
+ * 根据实际消耗的token计算应扣除的次数
+ * 不考虑缓存命中价格，不满1次按1次扣除
+ *
+ * @param {string} modelId - 模型ID（如 'deepseek-v4-flash'）
+ * @param {number} promptTokens - 输入token数
+ * @param {number} completionTokens - 输出token数
+ * @returns {number} 应扣除的次数（向上取整，最小1）
+ */
+function calculateCostFromTokens(modelId, promptTokens, completionTokens) {
+  const pricing = MODEL_PRICING[modelId];
+  if (!pricing) {
+    // 未知模型默认扣1次
+    console.log(`⚠️ 未知模型定价: ${modelId}，默认扣除1次`);
+    return 1;
+  }
+
+  // 计算实际费用（元）
+  const inputCost = (promptTokens / 1000000) * pricing.inputPerMillion;
+  const outputCost = (completionTokens / 1000000) * pricing.outputPerMillion;
+  const totalCost = inputCost + outputCost;
+
+  // 转换为次数（向上取整，不满1次按1次）
+  const count = Math.ceil(totalCost / PRICE_PER_COUNT);
+  return Math.max(1, count);
+}
+
 module.exports = {
   AI_MODELS,
   MODEL_COLUMN_MAP,
@@ -327,5 +381,8 @@ module.exports = {
   getSupportedModels,
   getModelCosts,
   getFullModelConfig,
-  getDisplayName
+  getDisplayName,
+  MODEL_PRICING,
+  PRICE_PER_COUNT,
+  calculateCostFromTokens
 };

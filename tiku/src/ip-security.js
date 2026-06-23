@@ -70,9 +70,9 @@ function checkIpInWhitelist(ip, whitelist) {
       const prefixParts = prefix.split('.').map(Number);
       if (ipParts.length !== 4 || prefixParts.length !== 4) return false;
       
-      const ipNum = (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3];
-      const prefixNum = (prefixParts[0] << 24) + (prefixParts[1] << 16) + (prefixParts[2] << 8) + prefixParts[3];
-      const maskNum = ~((1 << (32 - mask)) - 1);
+      const ipNum = ((ipParts[0] << 24) >>> 0) + ((ipParts[1] << 16) >>> 0) + ((ipParts[2] << 8) >>> 0) + (ipParts[3] >>> 0);
+      const prefixNum = ((prefixParts[0] << 24) >>> 0) + ((prefixParts[1] << 16) >>> 0) + ((prefixParts[2] << 8) >>> 0) + (prefixParts[3] >>> 0);
+      const maskNum = ((~((1 << (32 - mask)) - 1)) >>> 0);
       
       return (ipNum & maskNum) === (prefixNum & maskNum);
     }
@@ -94,9 +94,12 @@ async function getIpLocation(ip) {
   }
   
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     const response = await fetch(`https://ip9.com.cn/get?ip=${ip}`, {
-      timeout: 3000
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const result = await response.json();
     if (result.ret === 200 && result.data) {
       const d = result.data;
@@ -241,6 +244,7 @@ function checkRateLimit(ip, limit = 10) {
 }
 
 // 定期清理缓存（每分钟）
+const IP_CACHE_MAX_SIZE = 10000;
 const _rateLimitCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [ip, requests] of ipRequestCache.entries()) {
@@ -253,6 +257,17 @@ const _rateLimitCleanupTimer = setInterval(() => {
     if (requests.length === 0) {
       ipRequestCache.delete(ip);
     }
+  }
+  // 容量限制：超出时淘汰最旧条目
+  if (ipRequestCache.size > IP_CACHE_MAX_SIZE) {
+    const excess = ipRequestCache.size - IP_CACHE_MAX_SIZE;
+    let deleted = 0;
+    for (const key of ipRequestCache.keys()) {
+      if (deleted >= excess) break;
+      ipRequestCache.delete(key);
+      deleted++;
+    }
+    console.log(`[IP限流] 缓存超限，清理${deleted}个条目`);
   }
 }, 60000);
 

@@ -1,73 +1,56 @@
 /**
  * Tavily 搜索服务
  * 提供联网搜索能力,用于AI深度思考时获取最新信息
- * 支持30个API密钥自动切换
+ * 支持多API密钥自动切换（数量由环境变量决定）
  */
 
 const { db, getEnv } = require('./config');
 
-// Tavily API密钥配置(50个) - 提取为模块级常量，避免重复定义
-const TAVILY_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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',
-  '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'
-];
+// Tavily API密钥配置 - 从环境变量读取，格式：TAVILY_KEY_1 ~ TAVILY_KEY_50
+// 启动时自动扫描所有 TAVILY_KEY_* 环境变量
+const TAVILY_KEYS = [];
+let keyIndex = 1;
+while (true) {
+  const key = getEnv(`TAVILY_KEY_${keyIndex}`);
+  if (!key) break;
+  TAVILY_KEYS.push(key);
+  keyIndex++;
+}
+// 兼容单密钥配置
+if (TAVILY_KEYS.length === 0) {
+  const singleKey = getEnv('TAVILY_API_KEY');
+  if (singleKey) TAVILY_KEYS.push(singleKey);
+}
 const TAVILY_KEY_COUNT = TAVILY_KEYS.length;
 
 const MAX_RECURSION_DEPTH = 30;
 
 const INVALID_KEYS = new Set();
 
+// 启动时从DB加载已持久化的失效密钥
+async function loadInvalidKeys() {
+  try {
+    const rows = await db.prepare("SELECT key_index FROM tavily_invalid_keys").all();
+    for (const row of rows) {
+      INVALID_KEYS.add(row.key_index);
+    }
+    if (INVALID_KEYS.size > 0) {
+      console.log(`📋 从DB加载${INVALID_KEYS.size}个已失效Tavily密钥`);
+    }
+  } catch (e) {
+    // 表可能不存在，首次运行时忽略
+    console.log('⚠️ 加载Tavily失效密钥失败（表可能未创建）:', e.message);
+  }
+}
+loadInvalidKeys();
+
 function markKeyAsInvalid(keyIndex) {
   if (keyIndex > 0 && keyIndex <= TAVILY_KEY_COUNT) {
     INVALID_KEYS.add(keyIndex);
+    // 持久化到DB
+    db.prepare("INSERT IGNORE INTO tavily_invalid_keys (key_index, invalidated_at) VALUES (?, ?)").run(keyIndex, Math.floor(Date.now() / 1000)).catch(e => {
+      console.log('⚠️ 持久化失效密钥失败:', e.message);
+    });
     console.log(`🚫 标记Tavily密钥${keyIndex}为失效，当前失效密钥:`, [...INVALID_KEYS]);
   }
 }

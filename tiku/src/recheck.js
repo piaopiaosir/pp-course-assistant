@@ -135,7 +135,12 @@ async function callTikuSingleKey(questionData, keyNum, apiKey) {
     
     return jsonResponse;
   } catch (e) {
-    throw new Error(`请求错误: ${e.message}`);
+    if (e.name === 'AbortError') {
+      const err = new Error('请求超时（15秒）');
+      err.code = 'TIMEOUT';
+      throw err;
+    }
+    throw e;
   }
 }
 

@@ -16,9 +16,7 @@ function getQueryRate() {
   return queryRateWindow.length;
 }
 
-function calculatePollInterval() {
-  return 1000;
-}
+const POLL_INTERVAL = 1000;
 
 const _queryTaskCleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -31,12 +29,13 @@ const _queryTaskCleanupTimer = setInterval(() => {
 
 const recentlyQueriedQuestions = new Map(); // questionHash -> lastAccessTime
 const RECENTLY_QUERIED_EXPIRY = 30 * 60 * 1000;
+const RECENTLY_QUERIED_MAX_SIZE = 50000;
 
 function recordRecentlyQueried(token, questionHash) {
   recentlyQueriedQuestions.set(questionHash, Date.now());
 }
 
-function isRecentlyQueried(token, questionHash) {
+function isRecentlyQueried(questionHash) {
   return recentlyQueriedQuestions.has(questionHash);
 }
 
@@ -52,31 +51,54 @@ const _recentlyQueriedCleanupTimer = setInterval(() => {
   if (cleaned > 0) {
     console.log(`[最近查询追踪] 清理${cleaned}个过期记录，剩余${recentlyQueriedQuestions.size}个`);
   }
+  // 容量限制：超出时淘汰最旧条目
+  if (recentlyQueriedQuestions.size > RECENTLY_QUERIED_MAX_SIZE) {
+    const excess = recentlyQueriedQuestions.size - RECENTLY_QUERIED_MAX_SIZE;
+    let deleted = 0;
+    for (const key of recentlyQueriedQuestions.keys()) {
+      if (deleted >= excess) break;
+      recentlyQueriedQuestions.delete(key);
+      deleted++;
+    }
+    console.log(`[最近查询追踪] 缓存超限，清理${deleted}个条目`);
+  }
 }, 60 * 1000);
 
 // 校验模式深度思考免扣资格追踪：token+questionHash -> true
 // 第一次请求(checkOnly=true)扣2次后写入，第二次请求(checkOnly=false)检查并消耗
-const verifyThinkingGrants = new Map(); // "token:questionHash" -> true
+const verifyThinkingGrants = new Map(); // "token:questionHash" -> grantTime
 const VERIFY_THINKING_GRANT_EXPIRY = 5 * 60 * 1000; // 5分钟过期
 
 function grantVerifyThinking(token, questionHash) {
   const key = `${token}:${questionHash}`;
-  verifyThinkingGrants.set(key, true);
+  verifyThinkingGrants.set(key, Date.now());
 }
 
 function consumeVerifyThinking(token, questionHash) {
   const key = `${token}:${questionHash}`;
-  const exists = verifyThinkingGrants.has(key);
-  if (exists) {
-    verifyThinkingGrants.delete(key); // 一次性消耗
+  const grantTime = verifyThinkingGrants.get(key);
+  if (!grantTime) return false;
+  // 检查是否过期
+  if (Date.now() - grantTime > VERIFY_THINKING_GRANT_EXPIRY) {
+    verifyThinkingGrants.delete(key);
+    return false;
   }
-  return exists;
+  verifyThinkingGrants.delete(key); // 一次性消耗
+  return true;
 }
 
 const _verifyThinkingGrantCleanupTimer = setInterval(() => {
-  // 简单策略：超过5分钟的记录由 consumeVerifyThinking 的 TTL 逻辑处理
-  // 这里定期清理防止内存泄漏（Map 本身不大，每60秒清理一次）
-  // 由于是 Map 且 consume 时删除，实际不需要额外清理
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [key, grantTime] of verifyThinkingGrants.entries()) {
+    if (now - grantTime > VERIFY_THINKING_GRANT_EXPIRY) {
+      verifyThinkingGrants.delete(key);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`[思考资格] 清理${cleaned}个过期记录，剩余${verifyThinkingGrants.size}个`);
+  }
 }, 60 * 1000);
 
 module.exports = {
@@ -84,7 +106,7 @@ module.exports = {
   recentlyQueriedQuestions,
   recordQueryRate,
   getQueryRate,
-  calculatePollInterval,
+  POLL_INTERVAL,
   recordRecentlyQueried,
   isRecentlyQueried,
   grantVerifyThinking,

@@ -6,7 +6,8 @@
 const { handleVerifyMode } = require('./modes/verify-mode');
 const { handleNormalMode } = require('./modes/normal-mode');
 const { handleAIMode } = require('./modes/ai-mode');
-const { generateQuestionHash, getTypeDescription } = require('./tiku');
+const { generateQuestionHash } = require('./tiku');
+const { getTypeDescription } = require('./utils');
 
 /**
  * 处理查询请求的统一入口

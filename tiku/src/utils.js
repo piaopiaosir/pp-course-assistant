@@ -310,6 +310,71 @@ function retryWithStrippedPunctuation(questionData, answers) {
   return fixed;
 }
 
+// 答案校验+清洗+重试的统一函数
+// 返回 { valid, reason, answers } - answers 可能被 retryWithStrippedPunctuation 修正
+function validateAndCleanAnswer(type, answers, options) {
+  let currentAnswers = answers;
+  let validation = validateAnswer(type, currentAnswers, options);
+
+  if (!validation.valid && (type === "0" || type === "1") && validation.reason.includes('答案不在选项中')) {
+    const questionData = { options };
+    const fixed = retryWithStrippedPunctuation(questionData, currentAnswers);
+    if (fixed) {
+      currentAnswers = fixed;
+      validation = validateAnswer(type, currentAnswers, options);
+    }
+  }
+
+  return { valid: validation.valid, reason: validation.reason, answers: currentAnswers };
+}
+
+// 统一AI API调用函数（提取自 ai-mode/normal-mode/verify-mode 的重复逻辑）
+// 参数: { apiUrl, apiKey, model, body, timeoutMs }
+// 返回: { result, usage } 或抛出异常
+async function callAIApi({ apiUrl, apiKey, body, timeoutMs = 300000 }) {
+  const response = await fetchWithTimeout(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify(body)
+  }, timeoutMs);
+
+  const result = await response.json();
+  const usage = result.usage || null;
+  return { result, usage };
+}
+
+// 带超时的fetch，默认15秒超时
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new Error(`请求超时(${timeoutMs}ms): ${url}`);
+    }
+    throw e;
+  }
+}
+
+// 统一IP提取：优先信任 Nginx 传入的 x-real-ip，回退到 socket 地址
+function getClientIp(c) {
+  const xri = c.req.header('x-real-ip');
+  const rawReq = c.req.raw;
+  const socketIp = rawReq?.socket?.remoteAddress;
+  let clientIp = xri || socketIp || '127.0.0.1';
+  if (clientIp.startsWith('::ffff:')) {
+    clientIp = clientIp.substring(7);
+  }
+  return clientIp;
+}
+
 module.exports = {
   sha256,
   stripPunctuation,
@@ -317,5 +382,9 @@ module.exports = {
   normalizeOptions,
   validateAnswer,
   getTypeDescription,
-  retryWithStrippedPunctuation
+  retryWithStrippedPunctuation,
+  getClientIp,
+  fetchWithTimeout,
+  validateAndCleanAnswer,
+  callAIApi
 };
