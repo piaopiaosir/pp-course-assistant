@@ -33,7 +33,7 @@ const TIKU_API_KEY_2 = process.env.TIKU_API_KEY_2;
 const TIKU_API_URL = 'http://api.tikuhai.com/search';
 
 if (!TIKU_API_KEY_1 || !TIKU_API_KEY_2) {
-  console.error('✗ 错误: 请在 .env 文件中配置 TIKU_API_KEY_1 和 TIKU_API_KEY_2');
+  console.error('[X] 错误: 请在 .env 文件中配置 TIKU_API_KEY_1 和 TIKU_API_KEY_2');
   process.exit(1);
 }
 
@@ -80,7 +80,7 @@ async function callTikuApi(questionData) {
     const newKey = currentKey === 1 ? 2 : 1;
     const newApiKey = newKey === 1 ? TIKU_API_KEY_1 : TIKU_API_KEY_2;
     
-    console.log(`⚠️ 密钥${currentKey}失败，切换到密钥${newKey}...`);
+    console.log(`[WARN] 密钥${currentKey}失败，切换到密钥${newKey}...`);
     result = await callTikuSingleKey(questionData, newKey, newApiKey);
     
     // 如果切换后成功，更新数据库记录
@@ -88,7 +88,7 @@ async function callTikuApi(questionData) {
       await db.prepare(
         "UPDATE global_stats SET current_tiku_key = ? WHERE id = 1"
       ).run(newKey);
-      console.log(`✓ 已更新当前密钥为: ${newKey}`);
+      console.log(`[OK] 已更新当前密钥为: ${newKey}`);
     }
   }
   
@@ -107,7 +107,7 @@ async function callTikuSingleKey(questionData, keyNum, apiKey) {
     key: apiKey
   });
 
-  console.log(`📞 题库海查询中... (使用密钥${keyNum})`);
+  console.log(`[CALL] 题库海查询中... (使用密钥${keyNum})`);
 
   try {
     const controller = new AbortController();
@@ -126,11 +126,11 @@ async function callTikuSingleKey(questionData, keyNum, apiKey) {
     clearTimeout(timeoutId);
 
     const jsonResponse = await response.json();
-    console.log(`📍 题库海响应: code=${jsonResponse.code}, msg=${jsonResponse.msg || '无'}`);
+    console.log(`[INFO] 题库海响应: code=${jsonResponse.code}, msg=${jsonResponse.msg || '无'}`);
     
     if (jsonResponse.code === 200 && jsonResponse.data && jsonResponse.data.answer) {
-      console.log(`✓ 题库海找到答案: ${JSON.stringify(jsonResponse.data.answer)}`);
-      console.log(`📊 剩余次数: ${jsonResponse.data.num || '未知'}`);
+      console.log(`[OK] 题库海找到答案: ${JSON.stringify(jsonResponse.data.answer)}`);
+      console.log(`[STAT] 剩余次数: ${jsonResponse.data.num || '未知'}`);
     }
     
     return jsonResponse;
@@ -160,11 +160,11 @@ async function recheckSingleQuestion(questionHash) {
     ).get(questionHash);
 
     if (!row) {
-      console.log(`✓ 题目 ${questionHash.substring(0, 8)} 未被标记为错误，跳过重查`);
+      console.log(`[OK] 题目 ${questionHash.substring(0, 8)} 未被标记为错误，跳过重查`);
       return { status: 'skipped', reason: '题目未被标记为错误' };
     }
 
-    console.log(`\n━━━━━━━━━ 触发重查题目 ${questionHash.substring(0, 8)} ━━━━━━━━━`);
+    console.log(`\n========= 触发重查题目 ${questionHash.substring(0, 8)} =========`);
     return await recheckQuestion(row);
   } catch (e) {
     console.error(`重查题目失败 ${questionHash.substring(0, 8)}:`, e.message);
@@ -184,10 +184,10 @@ async function getWrongAnswers() {
        ORDER BY created_at DESC`
     ).all();
 
-    console.log(`✓ 查询到 ${rows.length} 个标记为错误的题目`);
+    console.log(`[OK] 查询到 ${rows.length} 个标记为错误的题目`);
     return rows;
   } catch (e) {
-    console.error('✗ 查询数据库失败:', e.message);
+    console.error('[X] 查询数据库失败:', e.message);
     return [];
   }
 }
@@ -196,7 +196,7 @@ async function getWrongAnswers() {
  * 重查单个题目
  */
 async function recheckQuestion(row) {
-  console.log(`\n━━━━━━━━━ 处理题目 ${row.question_hash.substring(0, 8)} ━━━━━━━━━`);
+  console.log(`\n========= 处理题目 ${row.question_hash.substring(0, 8)} =========`);
   console.log(`题目: ${row.question}`);
   console.log(`题型: ${getTypeDescription(row.type)} (${row.type})`);
   console.log(`原答案: ${row.answer}`);
@@ -235,15 +235,15 @@ async function recheckQuestion(row) {
       const newAnswer = tikuResult.data.answer;
       const newSource = 'tiku';
 
-      console.log('\n🔍 正在校验答案...');
+      console.log('\n[SEARCH] 正在校验答案...');
       const validation = validateAnswer(row.type, newAnswer, options);
 
       if (validation.valid) {
-        console.log('✓ 校验通过');
+        console.log('[OK] 校验通过');
         await updateDatabase(row.question_hash, newAnswer, newSource);
         return { status: 'success', source: 'tiku', answer: newAnswer };
       } else {
-        console.log(`✗ 校验失败: ${validation.reason}，继续调用 AI 深度思考...`);
+        console.log(`[X] 校验失败: ${validation.reason}，继续调用 AI 深度思考...`);
         // 校验失败，继续调用 AI
       }
     }
@@ -259,26 +259,26 @@ async function recheckQuestion(row) {
       const newAnswer = aiResult.data.answer;
       const newSource = aiResult.data.source || getDisplayName('deepseek-v4-pro');
 
-      console.log(`✓ AI 返回答案: ${JSON.stringify(newAnswer)}`);
-      console.log('🔍 正在校验答案...');
+      console.log(`[OK] AI 返回答案: ${JSON.stringify(newAnswer)}`);
+      console.log('[SEARCH] 正在校验答案...');
       const validation = validateAnswer(row.type, newAnswer, options);
 
       if (validation.valid) {
-        console.log('✓ 校验通过');
+        console.log('[OK] 校验通过');
         await updateDatabase(row.question_hash, newAnswer, newSource);
         return { status: 'success', source: 'ai', answer: newAnswer };
       } else {
-        console.log(`✗ 校验失败: ${validation.reason}，从数据库删除该题目`);
+        console.log(`[X] 校验失败: ${validation.reason}，从数据库删除该题目`);
         await deleteRecord(row.question_hash);
         return { status: 'invalid', reason: validation.reason };
       }
     } else {
-      console.log(`✗ AI 查询失败: ${aiResult.msg || '无答案'}`);
+      console.log(`[X] AI 查询失败: ${aiResult.msg || '无答案'}`);
       return { status: 'failed', reason: '题库海和AI均无答案' };
     }
 
   } catch (e) {
-    console.error(`✗ 处理异常:`, e.message);
+    console.error(`[X] 处理异常:`, e.message);
     return { status: 'failed', reason: e.message };
   }
 }
@@ -291,7 +291,7 @@ async function deleteRecord(questionHash) {
     `DELETE FROM answer_cache WHERE question_hash = ?`
   ).run(questionHash);
 
-  console.log(`✓ 已从数据库删除: ${questionHash.substring(0, 8)}`);
+  console.log(`[OK] 已从数据库删除: ${questionHash.substring(0, 8)}`);
 }
 
 /**
@@ -307,7 +307,7 @@ async function updateDatabase(questionHash, answer, source) {
      WHERE question_hash = ?`
   ).run(answerStr, source, now, questionHash);
 
-  console.log(`✓ 数据库已更新: 答案="${answerStr}", 来源="${source}", is_correct=NULL`);
+  console.log(`[OK] 数据库已更新: 答案="${answerStr}", 来源="${source}", is_correct=NULL`);
   stats.updated++;
 }
 
@@ -322,14 +322,14 @@ function delay(ms) {
  * 打印统计信息
  */
 function printStats() {
-  console.log('\n📊 统计信息:');
+  console.log('\n[STAT] 统计信息:');
   console.log(`  总题目数: ${stats.total}`);
   console.log(`  已处理: ${stats.processed}`);
-  console.log(`  ✓ 题库海成功: ${stats.tikuSuccess}`);
-  console.log(`  ✓ AI 成功: ${stats.aiSuccess}`);
-  console.log(`  ✗ 查询失败: ${stats.failed}`);
-  console.log(`  ⚠ 校验失败: ${stats.invalid}`);
-  console.log(`  💾 数据库更新: ${stats.updated}`);
+  console.log(`  [OK] 题库海成功: ${stats.tikuSuccess}`);
+  console.log(`  [OK] AI 成功: ${stats.aiSuccess}`);
+  console.log(`  [X] 查询失败: ${stats.failed}`);
+  console.log(`  [WARN] 校验失败: ${stats.invalid}`);
+  console.log(`  [SAVE] 数据库更新: ${stats.updated}`);
   console.log(`  成功率: ${stats.total > 0 ? ((stats.tikuSuccess + stats.aiSuccess) / stats.total * 100).toFixed(2) : 0}%`);
 }
 
@@ -349,7 +349,7 @@ async function main() {
   const wrongAnswers = await getWrongAnswers();
 
   if (wrongAnswers.length === 0) {
-    console.log('✓ 没有需要重查的题目');
+    console.log('[OK] 没有需要重查的题目');
     return;
   }
 
@@ -458,12 +458,12 @@ module.exports = {
 // 如果是直接运行脚本，执行主函数
 if (require.main === module) {
   main().catch(e => {
-    console.error('\n✗ 脚本执行失败:', e.message);
+    console.error('\n[X] 脚本执行失败:', e.message);
     console.error(e.stack);
     process.exit(1);
   }).finally(() => {
     // 关闭数据库连接
     try { pool?.end?.(); } catch(e) { console.warn('关闭数据库连接失败:', e.message); }
-    console.log('\n✓ 数据库连接已关闭');
+    console.log('\n[OK] 数据库连接已关闭');
   });
 }

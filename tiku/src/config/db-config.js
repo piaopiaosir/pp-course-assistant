@@ -18,7 +18,7 @@ const DB_CONFIG = {
 
 // ==================== MySQL 连接池 ====================
 const pool = mysql.createPool(DB_CONFIG);
-console.log(`✓ MySQL 连接池已创建: ${DB_CONFIG.host}/${DB_CONFIG.database}`);
+console.log(`[OK] MySQL 连接池已创建: ${DB_CONFIG.host}/${DB_CONFIG.database}`);
 
 // 数据库适配器（兼容 SQLite 接口）
 const db = {

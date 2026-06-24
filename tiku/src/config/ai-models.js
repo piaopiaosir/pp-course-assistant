@@ -1,3 +1,7 @@
+// 消耗等级划分标准（按输入+输出价格总和，元/百万tokens）：
+//   低消耗：总和 ≤ 10
+//   中消耗：总和 10~25
+//   高消耗：总和 > 25
 const AI_MODELS = {
   'DeepSeek-V3.2': {
     id: 'DeepSeek-V3.2',
@@ -6,7 +10,7 @@ const AI_MODELS = {
     displayName: 'DeepSeek-V3.2',
     temperature: 0.6,
     enable_thinking: true,
-    cost: 1,
+    cost: '低消耗',
     statsColumn: 'deepseek_v3_calls'
   },
   'DeepSeek-R1-0528': {
@@ -14,7 +18,7 @@ const AI_MODELS = {
     apiModel: 'Pro/deepseek-ai/DeepSeek-R1',
     provider: '302ai',
     displayName: 'DeepSeek-R1',
-    cost: 3,
+    cost: '中消耗',
     statsColumn: 'deepseek_r1_calls'
   },
   'deepseek-v4-flash': {
@@ -24,7 +28,7 @@ const AI_MODELS = {
     displayName: 'DeepSeek-V4-Flash',
     thinking: { type: "enabled" },
     reasoning_effort: "max",
-    cost: 1,
+    cost: '低消耗',
     statsColumn: 'deepseek_v4_flash_calls'
   },
   'deepseek-v4-pro': {
@@ -34,7 +38,7 @@ const AI_MODELS = {
     displayName: 'DeepSeek-V4-Pro',
     thinking: { type: "enabled" },
     reasoning_effort: "max",
-    cost: 1,
+    cost: '低消耗',
     statsColumn: 'deepseek_v4_pro_calls'
   },
   'qwen3.6-plus': {
@@ -45,7 +49,7 @@ const AI_MODELS = {
     temperature: 0.6,
     enable_thinking: true,
     supportsVision: true,
-    cost: 2,
+    cost: '中消耗',
     statsColumn: 'qwen3_6_calls'
   },
   'qwen3.7-max': {
@@ -56,7 +60,7 @@ const AI_MODELS = {
     temperature: 0.6,
     enable_thinking: true,
     supportsVision: true,
-    cost: 3,
+    cost: '高消耗',
     statsColumn: 'qwen3_7_calls'
   },
   'qwen3.5-plus': {
@@ -67,7 +71,7 @@ const AI_MODELS = {
     temperature: 0.6,
     enable_thinking: true,
     supportsVision: true,
-    cost: 1,
+    cost: '低消耗',
     statsColumn: 'qwen3_5_calls'
   },
   'minimax-m2.5': {
@@ -76,7 +80,7 @@ const AI_MODELS = {
     provider: '302ai',
     displayName: 'MiniMax-M2.5',
     temperature: 0.6,
-    cost: 1,
+    cost: '中消耗',
     statsColumn: 'minimax_m25_calls'
   },
   'minimax-m2.7': {
@@ -85,7 +89,7 @@ const AI_MODELS = {
     provider: '302ai',
     displayName: 'MiniMax-M2.7',
     temperature: 0.6,
-    cost: 1,
+    cost: '中消耗',
     statsColumn: 'minimax_m27_calls'
   },
   'minimax-m3': {
@@ -97,7 +101,7 @@ const AI_MODELS = {
     thinking: { type: "adaptive" },
     reasoning_split: true,
     supportsVision: true,
-    cost: 2,
+    cost: '中消耗',
     statsColumn: 'minimax_m3_calls'
   },
   'hy3-preview': {
@@ -107,7 +111,7 @@ const AI_MODELS = {
     displayName: 'Hy3-preview',
     temperature: 0.6,
     thinking: { type: "enabled" },
-    cost: 1,
+    cost: '低消耗',
     statsColumn: 'hy3_preview_calls'
   },
   'gpt-5.4-mini': {
@@ -117,7 +121,7 @@ const AI_MODELS = {
     displayName: 'GPT-5.4-mini',
     temperature: 0.6,
     supportsVision: true,
-    cost: 3,
+    cost: '高消耗',
     statsColumn: 'gpt_54_mini_calls'
   },
   'gpt-5.4-nano': {
@@ -127,7 +131,7 @@ const AI_MODELS = {
     displayName: 'GPT-5.4-nano',
     temperature: 0.6,
     supportsVision: true,
-    cost: 1,
+    cost: '中消耗',
     statsColumn: 'gpt_54_nano_calls'
   },
   'gemini-3.1-flash-lite': {
@@ -137,7 +141,7 @@ const AI_MODELS = {
     displayName: 'Gemini-3.1',
     temperature: 0.6,
     supportsVision: true,
-    cost: 1,
+    cost: '中消耗',
     statsColumn: 'gemini_31_calls'
   },
   'gemini-3.5-flash': {
@@ -147,7 +151,7 @@ const AI_MODELS = {
     displayName: 'Gemini-3.5',
     temperature: 0.6,
     supportsVision: true,
-    cost: 2,
+    cost: '高消耗',
     statsColumn: 'gemini_35_calls'
   },
   'GLM-5': {
@@ -157,7 +161,7 @@ const AI_MODELS = {
     displayName: 'GLM-5',
     temperature: 1.0,
     thinking: { type: "enabled" },
-    cost: 4,
+    cost: '中消耗',
     statsColumn: 'glm_5_calls'
   },
   'GLM-5.1': {
@@ -167,7 +171,7 @@ const AI_MODELS = {
     displayName: 'GLM-5.1',
     temperature: 1.0,
     thinking: { type: "enabled" },
-    cost: 4,
+    cost: '高消耗',
     statsColumn: 'glm_51_calls'
   },
   'GLM-4.7': {
@@ -177,7 +181,7 @@ const AI_MODELS = {
     displayName: 'GLM-4.7',
     temperature: 1.0,
     thinking: { type: "enabled" },
-    cost: 2,
+    cost: '低消耗',
     statsColumn: 'glm_47_calls'
   },
   'kimi-k2.6': {
@@ -187,7 +191,7 @@ const AI_MODELS = {
     displayName: 'Kimi-K2.6',
     thinking: { type: "enabled" },
     supportsVision: true,
-    cost: 4,
+    cost: '高消耗',
     statsColumn: 'kimi_k26_calls'
   },
   'kimi-k2.5': {
@@ -197,7 +201,7 @@ const AI_MODELS = {
     displayName: 'Kimi-K2.5',
     thinking: { type: "enabled" },
     supportsVision: true,
-    cost: 3,
+    cost: '高消耗',
     statsColumn: 'kimi_k25_calls'
   }
 };
@@ -233,10 +237,15 @@ function getSupportedModels() {
 }
 
 function getModelCosts() {
+  const { NORMAL_MODE_COST, VERIFY_MODE_COST } = require('./app-config');
   const costs = {};
+  // 各AI模型的消耗等级（汉字描述）
   for (const [modelId, entry] of Object.entries(AI_MODELS)) {
-    costs[modelId] = entry.cost || 1;
+    costs[modelId] = entry.cost || '低消耗';
   }
+  // 固定模式消耗（完整字符串，如"1次"、"1-3次"）
+  costs.normal = NORMAL_MODE_COST;
+  costs.verify = VERIFY_MODE_COST;
   return costs;
 }
 
@@ -319,7 +328,7 @@ function getDisplayName(apiModelName) {
   return MODEL_DISPLAY_MAP[apiModelName] || apiModelName;
 }
 
-// ==================== 模型价格表（元/百万Tokens，不考虑缓存命中价格） ====================
+// ==================== 模型价格表（元/百万Tokens，不考虑缓存命中价格）====================
 const MODEL_PRICING = {
   'DeepSeek-V3.2': { inputPerMillion: 2.03, outputPerMillion: 3.01 },
   'DeepSeek-R1-0528': { inputPerMillion: 4.20, outputPerMillion: 16.10 },
@@ -343,6 +352,27 @@ const MODEL_PRICING = {
   'kimi-k2.5': { inputPerMillion: 4.389, outputPerMillion: 23.10 }
 };
 
+// ==================== 预锁定机制 ====================
+// AI模式调用前，按模型消耗等级预锁定（冻结）一定次数，调用完成后按实际消耗结算
+// 防止并发请求导致余额透支，恶意用户无法在余额不足时发起AI请求
+// 预锁定是冻结预授权额度，不是扣费上限；最终扣费按实际token消耗计算，多退少不补
+const COST_PRELOCK = {
+  '低消耗': 4,   // 低消耗模型预锁定4次
+  '中消耗': 8,  // 中消耗模型预锁定8次
+  '高消耗': 16    // 高消耗模型预锁定16次
+};
+
+/**
+ * 根据模型ID获取预锁定次数
+ * @param {string} modelId - 模型ID
+ * @returns {number} 预锁定次数
+ */
+function getPrelockCount(modelId) {
+  const config = AI_MODELS[modelId];
+  if (!config) return COST_PRELOCK['低消耗']; // 未知模型按低消耗锁定
+  return COST_PRELOCK[config.cost] || COST_PRELOCK['低消耗'];
+}
+
 // 套餐综合单价（加权平均）：0.007 元/次
 const PRICE_PER_COUNT = 0.007;
 
@@ -359,7 +389,7 @@ function calculateCostFromTokens(modelId, promptTokens, completionTokens) {
   const pricing = MODEL_PRICING[modelId];
   if (!pricing) {
     // 未知模型默认扣1次
-    console.log(`⚠️ 未知模型定价: ${modelId}，默认扣除1次`);
+    console.log(`[WARN] 未知模型定价: ${modelId}，默认扣除1次`);
     return 1;
   }
 
@@ -368,8 +398,9 @@ function calculateCostFromTokens(modelId, promptTokens, completionTokens) {
   const outputCost = (completionTokens / 1000000) * pricing.outputPerMillion;
   const totalCost = inputCost + outputCost;
 
-  // 转换为次数（向上取整，不满1次按1次）
-  const count = Math.ceil(totalCost / PRICE_PER_COUNT);
+  // 转换为次数（保留1位小数向上取整，不满1次按1次）
+  const rawCount = totalCost / PRICE_PER_COUNT;
+  const count = Math.ceil(rawCount * 10) / 10;
   return Math.max(1, count);
 }
 
@@ -384,5 +415,7 @@ module.exports = {
   getDisplayName,
   MODEL_PRICING,
   PRICE_PER_COUNT,
+  COST_PRELOCK,
+  getPrelockCount,
   calculateCostFromTokens
 };

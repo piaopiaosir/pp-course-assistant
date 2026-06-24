@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.1.0
+// @version      3.2.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://wk.piao.one/assets/%E5%9B%BE%E5%B1%82%201-D6uQ9z8H.png
@@ -580,8 +580,29 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   };
   
   
+  const fetchSponsorUrl = async () => {
+    try {
+      const response = await new Promise((resolve, reject) => {
+        _GM_xmlhttpRequest({
+          method: 'GET',
+          url: `${CURRENT_SERVER}/sponsor-url`,
+          timeout: 5000,
+          onload: (res) => resolve(res),
+          onerror: (err) => reject(err),
+          ontimeout: () => reject(new Error('timeout'))
+        });
+      });
+      const data = JSON.parse(response.responseText);
+      if (data.code === 200 && data.data && data.data.sponsorUrl) {
+        SPONSOR_URL = data.data.sponsorUrl;
+      }
+    } catch (e) {}
+  };
+  
+  
   fetchModelConfig();
   fetchPollInterval();
+  fetchSponsorUrl();
   
   
   
@@ -1947,7 +1968,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const consumptionText = vue.computed(() => {
         watchUiUpdate();
         const answerParamsPart = __props.globalConfig.platformParams?.[__props.globalConfig.platformName]?.parts?.find(p => p.name === "答题参数");
-        if (!answerParamsPart) return "每题消耗约: 0.8—1 次";
+        if (!answerParamsPart) return "每题消耗约: 1 次";
         
         const aiModeParam = answerParamsPart.params.find(p => p.name === "AI模式");
         const normalModeParam = answerParamsPart.params.find(p => p.name === "正常模式");
@@ -1959,20 +1980,19 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         const isNormalModeActive = normalModeParam && normalModeParam.value;
         const isVerifyModeActive = verifyModeParam && verifyModeParam.value;
         
+        let cost;
         if (isNormalModeActive || (!isAiModeActive && !isVerifyModeActive)) {
-          return "每题消耗约: 1 次";
+          cost = modelCosts.value['normal'];
         } else if (isVerifyModeActive) {
-          return "每题消耗约: 2 次";
+          cost = modelCosts.value['verify'];
         } else if (isAiModeActive && aiTypeParam && aiModelParam) {
-          const currentAiType = aiTypeParam.value;
-          const currentAiModel = aiModelParam.value;
-          
-          const modelType = getModelType(currentAiType, currentAiModel);
-          
-          const cost = modelCosts.value[modelType] || 1;
-          return `每题消耗约: ${cost} 次`;
+          const modelType = getModelType(aiTypeParam.value, aiModelParam.value);
+          cost = modelCosts.value[modelType];
         }
-        return "每题消耗约: 1 次";
+        
+        if (cost == null) return "每题消耗约: 1 次";
+        
+        return /^\d/.test(cost) ? `每题消耗约: ${cost}` : `每题消耗: ${cost}`;
       });
       
       
@@ -8497,10 +8517,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     
     const modelType = getModelType(aiType, aiModel);
     
-    if ((useAIOnly || verifyAnswer) && !configStore.tokenVerified) {
-      return buildErrorResponse("AI模式和校验模式需要输入有效Token");
-    }
-
     const logStore = useLogStore();
     if (!window.__answerModeLogged && useAIOnly) {
       logStore.addLog(`🎯 AI模型: ${aiType} - ${aiModel}`, 'info');
@@ -8585,7 +8601,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                 const taskId = apiResponse.data.taskId;
                 pollQueryTask(taskId, resolve, globalPollInterval);
               } else {
-                resolve(buildErrorResponse(`意外响应码: ${apiResponse.code}, ${apiResponse.msg || ''}`));
+                resolve(apiResponse);
               }
             } catch (e) {
               resolve(buildErrorResponse("解析出错"));
@@ -8679,17 +8695,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       window.__inThinkingMode__ = false;
 
       return finalResponse;
-    }
-
-    
-    if (firstResponse.code === 403) {
-      
-      if (useAIOnly || verifyAnswer) {
-      return buildErrorResponse("AI模式和校验模式需要输入有效Token");
-    }
-    
-    
-    
     }
 
     return firstResponse;
@@ -8943,11 +8948,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               await this.fillQuestion(question);
               const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
               const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
-              this.addLog(`第${index + 1}道题搜索成功${sourceHint}${msgHint}`, "success");
-              this.addLog(`剩余次数:${answerData.data.num}`, "primary");
+              this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              if (answerData.data.cost !== undefined) {
+                this.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+              }
               this.correctNum += 1;
             } else {
               this.addLog(`第${index + 1}道题搜索失败: ${answerData.msg}`, "danger");
+              if (answerData.data?.sponsorUrl) {
+                this.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
+              }
               question.answer[0] = answerData.msg;
             }
             this.addQuestion(question);
@@ -11525,12 +11535,17 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         
         const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
         const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
-        logStore.addLog(`第${index + 1}道题搜索成功${sourceHint}${msgHint}`, "success");
-        logStore.addLog(`剩余次数:${answerData.data.num}`, "primary");
+        logStore.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+        if (answerData.data.cost !== undefined) {
+          logStore.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+        }
       } else {
         
         if (answerData.code === 403 && answerData.data && answerData.data.limitedMode) {
-          logStore.addLog(`第${index + 1}道题搜索失败: 免费题库无答案`, "danger");
+          logStore.addLog(`第${index + 1}道题搜索失败: ${answerData.msg}`, "danger");
+          if (answerData.data.sponsorUrl) {
+            logStore.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
+          }
           question.answer[0] = answerData.msg;
         } else if (answerData.code === 429 && answerData.data && answerData.data.limitedMode) {
           logStore.addLog(`第${index + 1}道题搜索失败: 今日免费查题已达上限`, "danger");
@@ -11547,6 +11562,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           question.answer[0] = (answerData.data.answer && answerData.data.answer[0]) || answerData.msg;
         } else {
           logStore.addLog(`第${index + 1}道题搜索失败: ${answerData.msg}`, "danger");
+          if (answerData.data?.sponsorUrl) {
+            logStore.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
+          }
           question.answer[0] = answerData.msg;
         }
       }
@@ -11718,10 +11736,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               
               const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
               const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
-              this.addLog(`第${index + 1}道题搜索成功${sourceHint}${msgHint}`, "success");
-              this.addLog(`剩余次数:${answerData.data.num}`, "primary");
+              this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              if (answerData.data.cost !== undefined) {
+                this.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+              }
             } else {
               this.addLog(`第${index + 1}道题搜索失败：${answerData.msg}`, "danger");
+              if (answerData.data?.sponsorUrl) {
+                this.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
+              }
               question.answer[0] = answerData.msg;
               this.addQuestion(question);
               await new Promise(r => setTimeout(r, 100));

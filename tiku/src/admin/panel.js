@@ -1,6 +1,6 @@
 const { escapeAttr, escapeJsTemplate } = require('./helpers');
 
-function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUsers, globalStats, hourlyRates, userTrends, queryTrends) {
+function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUsers, globalStats, hourlyRates) {
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp * 1000);
@@ -1345,10 +1345,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
       
       const hourlyRates = ${JSON.stringify(hourlyRates)};
       const globalStats = ${JSON.stringify(globalStats)};
-      const userTrends = ${JSON.stringify(userTrends || { days: [], total: [], paid: [], free: [] })};
-      const queryTrends = ${JSON.stringify(queryTrends || { hours: [], total: [], server1: [], server2: [], tiku: [], hivenet: [], yanxi: [], ucuc: [], ai: [], cache: [] })};
       
-      // Chart 1: AI Model Calls
+      // Chart 1: AI Model Calls (不依赖趋势数据，可立即渲染)
       const aiModels = [
         { label: 'DeepSeek-V3.2', value: globalStats.deepseek_v3_calls||0, color: colors.deepseek_v3 },
         { label: 'DeepSeek-R1', value: globalStats.deepseek_r1_calls||0, color: colors.deepseek_r1 },
@@ -1442,7 +1440,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         }
       });
       
-      // Chart 3: User Growth Trend (with range switch)
+      // Chart 3 & 4: 趋势图异步加载
       const userTrendDatasets = [
         { key: 'total', label: 'Total Users', borderColor: '#0071e3', bgFrom: 'rgba(0,113,227,0.16)', bgTo: 'rgba(0,113,227,0.0)' },
         { key: 'paid', label: 'Paid Users', borderColor: '#34d399', bgFrom: 'rgba(52,211,153,0.14)', bgTo: 'rgba(52,211,153,0.0)' },
@@ -1470,34 +1468,6 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         }
       });
 
-      function updateUserTrendChart(days) {
-        const sliceStart = userTrends.days.length - days;
-        const labels = userTrends.days.slice(sliceStart);
-        userTrendChart.data.labels = labels;
-        userTrendChart.data.datasets = userTrendDatasets.map(ds => {
-          const gradient = userTrendCtx.createLinearGradient(0, 0, 0, 300);
-          gradient.addColorStop(0, ds.bgFrom);
-          gradient.addColorStop(1, ds.bgTo);
-          return {
-            label: ds.label,
-            data: userTrends[ds.key].slice(sliceStart),
-            borderColor: ds.borderColor,
-            backgroundColor: gradient,
-            borderWidth: 2,
-            pointRadius: days <= 7 ? 3 : 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: ds.borderColor,
-            pointHoverBorderColor: '#ffffff',
-            pointHoverBorderWidth: 2,
-            tension: 0.3,
-            fill: true
-          };
-        });
-        userTrendChart.update();
-      }
-      updateUserTrendChart(30);
-      
-      // Chart 4: Query Rate (with range switch)
       const queryTrendCtx = document.getElementById('chartQueryRate').getContext('2d');
       const queryTrendChart = new Chart(queryTrendCtx, {
         type: 'line',
@@ -1531,12 +1501,44 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         { key: 'ai', label: 'AI', borderColor: '#ec4899', borderWidth: 2, borderDash: [6,4] }
       ];
 
+      // 存储趋势数据供范围切换使用
+      let cachedUserTrends = null;
+      let cachedQueryTrends = null;
+
+      function updateUserTrendChart(days) {
+        if (!cachedUserTrends) return;
+        const sliceStart = cachedUserTrends.days.length - days;
+        const labels = cachedUserTrends.days.slice(sliceStart);
+        userTrendChart.data.labels = labels;
+        userTrendChart.data.datasets = userTrendDatasets.map(ds => {
+          const gradient = userTrendCtx.createLinearGradient(0, 0, 0, 300);
+          gradient.addColorStop(0, ds.bgFrom);
+          gradient.addColorStop(1, ds.bgTo);
+          return {
+            label: ds.label,
+            data: cachedUserTrends[ds.key].slice(sliceStart),
+            borderColor: ds.borderColor,
+            backgroundColor: gradient,
+            borderWidth: 2,
+            pointRadius: days <= 7 ? 3 : 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: ds.borderColor,
+            pointHoverBorderColor: '#ffffff',
+            pointHoverBorderWidth: 2,
+            tension: 0.3,
+            fill: true
+          };
+        });
+        userTrendChart.update();
+      }
+
       function updateQueryRateChart(hours) {
-        const sliceStart = queryTrends.hours.length - hours;
-        queryTrendChart.data.labels = queryTrends.hours.slice(sliceStart);
+        if (!cachedQueryTrends) return;
+        const sliceStart = cachedQueryTrends.hours.length - hours;
+        queryTrendChart.data.labels = cachedQueryTrends.hours.slice(sliceStart);
         queryTrendChart.data.datasets = queryDatasets.map(ds => ({
           label: ds.label,
-          data: queryTrends[ds.key].slice(sliceStart),
+          data: cachedQueryTrends[ds.key].slice(sliceStart),
           borderColor: ds.borderColor,
           backgroundColor: 'transparent',
           borderWidth: ds.borderWidth,
@@ -1548,7 +1550,18 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         }));
         queryTrendChart.update();
       }
-      updateQueryRateChart(24);
+
+      // 异步请求趋势数据
+      fetch('/admin/chart-trends', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) { console.error('加载趋势数据失败:', data.error); return; }
+          cachedUserTrends = data.userTrends;
+          cachedQueryTrends = data.queryTrends;
+          updateUserTrendChart(30);
+          updateQueryRateChart(24);
+        })
+        .catch(function(e) { console.error('加载趋势数据失败:', e); });
 
       // Range button click handlers
       document.querySelectorAll('.chart-range-btns').forEach(group => {

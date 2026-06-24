@@ -1,6 +1,6 @@
 const { Hono } = require('hono');
 const http = require('http');
-const { db, getEnv, getGlobalStats, PORT, FREE_MODE, LATEST_VERSION, SPONSOR_URL } = require('./config');
+const { db, pool, getEnv, getGlobalStats, PORT, FREE_MODE, INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL } = require('./config');
 const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
 const { refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
 const { getTypeDescription, getClientIp } = require('./utils');
@@ -118,6 +118,14 @@ app.use('*', async (c, next) => {
 const fs = require('fs');
 const path = require('path');
 
+app.get('/sponsor-url', async (c) => {
+  return c.json({
+    code: 200,
+    msg: 'success',
+    data: { sponsorUrl: SPONSOR_URL }
+  });
+});
+
 app.get('/poll-interval', async (c) => {
   return c.json({
     code: 200,
@@ -163,7 +171,7 @@ app.get('/internal/code', async (c) => {
     const files = {};
     const srcDir = __dirname;
     
-    const codeFiles = ['config.js', 'auth.js', 'tiku.js', 'routes.js', 'mode-handler.js', 'ip-security.js', 'utils.js', 'admin.js', 'admin-helpers.js', 'admin-login.js', 'admin-panel.js', 'tavily-search.js', 'recheck.js', 'admin-session.js', 'admin-routes.js', 'query-tasks.js', 'remote-scripts.js'];
+    const codeFiles = ['config.js', 'auth.js', 'tiku.js', 'routes.js', 'mode-handler.js', 'ip-security.js', 'utils.js', 'tavily-search.js', 'recheck.js', 'query-tasks.js', 'remote-scripts.js'];
     
     for (const file of codeFiles) {
       let filePath;
@@ -174,19 +182,15 @@ app.get('/internal/code', async (c) => {
       }
     }
     
-    const modesDir = path.join(srcDir, 'modes');
-    if (fs.existsSync(modesDir)) {
-      const modeFiles = fs.readdirSync(modesDir).filter(f => f.endsWith('.js'));
-      for (const file of modeFiles) {
-        files[`modes/${file}`] = fs.readFileSync(path.join(modesDir, file), 'utf-8');
-      }
-    }
-    
-    const configDir = path.join(srcDir, 'config');
-    if (fs.existsSync(configDir)) {
-      const configFiles = fs.readdirSync(configDir).filter(f => f.endsWith('.js'));
-      for (const file of configFiles) {
-        files[`config/${file}`] = fs.readFileSync(path.join(configDir, file), 'utf-8');
+    // 扫描 src 下的子目录（modes, config, tiku, admin 等）
+    const subDirs = ['modes', 'config', 'tiku', 'admin'];
+    for (const subDir of subDirs) {
+      const dirPath = path.join(srcDir, subDir);
+      if (fs.existsSync(dirPath)) {
+        const subFiles = fs.readdirSync(dirPath).filter(f => f.endsWith('.js'));
+        for (const file of subFiles) {
+          files[`${subDir}/${file}`] = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+        }
       }
     }
     
@@ -283,7 +287,7 @@ app.post('/api/tiku', async (c) => {
     if (globalUsed >= GLOBAL_DAILY_QUOTA) {
       return c.json({
         code: 429,
-        msg: '今日接口调用次数已达上限（5000次），请明日再试',
+        msg: `今日接口调用次数已达上限（${GLOBAL_DAILY_QUOTA}次），请明日再试`,
         data: { used: globalUsed, total: GLOBAL_DAILY_QUOTA }
       }, 429);
     }
@@ -387,7 +391,7 @@ app.get('/notice', async (c) => {
       enabled: noticeEnabled,
       type: noticeType,
       message: noticeMessage,
-      title: '📢 系统公告'
+      title: '[NOTICE] 系统公告'
     }
   });
 });
@@ -477,7 +481,7 @@ app.post('/report-answer-results', async (c) => {
       const wasRecentlyQueried = isRecentlyQueried(questionHash);
       
       if (!wasRecentlyQueried) {
-        console.log(`⚠️ 题目不在最近查询记录中 ${questionHash.substring(0, 8)}，记录但不立即应用`);
+        console.log(`[WARN] 题目不在最近查询记录中 ${questionHash.substring(0, 8)}，记录但不立即应用`);
       }
       
       const reportResult = await recordCorrectnessReport(
@@ -569,53 +573,61 @@ app.post('/welfare', async (c) => {
     }
 
     if (targetUserId) {
-      // 原子操作：同时检查并设置 welfare_claimed，防止并发重复领取
-      const claimResult = await db.prepare(
-        'UPDATE user_ids SET welfare_claimed = 1 WHERE user_id = ? AND (welfare_claimed = 0 OR welfare_claimed IS NULL)'
-      ).run(targetUserId);
-      if (claimResult.changes === 0) {
-        return c.json({ code: 400, msg: '您已领取过免费次数，每人仅限一次' }, 400);
+      // 事务化福利领取：原子检查 welfare_claimed + 解封 + 加次数 + 更新 user_ids
+      // 保证多步操作的原子性，避免中途失败导致状态不一致
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+
+        // 原子操作：同时检查并设置 welfare_claimed，防止并发重复领取
+        const [claimResult] = await conn.execute(
+          'UPDATE user_ids SET welfare_claimed = 1 WHERE user_id = ? AND (welfare_claimed = 0 OR welfare_claimed IS NULL)',
+          [targetUserId]
+        );
+        if (claimResult.affectedRows === 0) {
+          await conn.rollback();
+          return c.json({ code: 400, msg: '您已领取过免费次数，每人仅限一次' }, 400);
+        }
+
+        // 仅在剩余次数不足时解封（H-13修复：不无条件解封）
+        if (targetToken.is_blacklisted === 1 && targetToken.remaining_count < 0.1) {
+          await conn.execute('UPDATE tokens SET is_blacklisted = 0 WHERE token = ?', [targetToken.token]);
+          console.log(`[福利领取] Token ${targetToken.token.substring(0, 8)}*** 已自动解封`);
+        }
+
+        let addedCount = 200;
+        if (mode === 'random') {
+          const rand = Math.random();
+          if (rand < 0.6) {
+            addedCount = 1 + Math.floor(Math.random() * 200);
+          } else if (rand < 0.9) {
+            addedCount = 200 + Math.floor(Math.random() * 101);
+          } else {
+            addedCount = 300 + Math.floor(Math.random() * 101);
+          }
+        }
+
+        await conn.execute('UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?', [addedCount, targetToken.token]);
+
+        await conn.commit();
+
+        console.log(`[福利领取] ${targetUserId ? `用户 ${targetUserId}` : 'Token无绑定用户'} 领取${addedCount}次（${mode === 'random' ? '随机' : '固定'}），Token: ${targetToken.token.substring(0, 8)}***，原余额: ${targetToken.remaining_count}，已解封: ${targetToken.is_blacklisted === 1}`);
+
+        return c.json({
+          code: 200,
+          msg: `领取成功！已为您的账号添加${addedCount}次查询次数`,
+          data: { addedCount, newTotal: targetToken.remaining_count + addedCount, token: targetToken.token, mode: mode === 'random' ? 'random' : 'fixed' }
+        });
+      } catch (txnErr) {
+        await conn.rollback();
+        console.error('[福利领取] 事务失败:', txnErr.message);
+        return c.json({ code: 500, msg: '领取失败，请稍后重试' }, 500);
+      } finally {
+        conn.release();
       }
     } else {
       return c.json({ code: 400, msg: '该Token未绑定用户ID，无法领取次数' }, 400);
     }
-
-    // 仅在剩余次数不足时解封（H-13修复：不无条件解封）
-    if (targetToken.is_blacklisted === 1 && targetToken.remaining_count < 0.1) {
-      await db.prepare('UPDATE tokens SET is_blacklisted = 0 WHERE token = ?').run(targetToken.token);
-      console.log(`[福利领取] Token ${targetToken.token.substring(0, 8)}*** 已自动解封`);
-    }
-
-    let addedCount = 200;
-    if (mode === 'random') {
-      const rand = Math.random();
-      if (rand < 0.6) {
-        addedCount = 1 + Math.floor(Math.random() * 200);
-      } else if (rand < 0.9) {
-        addedCount = 200 + Math.floor(Math.random() * 101);
-      } else {
-        addedCount = 300 + Math.floor(Math.random() * 101);
-      }
-    }
-
-    await db.prepare('UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?').run(addedCount, targetToken.token);
-
-    if (targetUserId) {
-      const user = await db.prepare('SELECT welfare_claimed FROM user_ids WHERE user_id = ?').get(targetUserId);
-      if (user) {
-        await db.prepare('UPDATE user_ids SET welfare_claimed = 1 WHERE user_id = ?').run(targetUserId);
-      } else {
-        await db.prepare('INSERT INTO user_ids (user_id, welfare_claimed) VALUES (?, 1)').run(targetUserId);
-      }
-    }
-
-    console.log(`[福利领取] ${targetUserId ? `用户 ${targetUserId}` : 'Token无绑定用户'} 领取${addedCount}次（${mode === 'random' ? '随机' : '固定'}），Token: ${targetToken.token.substring(0, 8)}***，原余额: ${targetToken.remaining_count}，已解封: ${targetToken.is_blacklisted === 1}`);
-
-    return c.json({
-      code: 200,
-      msg: `领取成功！已为您的账号添加${addedCount}次查询次数`,
-      data: { addedCount, newTotal: targetToken.remaining_count + addedCount, token: targetToken.token, mode: mode === 'random' ? 'random' : 'fixed' }
-    });
   } catch (e) {
     console.error('[福利领取] 处理失败:', e.message);
     return c.json({ code: 500, msg: '领取失败，请稍后重试' }, 500);
@@ -706,7 +718,7 @@ app.get('/', async (c) => {
     console.log(`[Token验证] 非法 workType: "${workType}"，拒绝请求`);
     return c.json({
       code: 403,
-      msg: `不支持的平台类型: ${workType || '(空)'}`,
+      msg: '请更新最新的用户端，可正常使用',
       data: { valid: false }
     }, 403);
   }
@@ -725,8 +737,8 @@ app.get('/', async (c) => {
       console.log(`为新用户 ${userId} 生成Token: ${newToken}, IP: ${userIp}, fid: ${fid || '未知'}`);
       return c.json({
         code: 200,
-        msg: '欢迎新用户！已为您生成Token，赠送40次查询额度',
-        data: { valid: true, num: FREE_MODE ? 999999 : 40, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
+        msg: `欢迎新用户！已为您生成Token，赠送${FREE_MODE ? 999999 : INITIAL_COUNT}次查询额度`,
+        data: { valid: true, num: FREE_MODE ? 999999 : INITIAL_COUNT, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
       });
     } else {
       const validTokens = await getUserValidTokens(userId);
@@ -839,25 +851,25 @@ app.post('/', async (c) => {
     let workType = (questionData?.workType || '').trim();
     if (['zy', 'ks', 'zj'].includes(workType)) workType = 'cx';
     if (!workType || !ALLOWED_WORK_TYPES.includes(workType)) {
-      log(`⚠️ 非法 workType: "${workType}"，拒绝请求`);
+      log(`[WARN] 非法 workType: "${workType}"，拒绝请求`);
       return c.json({
         code: 403,
-        msg: `不支持的平台类型: ${workType || '(空)'}`,
-        data: { answer: ['平台类型不支持'], num: 0 }
+        msg: '请更新最新的用户端，可正常使用',
+        data: { answer: ['请更新最新的用户端，可正常使用'], num: 0 }
       }, 403);
     }
 
-    log(`━━━ 开始处理请求 ━━━`);
+    log(`=== 开始处理请求 ===`);
     log(`enableWebSearch: ${enableWebSearch}`);
     log(`fid: ${fid || '未提供'}`);
     
     if (FREE_MODE) {
-      log("🌟 免费模式已开启，跳过Token验证和次数扣除");
+      log("[STAR] 免费模式已开启，跳过Token验证和次数扣除");
     }
     
     const clientIp = getClientIp(c);
     
-    log("━━━ 请求参数 ━━━");
+    log("=== 请求参数 ===");
     log(`verifyAnswer: ${verifyAnswer} (${typeof verifyAnswer})`);
     log(`userId: ${userId}`);
     
@@ -865,14 +877,14 @@ app.post('/', async (c) => {
     
     if (!FREE_MODE) {
       if (!token) {
-        log("⚠️ 无Token，进入受限模式（仅查询缓存）");
+        log("[WARN] 无Token，进入受限模式（仅查询缓存）");
         limitedMode = true;
       } else {
         const verifyResult = verifyUserToken(token, masterSecret);
-        log(`Token验证: ${verifyResult.valid ? "✓ 通过" : "✗ 失败"} - ${verifyResult.message}`);
+        log(`Token验证: ${verifyResult.valid ? "[OK] 通过" : "[X] 失败"} - ${verifyResult.message}`);
         
         if (!verifyResult.valid) {
-          log("⚠️ Token无效，进入受限模式（仅查询缓存）");
+          log("[WARN] Token无效，进入受限模式（仅查询缓存）");
           limitedMode = true;
         } else {
           const tokenRecord = await initOrGetToken(token, userId, verifyResult.count, clientIp);
@@ -882,7 +894,7 @@ app.post('/', async (c) => {
             const tokenOwnerId = tokenRecord.record.user_id;
 
             if (tokenOwnerId && tokenOwnerId !== userId) {
-              log(`⚠️ 免费Token不属于当前用户 (Token所有者: ${tokenOwnerId}, 当前用户: ${userId})`);
+              log(`[WARN] 免费Token不属于当前用户 (Token所有者: ${tokenOwnerId}, 当前用户: ${userId})`);
 
               return c.json({
                 code: 403,
@@ -894,10 +906,10 @@ app.post('/', async (c) => {
 
           const skipUserIdCheck = workType === 'zhs' || workType === 'ouchn';
           const checkResult = await checkTokenStatus(token, userId, skipUserIdCheck);
-          log(`次数检查: ${checkResult.success ? `✓ 剩余${checkResult.remainingCount}次` : "✗ " + checkResult.message}`);
+          log(`次数检查: ${checkResult.success ? `[OK] 剩余${checkResult.remainingCount}次` : "[X] " + checkResult.message}`);
 
           if (!checkResult.success) {
-            log("⚠️ 次数不足，进入受限模式（仅查询缓存）");
+            log("[WARN] 次数不足，进入受限模式（仅查询缓存）");
             limitedMode = true;
           }
         }
@@ -911,8 +923,8 @@ app.post('/', async (c) => {
       if (!quotaCheck.allowed) {
         return c.json({
           code: 429,
-          msg: '今日免费查题100次已达上限，明日再试',
-          data: { limitedMode: true, answer: ['今日免费查题已达上限，明日再试'], num: 0, dailyQuotaUsed: quotaCheck.used, sponsorUrl: SPONSOR_URL }
+          msg: `今日免费查题${quotaCheck.total}次已达上限，明日再试`,
+          data: { limitedMode: true, answer: [`今日免费查题已达上限，明日再试`], num: 0, dailyQuotaUsed: quotaCheck.used, sponsorUrl: SPONSOR_URL }
         }, 429);
       }
     }
@@ -920,14 +932,14 @@ app.post('/', async (c) => {
     if (limitedMode && (aiMode === true || aiMode === 'true' || verifyAnswer === true)) {
       return c.json({
         code: 403,
-        msg: 'AI模式和校验模式需要输入有效Token',
-        data: { limitedMode: true, answer: [], num: 0 }
+        msg: 'AI模式和校验模式需要输入有效Token，赞助获取token解锁',
+        data: { limitedMode: true, answer: [], num: 0, sponsorUrl: SPONSOR_URL }
       }, 403);
     }
     
     const { async: supportAsync } = body;
     if (supportAsync !== true) {
-      log("⚠️ 检测到老客户端请求，拒绝服务");
+      log("[WARN] 检测到老客户端请求，拒绝服务");
       return c.json({
         code: 426,
         msg: '您的脚本版本过旧，无法使用题库查询功能。请更新到最新版本以继续使用。',
@@ -1074,9 +1086,9 @@ app.post('/', async (c) => {
   }
 });
 
-console.log(`\n🚀 服务启动中...`);
-console.log(`📍 地址: http://localhost:${PORT}`);
-console.log(`📊 管理面板: http://localhost:${PORT}/admin`);
+console.log(`\n[ROCKET] 服务启动中...`);
+console.log(`[INFO] 地址: http://localhost:${PORT}`);
+console.log(`[STAT] 管理面板: http://localhost:${PORT}/admin`);
 
 // PP题库请求日志7天自动清理
 const _ppLogCleanupTimer = setInterval(async () => {
@@ -1091,19 +1103,19 @@ const _ppLogCleanupTimer = setInterval(async () => {
   }
 }, 24 * 60 * 60 * 1000);
 if (FREE_MODE) {
-  console.log(`🌟 免费模式: 已开启 (无需Token验证，不扣除次数)`);
+  console.log(`[STAR] 免费模式: 已开启 (无需Token验证，不扣除次数)`);
 } else {
-  console.log(`🔑 免费模式: 未开启 (需要Token验证)`);
+  console.log(`[KEY] 免费模式: 未开启 (需要Token验证)`);
 }
 
 (async () => {
   try {
     const whitelist = await getIpWhitelist();
     if (whitelist.length > 0) {
-      console.log(`🛡️ IP白名单: ${whitelist.join(', ')}`);
+      console.log(`[SHIELD] IP白名单: ${whitelist.join(', ')}`);
     }
   } catch (e) {
-    console.log(`🛡️ IP白名单: 暂无`);
+    console.log(`[SHIELD] IP白名单: 暂无`);
   }
 })();
 console.log();
@@ -1119,16 +1131,16 @@ const allTimers = [
 ];
 
 function gracefulShutdown() {
-  console.log('\n🛑 正在关闭服务器...');
+  console.log('\n[STOP] 正在关闭服务器...');
   for (const timer of allTimers) {
     clearInterval(timer);
   }
   server.close(() => {
-    console.log('✅ 服务器已关闭');
+    console.log('[OK] 服务器已关闭');
     process.exit(0);
   });
   setTimeout(() => {
-    console.log('⚠️ 强制关闭服务器');
+    console.log('[WARN] 强制关闭服务器');
     process.exit(1);
   }, 5000);
 }
@@ -1204,13 +1216,13 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`✅ 服务器已启动，监听端口 ${PORT}`);
+  console.log(`[OK] 服务器已启动，监听端口 ${PORT}`);
   
   const secondServer = getEnv('SECOND_SERVER_URL');
   if (secondServer && getEnv('SKIP_KEY_REFRESH') !== 'true') {
     try {
       const url = new URL(secondServer);
-      console.log(`🔔 通知第二台服务器同步: ${secondServer}/sync`);
+      console.log(`[BELL] 通知第二台服务器同步: ${secondServer}/sync`);
       
       http.request({
         hostname: url.hostname,
@@ -1227,16 +1239,16 @@ server.listen(PORT, () => {
         res.on('end', () => {
           try {
             const result = JSON.parse(data);
-            console.log(`✓ 第二台服务器同步结果:`, result.msg || '成功');
+            console.log(`[OK] 第二台服务器同步结果:`, result.msg || '成功');
           } catch (e) {
-            console.log(`✓ 第二台服务器已通知`);
+            console.log(`[OK] 第二台服务器已通知`);
           }
         });
       }).on('error', (e) => {
-        console.log(`⚠️ 无法通知第二台服务器: ${e.message}`);
+        console.log(`[WARN] 无法通知第二台服务器: ${e.message}`);
       }).end();
     } catch (e) {
-      console.log(`⚠️ 第二台服务器URL配置错误: ${e.message}`);
+      console.log(`[WARN] 第二台服务器URL配置错误: ${e.message}`);
     }
   }
   
@@ -1244,11 +1256,11 @@ server.listen(PORT, () => {
     const key1 = getEnv('TIKU_API_KEY_1');
     const key2 = getEnv('TIKU_API_KEY_2');
     if (key1 || key2) {
-      console.log(`🔄 正在刷新题库海密钥剩余次数...`);
+      console.log(`[SWITCH] 正在刷新题库海密钥剩余次数...`);
       refreshAllTikuKeys().then(results => {
-        console.log(`✓ 题库海密钥刷新完成: 密钥1=${results.key1 ?? '未配置'}, 密钥2=${results.key2 ?? '未配置'}`);
+        console.log(`[OK] 题库海密钥刷新完成: 密钥1=${results.key1 ?? '未配置'}, 密钥2=${results.key2 ?? '未配置'}`);
       }).catch(e => {
-        console.error(`✗ 题库海密钥刷新失败:`, e.message);
+        console.error(`[X] 题库海密钥刷新失败:`, e.message);
       });
       
       function scheduleDailyRefresh() {
@@ -1258,14 +1270,14 @@ server.listen(PORT, () => {
         tomorrow.setHours(0, 0, 0, 0);
         const msUntilMidnight = tomorrow - now;
         
-        console.log(`⏰ 下次刷新时间: ${tomorrow.toLocaleString('zh-CN')}`);
+        console.log(`[CLOCK] 下次刷新时间: ${tomorrow.toLocaleString('zh-CN')}`);
         
         setTimeout(() => {
-          console.log(`\n🔄 [定时任务] 每日0点刷新题库海密钥...`);
+          console.log(`\n[SWITCH] [定时任务] 每日0点刷新题库海密钥...`);
           refreshAllTikuKeys().then(results => {
-            console.log(`✓ [定时任务] 刷新完成: 密钥1=${results.key1 ?? '未配置'}, 密钥2=${results.key2 ?? '未配置'}`);
+            console.log(`[OK] [定时任务] 刷新完成: 密钥1=${results.key1 ?? '未配置'}, 密钥2=${results.key2 ?? '未配置'}`);
           }).catch(e => {
-            console.error(`✗ [定时任务] 刷新失败:`, e.message);
+            console.error(`[X] [定时任务] 刷新失败:`, e.message);
           }).finally(() => {
             scheduleDailyRefresh();
           });

@@ -48,7 +48,7 @@ async function saveAnswerToCache(questionHash, question, options, type, answer, 
     // ========== 清洗后再校验 ==========
     const validation = validateAnswer(type, cleanedAnswer, options);
     if (!validation.valid) {
-      console.log("⚠️ 答案校验失败，跳过缓存:", validation.reason);
+      console.log("[WARN] 答案校验失败，跳过缓存:", validation.reason);
       return;
     }
     
@@ -149,7 +149,7 @@ async function recordCorrectnessReport(questionHash, token, userId, clientIp, is
     // 直接应用更新（不需要多人验证）
     const applied = await applyCorrectnessUpdate(questionHash, isCorrect, type);
     
-    console.log(`✅ 单次上报已生效: ${questionHash.substring(0, 8)} (${isCorrect === 1 ? '正确' : '错误'})`);
+    console.log(`[OK] 单次上报已生效: ${questionHash.substring(0, 8)} (${isCorrect === 1 ? '正确' : '错误'})`);
     
     return { applied, pending: false };
     
@@ -187,7 +187,7 @@ async function applyCorrectnessUpdate(questionHash, isCorrect, type) {
               "UPDATE answer_cache SET answer = ?, is_correct = 1 WHERE question_hash = ?"
             ).run(JSON.stringify([reversedAnswer]), questionHash);
             
-            console.log(`✓ 判断题答案已更正: ${questionHash.substring(0, 8)} "${judgeAnswer}" -> "${reversedAnswer}"`);
+            console.log(`[OK] 判断题答案已更正: ${questionHash.substring(0, 8)} "${judgeAnswer}" -> "${reversedAnswer}"`);
             return true;
           }
         }
@@ -200,10 +200,10 @@ async function applyCorrectnessUpdate(questionHash, isCorrect, type) {
     ).run(isCorrect, questionHash);
     
     if (result.changes > 0) {
-      console.log(`✓ 更新答案正确性标记: ${questionHash.substring(0, 8)} -> ${isCorrect === 1 ? '正确' : '错误'}`);
+      console.log(`[OK] 更新答案正确性标记: ${questionHash.substring(0, 8)} -> ${isCorrect === 1 ? '正确' : '错误'}`);
       return true;
     } else {
-      console.log(`⚠️ 未找到缓存记录: ${questionHash.substring(0, 8)}`);
+      console.log(`[WARN] 未找到缓存记录: ${questionHash.substring(0, 8)}`);
       return false;
     }
   } catch (e) {
@@ -223,13 +223,13 @@ function validateSourceAnswer(sourceName, type, answers, options) {
   if (type === "1" && answers.length === 1) {
     return { valid: false, reason: `${sourceName}答案与题型不匹配(多选返回单答案)` };
   }
-  // 多选题全选校验
+  // 多选题答案数超过选项数校验（全选=选项数是合理的，超过才异常）
   if (type === "1" && options) {
     const optionCount = (typeof options === 'string')
       ? options.split(/[,\s]+/).filter(o => o.trim()).length
       : (Array.isArray(options) ? options.length : 0);
-    if (optionCount > 0 && answers.length >= optionCount) {
-      return { valid: false, reason: `${sourceName}答案校验失败(多选题全选)` };
+    if (optionCount > 0 && answers.length > optionCount) {
+      return { valid: false, reason: `${sourceName}答案校验失败(多选题答案数超过选项数)` };
     }
   }
   // 单选/多选验证：答案必须存在于选项中
@@ -259,7 +259,7 @@ function validateSourceAnswer(sourceName, type, answers, options) {
   // 判断题格式校验
   if (type === "3" && answers.length > 0) {
     const ans = String(answers[0]).trim();
-    const validJudge = ['正确', '错误', '对', '错', '√', '×', '✓', '✗', 'true', 'false', 't', 'f'];
+    const validJudge = ["正确", "错误", "对", "错", "√", "×", "✓", "✗", "true", "false", "t", "f"];
     const normalized = ans.toLowerCase().replace(/[，。！？、；：""''（）【】\s]/g, '').replace(/[,\.!?;:'"()\[\]]/g, '');
     if (!validJudge.some(v => normalized === v)) {
       return { valid: false, reason: `${sourceName}判断题答案格式异常: "${ans}"` };
@@ -273,17 +273,17 @@ function reverseJudgeAnswer(answer) {
   const normalized = answer.trim().toLowerCase();
   
   // 正确 -> 错误
-  if (['正确', '对', '√', '✓', 'true', 't', '是'].includes(normalized)) {
+  if (["正确", "对", "√", "✓", "true", "t", "是"].includes(normalized)) {
     return '错误';
   }
   
   // 错误 -> 正确
-  if (['错误', '错', '×', '✗', 'false', 'f', '否'].includes(normalized)) {
+  if (["错误", "错", "×", "✗", "false", "f", "否"].includes(normalized)) {
     return '正确';
   }
   
   // 无法识别的格式，返回 null
-  console.log(`⚠️ 无法识别判断题答案格式: "${answer}"`);
+  console.log(`[WARN] 无法识别判断题答案格式: "${answer}"`);
   return null;
 }
 

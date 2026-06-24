@@ -18,7 +18,7 @@ async function incrementTikuCalls() {
     await db.prepare(
       "UPDATE global_stats SET tiku_calls_count = tiku_calls_count + 1, updated_at = ? WHERE id = 1"
     ).run(Math.floor(Date.now() / 1000));
-    console.log("✓ 题库海调用次数已更新");
+    console.log("[OK] 题库海调用次数已更新");
   } catch (e) {
     console.error("更新题库海调用次数失败:", e.message);
   }
@@ -32,7 +32,7 @@ async function updateHiveNetRemaining(remaining) {
     await db.prepare(
       "UPDATE global_stats SET hivenet_remaining = ?, updated_at = ? WHERE id = 1"
     ).run(remaining, Math.floor(Date.now() / 1000));
-    console.log("✓ Hive-Net 剩余次数已更新:", remaining);
+    console.log("[OK] Hive-Net 剩余次数已更新:", remaining);
   } catch (e) {
     console.error("更新 Hive-Net 剩余次数失败:", e.message);
   }
@@ -44,7 +44,7 @@ async function incrementHiveNetCalls() {
     await db.prepare(
       "UPDATE global_stats SET hivenet_calls_count = hivenet_calls_count + 1, updated_at = ? WHERE id = 1"
     ).run(Math.floor(Date.now() / 1000));
-    console.log("✓ Hive-Net 调用次数已更新");
+    console.log("[OK] Hive-Net 调用次数已更新");
   } catch (e) {
     console.error("更新 Hive-Net 调用次数失败:", e.message);
   }
@@ -56,7 +56,7 @@ async function updateUcucRemaining(remaining) {
     await db.prepare(
       "UPDATE global_stats SET ucuc_remaining = ?, updated_at = ? WHERE id = 1"
     ).run(remaining, Math.floor(Date.now() / 1000));
-    console.log("✓ UCUC 题库剩余次数已更新:", remaining);
+    console.log("[OK] UCUC 题库剩余次数已更新:", remaining);
   } catch (e) {
     console.error("更新 UCUC 剩余次数失败:", e.message);
   }
@@ -68,7 +68,7 @@ async function incrementUcucCalls() {
     await db.prepare(
       "UPDATE global_stats SET ucuc_calls_count = ucuc_calls_count + 1, updated_at = ? WHERE id = 1"
     ).run(Math.floor(Date.now() / 1000));
-    console.log("✓ UCUC 题库调用次数已更新");
+    console.log("[OK] UCUC 题库调用次数已更新");
   } catch (e) {
     console.error("更新 UCUC 调用次数失败:", e.message);
   }
@@ -82,7 +82,7 @@ async function updateYanxiRemaining(remaining) {
     await db.prepare(
       "UPDATE global_stats SET yanxi_remaining = ?, updated_at = ? WHERE id = 1"
     ).run(remaining, Math.floor(Date.now() / 1000));
-    console.log("✓ 言溪题库剩余次数已更新:", remaining);
+    console.log("[OK] 言溪题库剩余次数已更新:", remaining);
   } catch (e) {
     console.error("更新言溪题库剩余次数失败:", e.message);
   }
@@ -94,7 +94,7 @@ async function incrementYanxiCalls() {
     await db.prepare(
       "UPDATE global_stats SET yanxi_calls_count = yanxi_calls_count + 1, updated_at = ? WHERE id = 1"
     ).run(Math.floor(Date.now() / 1000));
-    console.log("✓ 言溪题库调用次数已更新");
+    console.log("[OK] 言溪题库调用次数已更新");
   } catch (e) {
     console.error("更新言溪题库调用次数失败:", e.message);
   }
@@ -125,7 +125,7 @@ async function incrementCacheHits() {
     await db.prepare(
       "UPDATE global_stats SET cache_hits_count = cache_hits_count + 1, updated_at = ? WHERE id = 1"
     ).run(Math.floor(Date.now() / 1000));
-    console.log("✓ 缓存命中次数已更新");
+    console.log("[OK] 缓存命中次数已更新");
   } catch (e) {
     console.error("更新缓存命中次数失败:", e.message);
   }

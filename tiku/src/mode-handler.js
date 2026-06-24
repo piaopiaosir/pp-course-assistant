@@ -60,7 +60,7 @@ async function handleQuery(c, params) {
 
   // 校验模式
   if (verifyAnswer === true) {
-    log("━━━ 使用校验模式 ━━━");
+    log("=== 使用校验模式 ===");
     return handleVerifyMode(c, {
       token,
       userId,
@@ -78,7 +78,7 @@ async function handleQuery(c, params) {
 
   // AI模式
   if (aiMode === true || aiMode === 'true') {
-    log("━━━ 使用AI模式 ━━━");
+    log("=== 使用AI模式 ===");
     log(`enableWebSearch: ${enableWebSearch}`);
     return handleAIMode(c, {
       token,
@@ -95,7 +95,7 @@ async function handleQuery(c, params) {
   }
 
   // 正常模式（默认）
-  log("━━━ 使用正常模式 ━━━");
+  log("=== 使用正常模式 ===");
     return handleNormalMode(c, {
       token,
       userId,

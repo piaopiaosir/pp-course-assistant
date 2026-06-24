@@ -16,7 +16,7 @@ async function logAdminAccess(ip, sessionId, action, userAgent) {
       INSERT INTO admin_access_logs (ip, session_id, action, user_agent, ip_location, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(ip, sessionId || '', action, userAgent || '', location, Math.floor(Date.now() / 1000));
-    console.log(`[管理面板访问记录] ✓ ${ip}(${location}) ${action} session=${sessionId?.substring(0,8)}...`);
+    console.log(`[管理面板访问记录] [OK] ${ip}(${location}) ${action} session=${sessionId?.substring(0,8)}...`);
   } catch (e) {
     console.error('[管理面板访问记录] 写入失败:', e.message);
   }

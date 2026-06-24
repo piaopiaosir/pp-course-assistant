@@ -302,7 +302,7 @@ function retryWithStrippedPunctuation(questionData, answers) {
     });
     if (match) {
       fixed.push(String(match).trim());
-      console.log(`✓ 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
+      console.log(`[OK] 去标点匹配成功: "${ans}" -> "${String(match).trim()}"`);
     } else {
       return null; // 有答案匹配不上，放弃
     }

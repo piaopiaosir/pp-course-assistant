@@ -223,7 +223,7 @@ async function initDatabase() {
     try {
       const columns = await db.prepare("SHOW COLUMNS FROM global_stats LIKE 'tavily_current_key'").all();
       if (columns.length === 0) {
-        console.log('🔄 添加Tavily密钥管理字段...');
+        console.log('[SWITCH] 添加Tavily密钥管理字段...');
         const addColumns = [];
         addColumns.push("ADD COLUMN tavily_current_key INT DEFAULT 1 COMMENT '当前使用的Tavily密钥索引(1-50)'");
         for (let i = 1; i <= 50; i++) {
@@ -231,10 +231,10 @@ async function initDatabase() {
         }
         addColumns.push("ADD COLUMN tavily_last_reset_date VARCHAR(7) DEFAULT '' COMMENT '上次重置日期(格式:2026-04)'");
         await db.exec(`ALTER TABLE global_stats ${addColumns.join(', ')}`);
-        console.log('✓ Tavily密钥管理字段添加完成');
+        console.log('[OK] Tavily密钥管理字段添加完成');
       }
     } catch (e) {
-      console.log('⚠️ Tavily字段迁移检查失败:', e.message);
+      console.log('[WARN] Tavily字段迁移检查失败:', e.message);
     }
 
     // 数据库迁移：添加Tavily密钥11-50使用次数字段
@@ -248,33 +248,33 @@ async function initDatabase() {
         }
       }
       if (missingColumns.length > 0) {
-        console.log(`🔄 添加Tavily密钥${50 - missingColumns.length + 1}-50使用次数字段...`);
+        console.log(`[SWITCH] 添加Tavily密钥${50 - missingColumns.length + 1}-50使用次数字段...`);
         await db.exec(`ALTER TABLE global_stats ${missingColumns.join(', ')}`);
-        console.log('✓ Tavily密钥11-50字段添加完成');
+        console.log('[OK] Tavily密钥11-50字段添加完成');
       }
     } catch (e) {
-      console.log('⚠️ Tavily 11-50字段迁移失败:', e.message);
+      console.log('[WARN] Tavily 11-50字段迁移失败:', e.message);
     }
 
     // 数据库迁移：remaining_count 从 INT 改为 DECIMAL(10,1) 支持小数
     try {
       const colInfo = await db.prepare("SHOW COLUMNS FROM tokens LIKE 'remaining_count'").all();
       if (colInfo.length > 0 && colInfo[0].Type === 'int') {
-        console.log('🔄 迁移 remaining_count: INT → DECIMAL(10,1)...');
+        console.log('[SWITCH] 迁移 remaining_count: INT → DECIMAL(10,1)...');
         await db.exec("ALTER TABLE tokens MODIFY COLUMN remaining_count DECIMAL(10,1) DEFAULT 500.0");
-        console.log('✓ remaining_count 迁移完成');
+        console.log('[OK] remaining_count 迁移完成');
       }
     } catch (e) {
-      console.log('⚠️ remaining_count 迁移失败:', e.message);
+      console.log('[WARN] remaining_count 迁移失败:', e.message);
     }
 
-    console.log('✓ 数据库表初始化完成');
+    console.log('[OK] 数据库表初始化完成');
     
     // 初始化全局统计
     const globalStatsExists = await db.prepare("SELECT id FROM global_stats WHERE id = 1").get();
     if (!globalStatsExists) {
       await db.prepare("INSERT INTO global_stats (id) VALUES (1)").run();
-      console.log('✓ 全局统计表初始化完成');
+      console.log('[OK] 全局统计表初始化完成');
     }
     
     // 自动添加缺失的字段
@@ -302,7 +302,7 @@ async function addMissingColumns() {
     // 检查并添加缺失的字段
     for (const column of newColumns) {
       if (!existingColumns.includes(column)) {
-        console.log(`📌 添加缺失字段: ${column}`);
+        console.log(`[PIN] 添加缺失字段: ${column}`);
         // 使用反引号包裹列名，防止SQL注入
         await db.prepare(`ALTER TABLE global_stats ADD COLUMN \`${column}\` INT DEFAULT 0`).run();
       }
@@ -314,11 +314,11 @@ async function addMissingColumns() {
       const answerCacheColumnNames = answerCacheColumns.map(col => col.Field);
       
       if (!answerCacheColumnNames.includes('is_correct')) {
-        console.log(`📌 添加 answer_cache.is_correct 字段`);
+        console.log(`[PIN] 添加 answer_cache.is_correct 字段`);
         await db.prepare(`ALTER TABLE answer_cache ADD COLUMN is_correct TINYINT DEFAULT NULL COMMENT '答案正确性标记: 1=正确, 0=错误, NULL=未验证'`).run();
       }
     } catch (e) {
-      console.log('⚠️ answer_cache 表字段检查失败:', e.message);
+      console.log('[WARN] answer_cache 表字段检查失败:', e.message);
     }
     
     // 检查 user_ids 表的 welfare_claimed 字段
@@ -327,15 +327,15 @@ async function addMissingColumns() {
       const userIdsColumnNames = userIdsColumns.map(col => col.Field);
       
       if (!userIdsColumnNames.includes('welfare_claimed')) {
-        console.log(`📌 添加 user_ids.welfare_claimed 字段`);
+        console.log(`[PIN] 添加 user_ids.welfare_claimed 字段`);
         await db.prepare(`ALTER TABLE user_ids ADD COLUMN welfare_claimed TINYINT DEFAULT 0`).run();
       }
       if (!userIdsColumnNames.includes('fid')) {
-        console.log(`📌 添加 user_ids.fid 字段`);
+        console.log(`[PIN] 添加 user_ids.fid 字段`);
         await db.prepare(`ALTER TABLE user_ids ADD COLUMN fid VARCHAR(64) DEFAULT NULL COMMENT '用户所属学校/机构ID'`).run();
       }
     } catch (e) {
-      console.log('⚠️ user_ids 表字段检查失败:', e.message);
+      console.log('[WARN] user_ids 表字段检查失败:', e.message);
     }
     
     // Tavily失效密钥持久化表
@@ -347,10 +347,10 @@ async function addMissingColumns() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `).run();
     } catch (e) {
-      console.log('⚠️ 创建 tavily_invalid_keys 表失败:', e.message);
+      console.log('[WARN] 创建 tavily_invalid_keys 表失败:', e.message);
     }
     
-    console.log('✓ 数据库字段检查完成');
+    console.log('[OK] 数据库字段检查完成');
     
     // 验证：检查所有模型列是否都已存在
     try {
@@ -359,7 +359,7 @@ async function addMissingColumns() {
       const expectedCols = Object.values(AI_MODELS).map(m => m.statsColumn);
       const missingCols = expectedCols.filter(c => !existingCols.includes(c));
       if (missingCols.length > 0) {
-        console.error(`❌ 迁移验证失败！以下模型统计列缺失: ${missingCols.join(', ')}，请手动执行 ALTER TABLE 添加`);
+        console.error(`[ERROR] 迁移验证失败！以下模型统计列缺失: ${missingCols.join(', ')}，请手动执行 ALTER TABLE 添加`);
       }
     } catch (e) {
       console.error('迁移验证查询失败:', e.message);

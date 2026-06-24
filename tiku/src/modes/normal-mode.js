@@ -33,7 +33,7 @@ async function fetchAISupplement(questionData) {
   const apiName = "DeepSeek官方";
   
   if (!useApiKey) {
-    console.log("❌ 未配置 DEEPSEEK_API_KEY");
+    console.log("[ERROR] 未配置 DEEPSEEK_API_KEY");
     return { code: 500, msg: "未配置 DEEPSEEK_API_KEY", data: null };
   }
   
@@ -63,15 +63,15 @@ async function fetchAISupplement(questionData) {
     thinking: { type: "disabled" }  // thinking disabled模式下支持temperature
   };
   
-  console.log("━━━━━━━━━ AI请求日志（正常模式） ━━━━━━━━━");
-  console.log("📍 题目:", questionData.question);
-  console.log("📍 题型:", typeDesc);
-  console.log("📍 实际模型:", model);
-  console.log("📍 API平台:", apiName);
-  console.log("📍 Prompt长度:", systemPrompt.length + userPrompt.length, "字符");
+  console.log("========= AI请求日志（正常模式） =========");
+  console.log("[INFO] 题目:", questionData.question);
+  console.log("[INFO] 题型:", typeDesc);
+  console.log("[INFO] 实际模型:", model);
+  console.log("[INFO] API平台:", apiName);
+  console.log("[INFO] Prompt长度:", systemPrompt.length + userPrompt.length, "字符");
   if (imageUrls && imageUrls.length > 0) {
-    console.log("📍 图片URL:", imageUrls.join(', '));
-    console.log("📍 多模态:", supportsVision ? "已启用" : "未启用(模型不支持视觉)");
+    console.log("[INFO] 图片URL:", imageUrls.join(', '));
+    console.log("[INFO] 多模态:", supportsVision ? "已启用" : "未启用(模型不支持视觉)");
   }
   
   try {
@@ -93,12 +93,11 @@ async function fetchAISupplement(questionData) {
     let totalPromptTokens = result.usage?.prompt_tokens || 0;
     let totalCompletionTokens = result.usage?.completion_tokens || 0;
     if (result.usage) {
-      console.log(`📊 token统计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+      console.log(`[STAT] token统计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     }
     
-    console.log("━━━━━━━━━ AI响应日志（正常模式） ━━━━━━━━━");
-    console.log("📍 响应状态:", response.status);
-    console.log("📍 响应数据:", JSON.stringify(result).substring(0, 200));
+    console.log("========= AI响应日志（正常模式） =========");
+    console.log("[INFO] 响应数据:", JSON.stringify(result).substring(0, 200));
     
     if (result.choices && result.choices[0] && result.choices[0].message) {
       const content = result.choices[0].message.content;
@@ -111,21 +110,21 @@ async function fetchAISupplement(questionData) {
           }
           // 连线题：标准化答案格式（拆分合并字符串）
           parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
-          console.log("✅ AI解析成功:", JSON.stringify(parsed.answer));
+          console.log("[OK] AI解析成功:", JSON.stringify(parsed.answer));
         
         // 检查答案是否合理
         let checkResult;
         try {
           checkResult = checkAnswerReasonable(parsed.answer, questionData.type, questionData.options);
         } catch (e) {
-          console.log('⚠️ checkAnswerReasonable异常:', e.message);
+          console.log('[WARN] checkAnswerReasonable异常:', e.message);
           checkResult = { reasonable: true, reason: '' };
         }
         
         if (!checkResult.reasonable) {
           // 答案不合理，启用深度思考重新查询
-          console.log(`⚠️ 答案异常: ${checkResult.reason}`);
-          console.log(`━━━ 启用深度思考重新查询 ━━━`);
+          console.log(`[WARN] 答案异常: ${checkResult.reason}`);
+          console.log(`=== 启用深度思考重新查询 ===`);
           
           // 构建深度思考请求
           const thinkingBody = {
@@ -152,7 +151,7 @@ async function fetchAISupplement(questionData) {
             if (thinkingResult.usage) {
               totalPromptTokens += thinkingResult.usage.prompt_tokens || 0;
               totalCompletionTokens += thinkingResult.usage.completion_tokens || 0;
-              console.log(`📊 深度思考token: 输入=${thinkingResult.usage.prompt_tokens || 0}, 输出=${thinkingResult.usage.completion_tokens || 0}`);
+              console.log(`[STAT] 深度思考token: 输入=${thinkingResult.usage.prompt_tokens || 0}, 输出=${thinkingResult.usage.completion_tokens || 0}`);
             }
             
             if (thinkingResult.choices && thinkingResult.choices[0] && thinkingResult.choices[0].message) {
@@ -166,16 +165,16 @@ async function fetchAISupplement(questionData) {
                   }
                   // 连线题：标准化答案格式（拆分合并字符串）
                   thinkingParsed.answer = normalizeMatchingAnswer(thinkingParsed.answer, questionData.type);
-                  console.log("✅ 深度思考答案:", JSON.stringify(thinkingParsed.answer));
+                  console.log("[OK] 深度思考答案:", JSON.stringify(thinkingParsed.answer));
                   // 检查深度思考答案是否合理
                   const thinkingCheckResult = checkAnswerReasonable(thinkingParsed.answer, questionData.type, questionData.options);
 
                   if (!thinkingCheckResult.reasonable) {
                     // 深度思考答案也不合理，返回错误
-                    console.log(`⚠️ 深度思考答案异常: ${thinkingCheckResult.reason}`);
-                    console.log("✗ 深度思考答案校验失败");
-                    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
-                    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    console.log(`[WARN] 深度思考答案异常: ${thinkingCheckResult.reason}`);
+                    console.log("[X] 深度思考答案校验失败");
+                    console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+                    console.log("==========================");
                     return {
                       code: 500,
                       msg: `AI答案校验失败(深度思考:${thinkingCheckResult.reason})`,
@@ -195,19 +194,19 @@ async function fetchAISupplement(questionData) {
                   }
 
                   // 深度思考答案合理，返回
-                  console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
-                  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                  console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+                  console.log("==========================");
                   return {
                     code: 200,
-                    data: { answer: thinkingParsed.answer, source: "DeepSeek-V4-Flash-thinking" },
-                    msg: "查询成功"
+                    data: { answer: thinkingParsed.answer, source: AI_MODEL_NORMAL_THINKING },
+                    msg: "未命中缓存"
                   };
               }
             }
 
-            console.log("✗ 深度思考解析失败，使用原答案");
+            console.log("[X] 深度思考解析失败，使用原答案");
           } catch (thinkingError) {
-            console.log("✗ 深度思考请求失败:", thinkingError.message);
+            console.log("[X] 深度思考请求失败:", thinkingError.message);
           }
         }
         
@@ -222,29 +221,29 @@ async function fetchAISupplement(questionData) {
           }
         }
         
-        console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+        console.log("==========================");
         
         return {
           code: 200,
-          data: { answer: parsed.answer, source: "DeepSeek-V4-Flash" },
-          msg: "查询成功",
+          data: { answer: parsed.answer, source: model },
+          msg: "未命中缓存",
           tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens },
           modelId: model
         };
       }
     }
     
-    console.log("❌ AI解析失败: 响应中未找到有效答案");
-    console.log(`📊 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("[ERROR] AI解析失败: 响应中未找到有效答案");
+    console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
+    console.log("==========================");
     
     return { code: 500, msg: "AI解析失败", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, modelId: model };
     
   } catch (e) {
-    console.error("❌ AI查询失败:", e.message);
-    console.log("📊 本次AI调用token总计: 输入=0, 输出=0 (异常)");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.error("[ERROR] AI查询失败:", e.message);
+    console.log("[STAT] 本次AI调用token总计: 输入=0, 输出=0 (异常)");
+    console.log("==========================");
     
     return { 
       code: 500, 
@@ -285,15 +284,15 @@ async function handleNormalMode(c, params) {
     skipUserIdCheck
   } = params;
 
-  log("━━━ 正常模式（先题库后AI） ━━━");
+  log("=== 正常模式（先题库后AI） ===");
   if (limitedMode) {
-    log("⚠️ 受限模式：仅查询缓存");
+    log("[WARN] 受限模式：仅查询缓存");
   }
 
-  log("━━━ 开始查询缓存 ━━━");
+  log("=== 开始查询缓存 ===");
   const cachedAnswer = await getCachedAnswer(questionHash);
   if (cachedAnswer) {
-    log("✓ 缓存命中！");
+    log("[OK] 缓存命中！");
 
     // 统计缓存命中
     incrementCacheHits();
@@ -301,6 +300,7 @@ async function handleNormalMode(c, params) {
 
     // 受限模式或免费模式不扣除次数
     let remainingCount = 999999;
+    let actualCost = 0;  // 实际消耗次数
     if (!FREE_MODE && !limitedMode) {
       const cacheCost = 0.8;
       const decrementResult = await decrementCount(token, userId, skipUserIdCheck, cacheCost);
@@ -312,40 +312,43 @@ async function handleNormalMode(c, params) {
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
+      actualCost = cacheCost;
       log(`扣除次数: ${cacheCost}（缓存命中，按0.8次计费）`);
     }
 
     if (!limitedMode) {
       log(`剩余次数: ${remainingCount}`);
     }
-    log("━━━ 查询完成（缓存） ━━━");
+    log("=== 查询完成（缓存） ===");
 
     // 缓存答案校验（防止历史脏数据）
     const cachedAnswerArr = JSON.parse(cachedAnswer.answer);
     const cacheValidation = validateAnswer(questionData.type, cachedAnswerArr, questionData.options);
     if (!cacheValidation.valid) {
-      log(`✗ 缓存答案校验失败: ${cacheValidation.reason}，跳过缓存继续查询`);
+      log(`[X] 缓存答案校验失败: ${cacheValidation.reason}，跳过缓存继续查询`);
     } else {
+      // 受限模式不返回消耗次数
       return c.json({
         code: 200,
-        msg: "查询成功-缓存命中",
+        msg: '缓存命中',
         data: {
           answer: cachedAnswerArr,
           source: "cache",
-          num: limitedMode ? "免费题库中" : remainingCount
+          num: limitedMode ? "免费题库中" : remainingCount,
+          cost: limitedMode ? undefined : actualCost
         }
       });
     }
   }
-  log("✗ 缓存未命中或校验失败");
+  log("[X] 缓存未命中或校验失败");
 
   // 受限模式下：缓存未命中，直接返回无答案
   if (limitedMode) {
-    log("⚠️ 受限模式：缓存未命中");
+    log("[WARN] 受限模式：缓存未命中");
     return c.json({
       code: 403,
       msg: '免费题库：无答案<br>飘飘全能答题模型：有答案',
-      data: { limitedMode: true, answer: [], num: 0 }
+      data: { limitedMode: true, answer: [], num: 0, sponsorUrl: SPONSOR_URL }
     }, 403);
   }
 
@@ -357,33 +360,26 @@ async function handleNormalMode(c, params) {
 
   // 排序题（type=13）直接跳过题库，使用AI补充
   if (questionData.type === "13") {
-    log("⏭️ 排序题直接使用AI补充（跳过题库）");
+    log("[SKIP] 排序题直接使用AI补充（跳过题库）");
     if (hunyuanApiKey) {
-      log("━━━ 查询 AI ━━━");
+      log("=== 查询 AI ===");
       const aiResult = await fetchAISupplement(questionData);
 
     if (aiResult.code === 200 && aiResult.data && aiResult.data.answer) {
-      log("✓ AI 返回成功");
+      log("[OK] AI 返回成功");
         hasAnswer = true;
         answerData = aiResult;
         answerData.data.source = answerData.data.source || "ai";
 
         // 排序题不缓存
-        log("⚠️ 排序题答案不保存缓存");
+        log("[WARN] 排序题答案不保存缓存");
 
-        log("━━━ 查询完成 ━━━");
+        log("=== 查询完成 ===");
 
         // 免费模式不扣除次数
+        let actualCost = 0;  // 实际消耗次数
         if (!FREE_MODE) {
-          let normalCost = 1;
-          if (answerData.tokenUsage) {
-            const { promptTokens, completionTokens } = answerData.tokenUsage;
-            if (promptTokens > 0 || completionTokens > 0) {
-              normalCost = calculateCostFromTokens(answerData.modelId || 'deepseek-v4-flash', promptTokens, completionTokens);
-              log(`📊 token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
-              log(`💰 按token计费: 扣除${normalCost}次`);
-            }
-          }
+          const normalCost = 1;  // 正常模式固定1次（AI补充不额外收费）
           const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
           if (!decrementResult.success) {
             return c.json({
@@ -393,6 +389,7 @@ async function handleNormalMode(c, params) {
             }, 403);
           }
           remainingCount = decrementResult.remainingCount;
+          actualCost = normalCost;
           log(`扣除次数: ${normalCost}`);
           log(`剩余次数: ${remainingCount}`);
         } else {
@@ -401,6 +398,22 @@ async function handleNormalMode(c, params) {
 
         if (answerData.data) {
           answerData.data.num = remainingCount;
+        }
+
+        // 添加消耗信息到 data.cost，msg 改成"未命中缓存"
+        if (answerData.code === 200) {
+          answerData.msg = '未命中缓存';
+          if (answerData.data) {
+            answerData.data.cost = actualCost;
+          }
+        }
+
+        // AI来源的source转为"ai"供客户端显示
+        if (answerData.data && answerData.data.source) {
+          const nonAiSources = ['cache', 'tiku', 'hivenet', 'yanxi', 'ucuc'];
+          if (!nonAiSources.includes(answerData.data.source)) {
+            answerData.data.source = "ai";
+          }
         }
 
         // ========== 先清洗答案，再校验（修复#号导致校验失败的问题） ==========
@@ -412,7 +425,7 @@ async function handleNormalMode(c, params) {
           answerData.data.answer = fixedAnswers;
         }
         if (!valid) {
-          log(`✗ 答案校验失败: ${reason}`);
+          log(`[X] 答案校验失败: ${reason}`);
           return c.json({
             code: 422,
             msg: `答案校验失败: ${reason}`,
@@ -422,7 +435,7 @@ async function handleNormalMode(c, params) {
 
         return c.json(answerData);
       } else {
-        log("✗ AI 返回失败");
+        log("[X] AI 返回失败");
         answerData = {
           code: 404,
           msg: "排序题AI补充失败",
@@ -431,7 +444,7 @@ async function handleNormalMode(c, params) {
         return c.json(cleanAnswerData(answerData));
       }
     } else {
-      log("✗ 未配置AI API密钥，无法处理排序题");
+      log("[X] 未配置AI API密钥，无法处理排序题");
       answerData = {
         code: 404,
         msg: "排序题需要AI支持，但未配置API密钥",
@@ -449,7 +462,7 @@ async function handleNormalMode(c, params) {
 
   // 策略：Hive-Net → UCUC → 言溪 → 题库海 → AI
   if (!skipHiveNet && !skipHiveNetByType) {
-    log("━━━ 1. 查询 Hive-Net ━━━");
+    log("=== 1. 查询 Hive-Net ===");
     const hiveNetResult = await fetchHiveNet(questionData);
 
     hasAnswer = hiveNetResult.code === 200 &&
@@ -458,23 +471,23 @@ async function handleNormalMode(c, params) {
                 (Array.isArray(hiveNetResult.data.answer) ? hiveNetResult.data.answer.length > 0 : true);
 
     if (hasAnswer) {
-      log("✓ Hive-Net 有答案");
+      log("[OK] Hive-Net 有答案");
       answerData = hiveNetResult;
       answerData.data.source = answerData.data.source || "hivenet";
     } else {
-      log(`✗ Hive-Net 无答案：${hiveNetResult.msg || '未找到'}`);
+      log(`[X] Hive-Net 无答案：${hiveNetResult.msg || '未找到'}`);
     }
   } else {
     log(skipHiveNetByType 
-      ? `⏭️ Hive-Net 不支持题型${questionData.type}，跳过` 
-      : "⏭️ Hive-Net 已禁用（SKIP_HIVENET=true），直接使用UCUC题库");
+      ? `[SKIP] Hive-Net 不支持题型${questionData.type}，跳过` 
+      : "[SKIP] Hive-Net 已禁用（SKIP_HIVENET=true），直接使用UCUC题库");
   }
 
   if (!hasAnswer) {
     // UCUC 题库支持：单选题(0)、多选题(1)、填空题(2)、判断题(3)、简答题(4)
     const ucucSupportedTypes = ["0", "1", "2", "3", "4"];
     if (ucucSupportedTypes.includes(questionData.type)) {
-      log("━━━ 2. 查询 UCUC 题库 ━━━");
+      log("=== 2. 查询 UCUC 题库 ===");
       const ucucResult = await fetchUcuc(questionData);
 
       hasAnswer = ucucResult.code === 200 &&
@@ -483,19 +496,19 @@ async function handleNormalMode(c, params) {
                   (Array.isArray(ucucResult.data.answer) ? ucucResult.data.answer.length > 0 : true);
 
       if (hasAnswer) {
-        log("✓ UCUC 题库 有答案");
+        log("[OK] UCUC 题库 有答案");
         answerData = ucucResult;
         answerData.data.source = answerData.data.source || "ucuc";
       } else {
-        log(`✗ UCUC 题库 无答案：${ucucResult.msg || '未找到'}`);
+        log(`[X] UCUC 题库 无答案：${ucucResult.msg || '未找到'}`);
       }
     } else {
-      log(`⏭️ 题型 "${questionData.type}" 不在 UCUC 支持范围内，跳过 UCUC 题库`);
+      log(`[SKIP] 题型 "${questionData.type}" 不在 UCUC 支持范围内，跳过 UCUC 题库`);
     }
   }
 
   if (!hasAnswer) {
-    log("━━━ 3. 查询 言溪题库 ━━━");
+    log("=== 3. 查询 言溪题库 ===");
     const yanxiResult = await fetchYanxi(questionData);
 
     hasAnswer = yanxiResult.code === 200 &&
@@ -504,16 +517,16 @@ async function handleNormalMode(c, params) {
                 (Array.isArray(yanxiResult.data.answer) ? yanxiResult.data.answer.length > 0 : true);
 
     if (hasAnswer) {
-      log("✓ 言溪题库 有答案");
+      log("[OK] 言溪题库 有答案");
       answerData = yanxiResult;
       answerData.data.source = answerData.data.source || "yanxi";
     } else {
-      log(`✗ 言溪题库 无答案：${yanxiResult.msg || '未找到'}`);
+      log(`[X] 言溪题库 无答案：${yanxiResult.msg || '未找到'}`);
     }
   }
 
   if (!hasAnswer) {
-    log("━━━ 4. 查询 题库海 ━━━");
+    log("=== 4. 查询 题库海 ===");
     const tikuResult = await fetchAnswer(questionData);
 
     hasAnswer = tikuResult.code === 200 &&
@@ -522,26 +535,26 @@ async function handleNormalMode(c, params) {
                 (Array.isArray(tikuResult.data.answer) ? tikuResult.data.answer.length > 0 : true);
 
     if (hasAnswer) {
-      log("✓ 题库海 有答案");
+      log("[OK] 题库海 有答案");
       answerData = tikuResult;
-      answerData.data.source = answerData.data.source || "tikuhai";
+      answerData.data.source = "tiku";  // 题库来源统一为 tiku
     } else {
-      log(`✗ 题库海 无答案：${tikuResult.msg || '未找到'}`);
+      log(`[X] 题库海 无答案：${tikuResult.msg || '未找到'}`);
     }
   }
 
   // AI补充：检查是否配置了 DeepSeek API Key
   if (!hasAnswer && getEnv('DEEPSEEK_API_KEY')) {
-    log("━━━ 5. 查询 AI ━━━");
+    log("=== 5. 查询 AI ===");
     const aiResult = await fetchAISupplement(questionData);
 
     if (aiResult.code === 200 && aiResult.data && aiResult.data.answer) {
-      log("✓ AI 补充成功");
+      log("[OK] AI 补充成功");
       hasAnswer = true;
       answerData = aiResult;
       answerData.data.source = answerData.data.source || "ai";
     } else {
-      log("✗ AI 补充失败");
+      log("[X] AI 补充失败");
     }
   }
 
@@ -558,7 +571,7 @@ async function handleNormalMode(c, params) {
       answerData.data.answer = fixedAnswers;
     }
     if (!valid) {
-      log(`✗ 答案校验失败: ${reason}`);
+      log(`[X] 答案校验失败: ${reason}`);
       return c.json({
         code: 422,
         msg: `答案校验失败: ${reason}`,
@@ -566,7 +579,7 @@ async function handleNormalMode(c, params) {
       }, 422);
     }
 
-    log("✓ 答案校验通过，保存缓存");
+    log("[OK] 答案校验通过，保存缓存");
     await saveAnswerToCache(
       questionHash,
       questionData.question,
@@ -575,22 +588,21 @@ async function handleNormalMode(c, params) {
       answerData.data.answer,
       answerData.data.source || 'tiku'
     );
-    log("✓ 缓存处理完成");
+    log("[OK] 缓存处理完成");
 
-    log("━━━ 查询完成 ━━━");
+    // AI来源的source存缓存时是具体模型名，但客户端需要"ai"来显示AI提示
+    if (answerData.data.source && answerData.data.source !== 'cache' && 
+        answerData.data.source !== 'tiku' && answerData.data.source !== 'hivenet' && 
+        answerData.data.source !== 'yanxi' && answerData.data.source !== 'ucuc') {
+      answerData.data.source = "ai";
+    }
+
+    log("=== 查询完成 ===");
 
     // 免费模式不扣除次数
+    let actualCost = 0;  // 实际消耗次数
     if (!FREE_MODE) {
-      let normalCost = 1;
-      // 如果来源是AI，按token消耗计费
-      if (answerData.tokenUsage) {
-        const { promptTokens, completionTokens } = answerData.tokenUsage;
-        if (promptTokens > 0 || completionTokens > 0) {
-          normalCost = calculateCostFromTokens(answerData.modelId || 'deepseek-v4-flash', promptTokens, completionTokens);
-          log(`📊 token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
-          log(`💰 按token计费: 扣除${normalCost}次`);
-        }
-      }
+      const normalCost = 1;  // 正常模式固定1次（题库或AI补充都只收1次）
       const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
       if (!decrementResult.success) {
         return c.json({
@@ -600,20 +612,29 @@ async function handleNormalMode(c, params) {
         }, 403);
       }
       remainingCount = decrementResult.remainingCount;
+      actualCost = normalCost;
       log(`扣除次数: ${normalCost}`);
       log(`剩余次数: ${remainingCount}`);
     } else {
       log("免费模式: 不扣除次数");
     }
 
-    // 设置剩余次数
+    // 设置剩余次数和消耗信息
     if (answerData.data) {
       answerData.data.num = remainingCount;
     }
 
+    // 添加消耗信息到 data.cost，msg 改成"未命中缓存"
+    if (answerData.code === 200) {
+      answerData.msg = '未命中缓存';
+      if (answerData.data) {
+        answerData.data.cost = actualCost;
+      }
+    }
+
     return c.json(answerData);
   } else {
-    log("✗ 所有来源均无答案");
+    log("[X] 所有来源均无答案");
     answerData = {
       code: 404,
       msg: "未找到答案",

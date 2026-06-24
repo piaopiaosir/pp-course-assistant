@@ -35,11 +35,11 @@ async function loadInvalidKeys() {
       INVALID_KEYS.add(row.key_index);
     }
     if (INVALID_KEYS.size > 0) {
-      console.log(`📋 从DB加载${INVALID_KEYS.size}个已失效Tavily密钥`);
+      console.log(`[LIST] 从DB加载${INVALID_KEYS.size}个已失效Tavily密钥`);
     }
   } catch (e) {
     // 表可能不存在，首次运行时忽略
-    console.log('⚠️ 加载Tavily失效密钥失败（表可能未创建）:', e.message);
+    console.log('[WARN] 加载Tavily失效密钥失败（表可能未创建）:', e.message);
   }
 }
 loadInvalidKeys();
@@ -49,9 +49,9 @@ function markKeyAsInvalid(keyIndex) {
     INVALID_KEYS.add(keyIndex);
     // 持久化到DB
     db.prepare("INSERT IGNORE INTO tavily_invalid_keys (key_index, invalidated_at) VALUES (?, ?)").run(keyIndex, Math.floor(Date.now() / 1000)).catch(e => {
-      console.log('⚠️ 持久化失效密钥失败:', e.message);
+      console.log('[WARN] 持久化失效密钥失败:', e.message);
     });
-    console.log(`🚫 标记Tavily密钥${keyIndex}为失效，当前失效密钥:`, [...INVALID_KEYS]);
+    console.log(`[BLOCK] 标记Tavily密钥${keyIndex}为失效，当前失效密钥:`, [...INVALID_KEYS]);
   }
 }
 
@@ -69,7 +69,7 @@ async function switchToNextAvailableKey(currentKeyIndex) {
     // 从当前密钥的下一个开始查找
     for (let i = currentKeyIndex; i < TAVILY_KEY_COUNT; i++) {
       if (isKeyInvalid(i + 1)) {
-        console.log(`⏭️ 跳过失效的密钥${i + 1}`);
+        console.log(`[SKIP] 跳过失效的密钥${i + 1}`);
         continue;
       }
       const key = TAVILY_KEYS[i];
@@ -77,7 +77,7 @@ async function switchToNextAvailableKey(currentKeyIndex) {
         await db.prepare(
           "UPDATE global_stats SET tavily_current_key = ? WHERE id = 1"
         ).run(i + 1);
-        console.log(`🔄 Tavily密钥切换: 切换到密钥${i + 1}`);
+        console.log(`[SWITCH] Tavily密钥切换: 切换到密钥${i + 1}`);
         return { key, index: i + 1 };
       }
     }
@@ -85,7 +85,7 @@ async function switchToNextAvailableKey(currentKeyIndex) {
     // 如果后面没有可用密钥,从头开始找
     for (let i = 0; i < currentKeyIndex - 1; i++) {
       if (isKeyInvalid(i + 1)) {
-        console.log(`⏭️ 跳过失效的密钥${i + 1}`);
+        console.log(`[SKIP] 跳过失效的密钥${i + 1}`);
         continue;
       }
       const key = TAVILY_KEYS[i];
@@ -93,7 +93,7 @@ async function switchToNextAvailableKey(currentKeyIndex) {
         await db.prepare(
           "UPDATE global_stats SET tavily_current_key = ? WHERE id = 1"
         ).run(i + 1);
-        console.log(`🔄 Tavily密钥切换: 切换到密钥${i + 1}`);
+        console.log(`[SWITCH] Tavily密钥切换: 切换到密钥${i + 1}`);
         return { key, index: i + 1 };
       }
     }
@@ -101,7 +101,7 @@ async function switchToNextAvailableKey(currentKeyIndex) {
     return null; // 所有密钥都尝试过了
 
   } catch (e) {
-    console.log("⚠️ 切换Tavily密钥失败:", e.message);
+    console.log("[WARN] 切换Tavily密钥失败:", e.message);
     return null;
   }
 }
@@ -144,7 +144,7 @@ async function getAvailableTavilyKey() {
     
     if (currentMonth !== lastResetDate) {
       // 新的一个月,重置所有密钥使用次数
-      console.log(`🔄 Tavily月度重置: ${lastResetDate || '首次'} -> ${currentMonth}`);
+      console.log(`[SWITCH] Tavily月度重置: ${lastResetDate || '首次'} -> ${currentMonth}`);
       const resetFields = Array.from({length: TAVILY_KEY_COUNT}, (_, i) => `tavily_key_${i + 1}_usage = 0`).join(', ');
       await conn.query(
         `UPDATE global_stats SET 
@@ -163,7 +163,7 @@ async function getAvailableTavilyKey() {
     
     // 检查当前密钥是否已失效，��果是则跳过
     if (isKeyInvalid(currentKeyIndex)) {
-      console.log(`⏭️ 当前密钥${currentKeyIndex}已失效，查找下一个可用密钥...`);
+      console.log(`[SKIP] 当前密钥${currentKeyIndex}已失效，查找下一个可用密钥...`);
       let found = false;
       // 先往后找
       for (let i = currentKeyIndex; i < TAVILY_KEY_COUNT; i++) {
@@ -197,7 +197,7 @@ async function getAvailableTavilyKey() {
 
   } catch (e) {
     await conn.rollback();
-    console.log("⚠️ 查询Tavily密钥状态失败,使用默认��钥:", e.message);
+    console.log("[WARN] 查询Tavily密钥状态失败,使用默认��钥:", e.message);
     return keys[0];
   } finally {
     conn.release();
@@ -219,9 +219,9 @@ async function updateTavilyKeyUsage(keyIndex, increment = 1) {
       `UPDATE global_stats SET \`${field}\` = \`${field}\` + ?, updated_at = ? WHERE id = 1`
     ).run(increment, Math.floor(Date.now() / 1000));
     
-    console.log(`📊 Tavily密钥${keyIndex}使用次数: +${increment} (原子递增)`);
+    console.log(`[STAT] Tavily密钥${keyIndex}使用次数: +${increment} (原子递增)`);
   } catch (e) {
-    console.log("⚠️ 更新Tavily密钥使用次数失败:", e.message);
+    console.log("[WARN] 更新Tavily密钥使用次数失败:", e.message);
   }
 }
 
@@ -237,14 +237,14 @@ async function updateTavilyKeyUsage(keyIndex, increment = 1) {
  */
 async function tavilySearch(query, options = {}, _depth = 0) {
   if (_depth > MAX_RECURSION_DEPTH) {
-    console.log(`❌ 超过最大递归深度${MAX_RECURSION_DEPTH}次，停止重试`);
+    console.log(`[ERROR] 超过最大递归深度${MAX_RECURSION_DEPTH}次，停止重试`);
     return { results: [], answer: null, error: `超过最大递归深度${MAX_RECURSION_DEPTH}次` };
   }
 
   const tavilyKeyObj = await getAvailableTavilyKey();
   
   if (!tavilyKeyObj) {
-    console.log("⚠️ 未配置 TAVILY_API_KEY,跳过Tavily搜索");
+    console.log("[WARN] 未配置 TAVILY_API_KEY,跳过Tavily搜索");
     return { results: [], answer: null, error: '未配置API密钥' };
   }
 
@@ -258,10 +258,10 @@ async function tavilySearch(query, options = {}, _depth = 0) {
   } = options;
 
   try {
-    console.log(`━━━ Tavily搜索中... (使用密钥${keyIndex || '默认'}) ━━━`);
-    console.log("📍 搜索问题:", query);
-    console.log("📍 搜索深度:", autoParameters ? '自动(auto_parameters)' : searchDepth);
-    console.log("📍 最大结果数:", maxResults);
+    console.log(`=== Tavily搜索中... (使用密钥${keyIndex || '默认'}) ===`);
+    console.log("[INFO] 搜索问题:", query);
+    console.log("[INFO] 搜索深度:", autoParameters ? '自动(auto_parameters)' : searchDepth);
+    console.log("[INFO] 最大结果数:", maxResults);
     
     const requestBody = {
       query: query,
@@ -284,11 +284,11 @@ async function tavilySearch(query, options = {}, _depth = 0) {
     });
 
     if (!response.ok) {
-      console.log("❌ Tavily搜索失败:", response.status, response.statusText);
+      console.log("[ERROR] Tavily搜索失败:", response.status, response.statusText);
       
       // 401: 密钥失效/无效
       if (response.status === 401) {
-        console.log(`⚠️ Tavily密钥${keyIndex}无效或已失效`);
+        console.log(`[WARN] Tavily密钥${keyIndex}无效或已失效`);
         markKeyAsInvalid(keyIndex);
         return { 
           results: [], 
@@ -306,31 +306,31 @@ async function tavilySearch(query, options = {}, _depth = 0) {
         if (retryAfter) {
           // 有retry-after头,说明是频率限制,临时切换到其他密钥
           const waitSeconds = parseInt(retryAfter);
-          console.log(`⚠️ Tavily密钥${keyIndex}触发频率限制,临时切换到其他密钥...`);
+          console.log(`[WARN] Tavily密钥${keyIndex}触发频率限制,临时切换到其他密钥...`);
           
           // 尝试切换到其他密钥
           const nextKey = await switchToNextAvailableKey(keyIndex);
           if (nextKey) {
-            console.log(`🔄 临时切换到密钥${nextKey.index},重新执行搜索...`);
+            console.log(`[SWITCH] 临时切换到密钥${nextKey.index},重新执行搜索...`);
             return await tavilySearch(query, options, _depth + 1);
           } else {
             // 所有密钥都不可用,等待后重试
-            console.log(`⚠️ 所有密钥都不可用,等待${waitSeconds}秒后重试...`);
+            console.log(`[WARN] 所有密钥都不可用,等待${waitSeconds}秒后重试...`);
             await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
             return await tavilySearch(query, options, _depth + 1);
           }
         } else {
           // 没有retry-after头,可能是额度用完,切换密钥
-          console.log(`⚠️ Tavily密钥${keyIndex}额度可能已用完(HTTP 429),尝试切换...`);
+          console.log(`[WARN] Tavily密钥${keyIndex}额度可能已用完(HTTP 429),尝试切换...`);
           
           // 尝试切换到下一个有额度的密钥
           const nextKey = await switchToNextAvailableKey(keyIndex);
           if (nextKey) {
-            console.log(`🔄 已切换到密钥${nextKey.index},重新执行搜索...`);
+            console.log(`[SWITCH] 已切换到密钥${nextKey.index},重新执行搜索...`);
             // 递归调用,使用新密钥重新搜索
             return await tavilySearch(query, options, _depth + 1);
           } else {
-            console.log("❌ 所有Tavily密钥额度都已用完");
+            console.log("[ERROR] 所有Tavily密钥额度都已用完");
             return { 
               results: [], 
               answer: null, 
@@ -343,13 +343,13 @@ async function tavilySearch(query, options = {}, _depth = 0) {
       
       // 432/433: 搜索失败（可能是敏感词或频率限制），尝试切换密钥
       if (response.status === 432 || response.status === 433) {
-        console.log(`⚠️ Tavily密钥${keyIndex}搜索失败(HTTP ${response.status}),尝试切换密钥...`);
+        console.log(`[WARN] Tavily密钥${keyIndex}搜索失败(HTTP ${response.status}),尝试切换密钥...`);
         const nextKey = await switchToNextAvailableKey(keyIndex);
         if (nextKey) {
-          console.log(`🔄 已切换到密钥${nextKey.index},重新执行搜索...`);
+          console.log(`[SWITCH] 已切换到密钥${nextKey.index},重新执行搜索...`);
           return await tavilySearch(query, options, _depth + 1);
         } else {
-          console.log("❌ 所有Tavily密钥都不可用");
+          console.log("[ERROR] 所有Tavily密钥都不可用");
           return { 
             results: [], 
             answer: null, 
@@ -370,17 +370,17 @@ async function tavilySearch(query, options = {}, _depth = 0) {
 
     const result = await response.json();
     
-    console.log("✅ Tavily搜索成功!");
-    console.log("📍 搜索结果数量:", result.results?.length || 0);
+    console.log("[OK] Tavily搜索成功!");
+    console.log("[INFO] 搜索结果数量:", result.results?.length || 0);
     
     if (result.answer) {
-      console.log("📍 Tavily直接答案:", result.answer);
+      console.log("[INFO] Tavily直接答案:", result.answer);
     }
 
     // 更新使用次数(根据Tavily实际使用的搜索深度扣费)
     // auto_parameters开启后，实际search_depth以响应中auto_parameters.search_depth为准
     const actualSearchDepth = result.auto_parameters?.search_depth || searchDepth;
-    console.log(`📍 实际搜索深度: ${actualSearchDepth}`);
+    console.log(`[INFO] 实际搜索深度: ${actualSearchDepth}`);
     if (keyIndex > 0) {
       const cost = actualSearchDepth === 'advanced' ? 2 : 1;
       await updateTavilyKeyUsage(keyIndex, cost);
@@ -393,7 +393,7 @@ async function tavilySearch(query, options = {}, _depth = 0) {
     };
 
   } catch (e) {
-    console.error("❌ Tavily搜索异常:", e.message);
+    console.error("[ERROR] Tavily搜索异常:", e.message);
     return { 
       results: [], 
       answer: null, 
@@ -454,7 +454,7 @@ async function getTavilyUsage() {
     };
 
   } catch (e) {
-    console.error("❌ 查询Tavily用量失败:", e.message);
+    console.error("[ERROR] 查询Tavily用量失败:", e.message);
     return { usage: 0, limit: 0, remaining: 0, error: e.message };
   }
 }

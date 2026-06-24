@@ -70,14 +70,14 @@ async function checkAndRecordSuspiciousIp(ip) {
           SET user_count = ?, user_ids = ?, updated_at = ? 
           WHERE ip = ?
         `).run(userIds.length, userIdList, Math.floor(Date.now() / 1000), ip);
-        console.log(`⚠️ 更新可疑IP: ${ip}, 用户数: ${userIds.length}`);
+        console.log(`[WARN] 更新可疑IP: ${ip}, 用户数: ${userIds.length}`);
       } else {
         // 新增记录
         await db.prepare(`
           INSERT INTO suspicious_ips (ip, user_count, user_ids, reason, created_at, updated_at) 
           VALUES (?, ?, ?, '同一IP创建多个用户ID', ?, ?)
         `).run(ip, userIds.length, userIdList, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000));
-        console.log(`⚠️ 新增可疑IP: ${ip}, 用户数: ${userIds.length} (阈值: 5), 用户ID: ${userIdList}`);
+        console.log(`[WARN] 新增可疑IP: ${ip}, 用户数: ${userIds.length} (阈值: 5), 用户ID: ${userIdList}`);
       }
     }
   } catch (e) {
@@ -185,7 +185,7 @@ function verifyUserToken(token, masterSecret) {
       }
     }
     
-    return { valid: false, message: "Token无效，请购买token" };
+    return { valid: false, message: "Token无效，请赞助获取token" };
   } catch (e) {
     return { valid: false, message: "Token验证失败" };
   }
@@ -409,6 +409,7 @@ async function getReferralStats(userId) {
 }
 
 // 扣除次数（原子操作，使用 UPDATE ... WHERE remaining_count >= ? 避免竞态条件）
+// 扣减 + 归零拉黑使用事务保证原子性，避免并发场景下状态不一致
 async function decrementCount(token, userId = null, skipUserIdCheck = false, count = 1, checkOnly = false) {
   const now = Math.floor(Date.now() / 1000);
   
@@ -432,7 +433,7 @@ async function decrementCount(token, userId = null, skipUserIdCheck = false, cou
   
   // 剩余次数不足，拒绝扣减
   if (record.remaining_count < count) {
-    return { success: false, message: `剩余次数不足（${record.remaining_count}次，需${count}次）`, remainingCount: record.remaining_count };
+    return { success: false, message: `剩余次数不足（${record.remaining_count}次，需${count}次），请赞助获取新token`, remainingCount: record.remaining_count };
   }
 
   // 仅检查模式：不实际扣减，只返回余额
@@ -440,28 +441,213 @@ async function decrementCount(token, userId = null, skipUserIdCheck = false, cou
     return { success: true, remainingCount: record.remaining_count };
   }
 
-  // 原子扣减：使用 WHERE remaining_count >= ? 保证并发安全
-  const result = await db.prepare(
-    "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ? AND remaining_count >= ?"
-  ).run(count, now, token, count);
+  // 事务化扣减 + 拉黑：保证"扣减"与"归零拉黑"两步操作的原子性
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
 
-  if (result.changes === 0) {
-    // 并发场景下余额已被其他请求消耗
-    return { success: false, message: "余额不足或已被并发消耗", remainingCount: 0 };
+    // 原子扣减：使用 WHERE remaining_count >= ? 保证并发安全
+    const [result] = await conn.execute(
+      "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ? AND remaining_count >= ?",
+      [count, now, token, count]
+    );
+
+    if (result.affectedRows === 0) {
+      // 并发场景下余额已被其他请求消耗
+      await conn.rollback();
+      return { success: false, message: "余额不足，请赞助获取新token", remainingCount: 0 };
+    }
+
+    // 检查扣减后是否归零，需要拉黑
+    const [rows] = await conn.execute(
+      "SELECT remaining_count FROM tokens WHERE token = ?",
+      [token]
+    );
+    const updated = rows[0];
+    const finalCount = updated ? parseFloat(Number(updated.remaining_count).toFixed(1)) : 0;
+    if (finalCount < 0.1) {
+      await conn.execute(
+        "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?",
+        [token]
+      );
+      await conn.commit();
+      return { success: true, remainingCount: 0, justBlacklisted: true };
+    }
+
+    await conn.commit();
+    return { success: true, remainingCount: finalCount };
+  } catch (e) {
+    await conn.rollback();
+    console.error("[decrementCount] 事务失败:", e.message);
+    return { success: false, message: "扣减失败，请稍后重试", remainingCount: 0 };
+  } finally {
+    conn.release();
   }
-
-  // 检查扣减后是否归零，需要拉黑
-  const updated = await db.prepare("SELECT remaining_count FROM tokens WHERE token = ?").get(token);
-  const finalCount = updated ? parseFloat(updated.remaining_count.toFixed(1)) : 0;
-  if (finalCount < 0.1) {
-    await db.prepare(
-      "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?"
-    ).run(token);
-    return { success: true, remainingCount: 0, justBlacklisted: true };
-  }
-
-  return { success: true, remainingCount: finalCount };
 }
+
+// ==================== AI模式预锁定机制 ====================
+// 防止并发请求导致余额透支，调用AI前锁定一定数量的token，完成后按实际消耗结算
+
+// 内存中存储当前锁定的token：token -> { lockedAt, lockCount }
+const lockedTokens = new Map();
+const LOCK_EXPIRY = 60 * 1000; // 锁定60秒后自动释放（兜底，防死锁）
+
+/**
+ * 锁定Token次数（AI模式调用前）
+ * @param {string} token - 用户Token
+ * @param {number} lockCount - 锁定次数
+ * @returns {Promise<Object>} { success, remainingCount, message }
+ */
+async function lockToken(token, lockCount) {
+  if (!token) return { success: false, message: 'Token为空' };
+  
+  // 清理该Token的过期锁定（如果有）
+  const existing = lockedTokens.get(token);
+  if (existing && Date.now() - existing.lockedAt >= LOCK_EXPIRY) {
+    lockedTokens.delete(token);
+  }
+  
+  // 检查余额是否足够
+  const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ? AND is_blacklisted = 0').get(token);
+  if (!record) {
+    return { success: false, message: 'Token无效或已被拉黑' };
+  }
+  if (record.remaining_count < lockCount) {
+    return { success: false, message: `余额不足，需要${lockCount}次，剩余${record.remaining_count}次，请赞助获取新token` };
+  }
+  
+  // 锁定：扣除锁定次数
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    // 原子扣减锁定次数
+    const [result] = await conn.execute(
+      'UPDATE tokens SET remaining_count = remaining_count - ? WHERE token = ? AND remaining_count >= ?',
+      [lockCount, token, lockCount]
+    );
+    
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return { success: false, message: '余额不足，请赞助获取新token' };
+    }
+    
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    console.error('[lockToken] 事务失败:', e.message);
+    return { success: false, message: '锁定失败，请稍后重试' };
+  } finally {
+    conn.release();
+  }
+  
+  // 记录锁定
+  lockedTokens.set(token, { lockedAt: Date.now(), lockCount });
+  
+  return { 
+    success: true, 
+    remainingCount: record.remaining_count - lockCount 
+  };
+}
+
+/**
+ * 结算Token（AI模式调用完成后）
+ * 预锁定时已扣减lockCount，现在根据actualCost多退少补：
+ *   - actualCost < lockCount：退还 (lockCount - actualCost) 次
+ *   - actualCost > lockCount：补扣 (actualCost - lockCount) 次
+ *   - actualCost = lockCount：无需操作
+ * @param {string} token - 用户Token
+ * @param {number} lockCount - 预锁定次数
+ * @param {number} actualCost - 实际消耗
+ * @returns {Promise<Object>} { success, remainingCount, message }
+ */
+async function settleToken(token, lockCount, actualCost) {
+  if (!token) return { success: false, message: 'Token为空' };
+  
+  // 清除锁定记录
+  lockedTokens.delete(token);
+  
+  const diff = lockCount - actualCost; // 正数=退还，负数=补扣
+  
+  if (diff === 0) {
+    // 刚好相等，无需操作
+    const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ?').get(token);
+    return { success: true, remainingCount: record ? record.remaining_count : 0 };
+  }
+  
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    if (diff > 0) {
+      // 退还多余次数
+      await conn.execute(
+        'UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?',
+        [diff, token]
+      );
+    } else {
+      // 补扣不足次数（actualCost > lockCount 的情况）
+      const extraCost = Math.abs(diff);
+      const [result] = await conn.execute(
+        'UPDATE tokens SET remaining_count = remaining_count - ? WHERE token = ? AND remaining_count >= ?',
+        [extraCost, token, extraCost]
+      );
+      if (result.affectedRows === 0) {
+        // 余额不足以补扣，扣到0并拉黑
+        await conn.execute(
+          'UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?',
+          [token]
+        );
+        await conn.commit();
+        console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 余额不足补扣${extraCost}次，已拉黑`);
+        return { success: true, remainingCount: 0 };
+      }
+    }
+    
+    await conn.commit();
+    
+    // 查询更新后余额
+    const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ?').get(token);
+    return { 
+      success: true, 
+      remainingCount: record ? record.remaining_count : 0 
+    };
+  } catch (e) {
+    await conn.rollback();
+    console.error('[settleToken] 事务失败:', e.message);
+    return { success: false, message: '结算失败' };
+  } finally {
+    conn.release();
+  }
+}
+
+/**
+ * 释放锁定（异常时调用，不返还次数）
+ * 注意：正常流程应使用 settleToken 返还多余次数，此方法仅用于异常回退
+ * @param {string} token - 用户Token
+ * @param {number} lockCount - 锁定次数
+ */
+async function releaseToken(token, lockCount) {
+  if (!token) return;
+  lockedTokens.delete(token);
+  // 不返还次数，锁定时的扣减保留（异常时用户损失锁定次数，防止恶意利用异常逃费）
+  console.log(`[预锁定] Token ${token.substring(0, 8)}*** 异常释放，${lockCount}次已扣`);
+}
+
+// 定期清理过期锁定
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [token, data] of lockedTokens.entries()) {
+    if (now - data.lockedAt > LOCK_EXPIRY) {
+      lockedTokens.delete(token);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`[预锁定] 清理${cleaned}个过期锁定`);
+  }
+}, 30 * 1000); // 每30秒清理一次
 
 // 导出认证函数
 module.exports = {
@@ -484,5 +670,8 @@ module.exports = {
   checkReferralStatus,
   getReferralStats,
   decrementCount,
-  verifyUserFid
+  verifyUserFid,
+  lockToken,
+  settleToken,
+  releaseToken
 };

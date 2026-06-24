@@ -3,7 +3,7 @@ const path = require('path');
 // 加载 .env 文件
 const envPath = path.join(__dirname, '../../.env');
 require('dotenv').config({ path: envPath });
-console.log('✓ 环境变量加载自:', envPath);
+console.log('[OK] 环境变量加载自:', envPath);
 
 // ==================== 应用配置常量 ====================
 const PORT = process.env.PORT || 3000;
@@ -45,6 +45,12 @@ function getEnv(key, defaultVal) {
 // 云端脚本最新版本号（从环境变量读取，用于版本检查）
 const LATEST_VERSION = getEnv('LATEST_VERSION', '2.2.6');
 
+// ==================== 固定模式消耗配置（最小扣除次数）====================
+// 正常模式：缓存命中扣0.8次、AI补充扣1次
+const NORMAL_MODE_COST = '0.8-1次';
+// 校验模式：缓存命中0.8次、第一步1次+AI消耗、第二步深度思考1-3次
+const VERIFY_MODE_COST = '0.8-3次';
+
 module.exports = {
   PORT,
   TIKU_API_URL,
@@ -56,5 +62,7 @@ module.exports = {
   SERVER_ID,
   SPONSOR_URL,
   getEnv,
-  LATEST_VERSION
+  LATEST_VERSION,
+  NORMAL_MODE_COST,
+  VERIFY_MODE_COST
 };

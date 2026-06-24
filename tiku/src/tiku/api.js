@@ -21,12 +21,12 @@ async function fetchUcuc(questionData) {
   const apiKey = getEnv('UCUC_API_KEY');
 
   if (!apiKey) {
-    console.log("✗ UCUC 题库未配置 UCUC_API_KEY");
+    console.log("[X] UCUC 题库未配置 UCUC_API_KEY");
     return { code: 500, msg: "UCUC题库未配置ApiKey", data: null };
   }
 
   try {
-    console.log("━━━ UCUC 题库查询中... ━━━");
+    console.log("=== UCUC 题库查询中... ===");
 
     // 统计 UCUC 调用次数
     await incrementUcucCalls();
@@ -51,7 +51,7 @@ async function fetchUcuc(questionData) {
         ? questionData.options.split('\n').filter(o => o.trim())
         : questionData.options;
       requestBody.options = JSON.stringify(optionsArr);
-      console.log(`📤 UCUC 上传选项: ${optionsArr.length} 个`);
+      console.log(`[UP] UCUC 上传选项: ${optionsArr.length} 个`);
     }
 
     const response = await fetchWithTimeout("https://so.ucuc.net/prod-api/system/questionBank/search", {
@@ -63,7 +63,7 @@ async function fetchUcuc(questionData) {
     });
 
     if (!response.ok) {
-      console.log(`✗ UCUC 题库 HTTP错误: ${response.status} ${response.statusText}`);
+      console.log(`[X] UCUC 题库 HTTP错误: ${response.status} ${response.statusText}`);
       return { code: response.status, msg: `UCUC题库HTTP错误: ${response.status}`, data: null };
     }
 
@@ -72,13 +72,13 @@ async function fetchUcuc(questionData) {
     // 记录查询日志
     await incrementTotalQueries('ucuc');
 
-    console.log(`📥 UCUC 返回: code=${result.code}, msg="${result.msg || ''}"`);
+    console.log(`[DOWN] UCUC 返回: code=${result.code}, msg="${result.msg || ''}"`);
     if (result.data?.remainingCount !== undefined) {
-      console.log(`📥 UCUC 剩余次数: ${result.data.remainingCount}`);
+      console.log(`[DOWN] UCUC 剩余次数: ${result.data.remainingCount}`);
     }
 
     if (result.code !== 200 || !result.data || !result.data.answer) {
-      console.log(`✗ UCUC 题库未找到答案: "${(questionData.question || '').substring(0, 30)}..."`);
+      console.log(`[X] UCUC 题库未找到答案: "${(questionData.question || '').substring(0, 30)}..."`);
       return { code: 404, msg: result.msg || "UCUC题库未找到答案", data: null };
     }
 
@@ -126,13 +126,13 @@ async function fetchUcuc(questionData) {
       answers = answerText.map(a => cleanBlankPrefix(typeof a === 'string' ? a : String(a))).filter(a => a);
     }
 
-    console.log(`✓ UCUC 题库找到答案:`, JSON.stringify(answers));
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log(`[OK] UCUC 题库找到答案:`, JSON.stringify(answers));
+    console.log("==========================");
 
     // 统一答案校验（单选/多选数量、选项匹配、判断题格式）
     const ucucValidation = validateSourceAnswer('UCUC题库', questionData.type, answers, questionData.options);
     if (!ucucValidation.valid) {
-      console.log(`✗ ${ucucValidation.reason}`);
+      console.log(`[X] ${ucucValidation.reason}`);
       return { code: 404, msg: ucucValidation.reason, data: { answer: answers } };
     }
 
@@ -147,14 +147,14 @@ async function fetchUcuc(questionData) {
       const hasCorrect = normalizedJudgments.includes('correct');
       const hasWrong = normalizedJudgments.includes('wrong');
       if (hasCorrect && hasWrong) {
-        console.log(`✗ UCUC 题库判断题答案矛盾: 同时包含正确和错误 → ${answers.join(', ')}`);
+        console.log(`[X] UCUC 题库判断题答案矛盾: 同时包含正确和错误 → ${answers.join(', ')}`);
         return { code: 404, msg: "UCUC题库判断题答案矛盾(同时包含正确和错误)", data: { answer: answers } };
       }
       if (hasCorrect) {
-        console.log(`✓ UCUC 判断题多答案统一为正确: ${answers.join(', ')} → ["正确"]`);
+        console.log(`[OK] UCUC 判断题多答案统一为正确: ${answers.join(', ')} → ["正确"]`);
         answers = ["正确"];
       } else if (hasWrong) {
-        console.log(`✓ UCUC 判断题多答案统一为错误: ${answers.join(', ')} → ["错误"]`);
+        console.log(`[OK] UCUC 判断题多答案统一为错误: ${answers.join(', ')} → ["错误"]`);
         answers = ["错误"];
       }
     }
@@ -175,7 +175,7 @@ async function fetchUcuc(questionData) {
       }
     };
   } catch (e) {
-    console.error("✗ UCUC 题库请求失败:", e.message);
+    console.error("[X] UCUC 题库请求失败:", e.message);
     return { code: 500, msg: `UCUC题库请求失败: ${e.message}`, data: null };
   }
 }
@@ -209,13 +209,13 @@ async function getAvailableTikuKey() {
       // 切换到另一个密钥（数据库显示有次数）
       const newKeyNum = currentKey === 1 ? 2 : 1;
       await db.prepare("UPDATE global_stats SET current_tiku_key = ? WHERE id = 1").run(newKeyNum);
-      console.log(`🔄 题库海密钥切换: 密钥${currentKey}次数耗尽，切换到密钥${newKeyNum}`);
+      console.log(`[SWITCH] 题库海密钥切换: 密钥${currentKey}次数耗尽，切换到密钥${newKeyNum}`);
       currentKey = newKeyNum;
     } else {
       // 数据库显示两个密钥都是0，但仍返回当前密钥尝试调用
       // 因为用户可能已充值，数据库还没更新
       // 实际调用API时会更新数据库值
-      console.log(`⚠️ 数据库显示两个密钥次数都为0，仍尝试密钥${currentKey}（可能已充值）`);
+      console.log(`[WARN] 数据库显示两个密钥次数都为0，仍尝试密钥${currentKey}（可能已充值）`);
       return {
         key: currentKey === 1 ? key1 : key2,
         keyNum: currentKey,
@@ -241,7 +241,7 @@ async function updateTikuKeyRemaining(keyNum, remaining) {
     await db.prepare(
       `UPDATE global_stats SET \`${field}\` = ?, updated_at = ? WHERE id = 1`
     ).run(remaining, Math.floor(Date.now() / 1000));
-    console.log(`✓ 题库海密钥${keyNum}剩余次数已更新:`, remaining);
+    console.log(`[OK] 题库海密钥${keyNum}剩余次数已更新:`, remaining);
   } catch (e) {
     console.error(`更新题库海密钥${keyNum}剩余次数失败:`, e.message);
   }
@@ -251,7 +251,7 @@ async function updateTikuKeyRemaining(keyNum, remaining) {
 async function refreshTikuKeyRemaining(keyNum) {
   const key = keyNum === 1 ? getEnv('TIKU_API_KEY_1') : getEnv('TIKU_API_KEY_2');
   if (!key) {
-    console.log(`⚠️ 题库海密钥${keyNum}未配置`);
+    console.log(`[WARN] 题库海密钥${keyNum}未配置`);
     return null;
   }
   
@@ -261,14 +261,14 @@ async function refreshTikuKeyRemaining(keyNum) {
     
     if (result.code === 0 && result.data && result.data.num !== undefined) {
       await updateTikuKeyRemaining(keyNum, result.data.num);
-      console.log(`✓ 题库海密钥${keyNum}刷新成功: 剩余${result.data.num}次`);
+      console.log(`[OK] 题库海密钥${keyNum}刷新成功: 剩余${result.data.num}次`);
       return result.data.num;
     } else {
-      console.log(`✗ 题库海密钥${keyNum}刷新失败:`, result.msg || '未知错误');
+      console.log(`[X] 题库海密钥${keyNum}刷新失败:`, result.msg || '未知错误');
       return null;
     }
   } catch (e) {
-    console.error(`✗ 题库海密钥${keyNum}刷新异常:`, e.message);
+    console.error(`[X] 题库海密钥${keyNum}刷新异常:`, e.message);
     return null;
   }
 }
@@ -306,7 +306,7 @@ async function fetchAnswer(questionData) {
   
   // 如果两个密钥都没次数，直接跳过题库海
   if (remaining1 <= 0 && remaining2 <= 0) {
-    console.log("⏭️ 题库海两个密钥次数都为0，跳过题库海");
+    console.log("[SKIP] 题库海两个密钥次数都为0，跳过题库海");
     return { code: 403, msg: "题库海次数耗尽，已跳过", data: null, skipTiku: true };
   }
   
@@ -329,14 +329,14 @@ async function fetchAnswer(questionData) {
       key: key
     });
     
-    console.log(`━━━ 题库海查询中... (使用密钥${keyNum}) ━━━`);
-    console.log(`📍 题目: ${questionData.question}`);
-    console.log(`📍 题型: ${questionData.type} (${getTypeDescription(questionData.type)})`);
+    console.log(`=== 题库海查询中... (使用密钥${keyNum}) ===`);
+    console.log(`[INFO] 题目: ${questionData.question}`);
+    console.log(`[INFO] 题型: ${questionData.type} (${getTypeDescription(questionData.type)})`);
     // 正确处理options为数组的情况
     const optionsText = Array.isArray(questionData.options) 
       ? questionData.options.join('; ').substring(0, 30)
       : (questionData.options || '').substring(0, 30);
-    console.log(`📍 请求体: question=${questionData.question.substring(0,30)}, options=${optionsText}, type=${questionData.type}`);
+    console.log(`[INFO] 请求体: question=${questionData.question.substring(0,30)}, options=${optionsText}, type=${questionData.type}`);
     
     const response = await fetchWithTimeout(TIKU_API_URL + "?s=PIAOPIAO&v=9.9.9", {
       method: 'POST',
@@ -345,12 +345,12 @@ async function fetchAnswer(questionData) {
     });
     
     if (!response.ok) {
-      console.log(`❌ HTTP错误: ${response.status}`);
+      console.log(`[ERROR] HTTP错误: ${response.status}`);
       return { success: false, error: { code: response.status, msg: `HTTP错误: ${response.status}` } };
     }
     
     const result = await response.json();
-    console.log(`📍 code: ${result.code}, msg: ${result.msg || '无'}`);
+    console.log(`[INFO] code: ${result.code}, msg: ${result.msg || '无'}`);
     
     // 更新题库剩余次数
     if (result.data && result.data.num !== undefined) {
@@ -409,16 +409,16 @@ async function fetchAnswer(questionData) {
                        (Array.isArray(result.data.answer) ? result.data.answer.length > 0 : true);
       
       if (!hasAnswer) {
-        console.log("✗ 题库海 查询成功但无答案（题库中无此题）");
+        console.log("[X] 题库海 查询成功但无答案（题库中无此题）");
         return { code: 404, msg: "题库海无此题", data: result.data };
       }
       
-      const answers = result.data.answer;
+      let answers = result.data.answer;
       
       // 统一答案校验
       const sourceValidation = validateSourceAnswer('题库海', questionData.type, answers, questionData.options);
       if (!sourceValidation.valid) {
-        console.log(`✗ ${sourceValidation.reason}`);
+        console.log(`[X] ${sourceValidation.reason}`);
         return { code: 404, msg: sourceValidation.reason, data: result.data };
       }
 
@@ -427,7 +427,7 @@ async function fetchAnswer(questionData) {
         answers = answers.map(ans => normalizeAnswer(ans, "3"));
       }
 
-      console.log("✓ 题库海 找到答案:", JSON.stringify(answers));
+      console.log("[OK] 题库海 找到答案:", JSON.stringify(answers));
       // 统一answer为数组格式（题库海API可能返回逗号分隔的字符串）
       let normalizedAnswer = result.data.answer;
       if (typeof normalizedAnswer === 'string') {
@@ -448,7 +448,7 @@ async function fetchAnswer(questionData) {
     }
     
     if (apiResult.exhausted) {
-      console.log(`🔄 密钥${currentKey}次数不足，尝试切换到密钥${currentKey === 1 ? 2 : 1}...`);
+      console.log(`[SWITCH] 密钥${currentKey}次数不足，尝试切换到密钥${currentKey === 1 ? 2 : 1}...`);
       console.log(`[密钥切换] IP=${questionData.question?.substring(0, 20) || 'unknown'}, 从密钥${currentKey}切换，原因: 次数不足`);
       currentKey = currentKey === 1 ? 2 : 1;
       continue;
@@ -530,7 +530,7 @@ function parseAnswer(answer, answerOptions) {
   console.log("答案格式：字母，开始转换");
   
   if (!answerOptions) {
-    console.log("⚠️ 缺少选项信息，无法转换字母答案");
+    console.log("[WARN] 缺少选项信息，无法转换字母答案");
     return answerParts; // 无法转换，返回原始字母
   }
   
@@ -556,7 +556,7 @@ function parseAnswer(answer, answerOptions) {
     if (optionsMap[letter]) {
       convertedAnswers.push(optionsMap[letter]);
     } else {
-      console.log(`⚠️ 未找到字母 ${letter} 对应的选项`);
+      console.log(`[WARN] 未找到字母 ${letter} 对应的选项`);
     }
   }
   
@@ -565,7 +565,7 @@ function parseAnswer(answer, answerOptions) {
 
 // Hive-Net 单次查询（内部函数）
 async function fetchHiveNetOnce(questionData, token, tokenName) {
-  console.log(`━━━ Hive-Net 题库查询中... (使用 ${tokenName} token) ━━━`);
+  console.log(`=== Hive-Net 题库查询中... (使用 ${tokenName} token) ===`);
   
   // 统计 Hive-Net 调用次数
   await incrementHiveNetCalls();
@@ -583,7 +583,7 @@ async function fetchHiveNetOnce(questionData, token, tokenName) {
   
   // 检查 HTTP 响应状态
   if (!response.ok) {
-    console.log(`✗ Hive-Net HTTP错误: ${response.status} ${response.statusText}`);
+    console.log(`[X] Hive-Net HTTP错误: ${response.status} ${response.statusText}`);
     return { code: response.status, msg: `Hive-Net HTTP错误: ${response.status}`, data: null };
   }
   
@@ -599,13 +599,13 @@ async function fetchHiveNetOnce(questionData, token, tokenName) {
   
   // Hive-Net 成功码是 0
   if (result.code !== 0) {
-    console.log(`✗ Hive-Net API错误: code=${result.code}, msg=${result.msg || '未知错误'}`);
+    console.log(`[X] Hive-Net API错误: code=${result.code}, msg=${result.msg || '未知错误'}`);
     return { code: result.code, msg: `Hive-Net API错误: ${result.msg || '未知错误'}`, data: null };
   }
   
   // API 返回成功但无数据
   if (!result.data || !result.data.list || result.data.list.length === 0) {
-    console.log("✗ Hive-Net 查询成功但无答案（题库中无此题）");
+    console.log("[X] Hive-Net 查询成功但无答案（题库中无此题）");
     return { code: 404, msg: "Hive-Net无此题", data: null };
   }
   
@@ -639,16 +639,16 @@ async function fetchHiveNet(questionData) {
     
     if (isNewDay) {
       // 新的一天，免费 token 已刷新，优先使用
-      console.log(`━━━ Hive-Net 使用免费 token (新的一天已刷新) ━━━`);
+      console.log(`=== Hive-Net 使用免费 token (新的一天已刷新) ===`);
       apiResult = await fetchHiveNetOnce(questionData, HIVENET_FREE_TOKEN, '免费');
       
       // 如果免费 token 失败，切换到付费 token
       if (!apiResult.success) {
         if (!HIVENET_PAID_TOKEN) {
-          console.log(`✗ 免费 token 查询失败，且未配置 HIVENET_PAID_TOKEN`);
+          console.log(`[X] 免费 token 查询失败，且未配置 HIVENET_PAID_TOKEN`);
           return apiResult;
         }
-        console.log(`🔄 免费 token 查询失败，切换到付费 token...`);
+        console.log(`[SWITCH] 免费 token 查询失败，切换到付费 token...`);
         apiResult = await fetchHiveNetOnce(questionData, HIVENET_PAID_TOKEN, '付费');
       } else {
         // 更新日期和剩余次数
@@ -663,15 +663,15 @@ async function fetchHiveNet(questionData) {
       // 同一天，检查剩余次数
       const freeRemaining = stats.hivenet_remaining || 0;
       if (freeRemaining > 0) {
-        console.log(`━━━ Hive-Net 使用免费 token (剩余 ${freeRemaining} 次) ━━━`);
+        console.log(`=== Hive-Net 使用免费 token (剩余 ${freeRemaining} 次) ===`);
         apiResult = await fetchHiveNetOnce(questionData, HIVENET_FREE_TOKEN, '免费');
         
         if (!apiResult.success) {
           if (!HIVENET_PAID_TOKEN) {
-            console.log(`✗ 免费 token 查询失败，且未配置 HIVENET_PAID_TOKEN`);
+            console.log(`[X] 免费 token 查询失败，且未配置 HIVENET_PAID_TOKEN`);
             return apiResult;
           }
-          console.log(`🔄 免费 token 查询失败，切换到付费 token...`);
+          console.log(`[SWITCH] 免费 token 查询失败，切换到付费 token...`);
           apiResult = await fetchHiveNetOnce(questionData, HIVENET_PAID_TOKEN, '付费');
         } else {
           // 更新剩余次数
@@ -685,10 +685,10 @@ async function fetchHiveNet(questionData) {
       } else {
         // 免费次数已用完，直接使用付费 token
         if (!HIVENET_PAID_TOKEN) {
-          console.log("✗ Hive-Net 免费 token 已耗尽，且未配置 HIVENET_PAID_TOKEN");
+          console.log("[X] Hive-Net 免费 token 已耗尽，且未配置 HIVENET_PAID_TOKEN");
           return { code: 403, msg: "Hive-Net次数耗尽且未配置付费Token", data: null };
         }
-        console.log("━━━ Hive-Net 免费 token 已耗尽，使用付费 token ━━━");
+        console.log("=== Hive-Net 免费 token 已耗尽，使用付费 token ===");
         apiResult = await fetchHiveNetOnce(questionData, HIVENET_PAID_TOKEN, '付费');
       }
     }
@@ -737,7 +737,7 @@ async function fetchHiveNet(questionData) {
     
     // 如果用户没有提供选项，返回失败，让下一个题库处理
     if (userOptionTexts.length === 0) {
-      console.log(`✗ Hive-Net 用户未提供选项，跳过`);
+      console.log(`[X] Hive-Net 用户未提供选项，跳过`);
       return { code: 404, msg: "Hive-Net需要选项进行匹配", data: null };
     }
     
@@ -745,7 +745,7 @@ async function fetchHiveNet(questionData) {
     let exactMatch = null;
 
     // 调试日志：输出用户选项
-    console.log(`📋 用户选项(${userOptionTexts.length}个):`, userOptionTexts);
+    console.log(`[LIST] 用户选项(${userOptionTexts.length}个):`, userOptionTexts);
 
     for (const item of result.data.list) {
       if (!item.answer_options) continue;
@@ -755,7 +755,7 @@ async function fetchHiveNet(questionData) {
       const rawOptions = item.answer_options;
 
       // 先打印原始选项格式，便于调试
-      console.log(`📋 Hive-Net原始选项:`, rawOptions.substring(0, 100) + (rawOptions.length > 100 ? '...' : ''));
+      console.log(`[LIST] Hive-Net原始选项:`, rawOptions.substring(0, 100) + (rawOptions.length > 100 ? '...' : ''));
 
       // 尝试不同的分割方式
       if (rawOptions.includes('\n')) {
@@ -787,11 +787,11 @@ async function fetchHiveNet(questionData) {
       const normalizedHiveNetOptions = hiveNetOptionTexts.map(normalizeText);
       
       // 调试日志：输出选项
-      console.log(`📋 Hive-Net选项(${hiveNetOptionTexts.length}个):`, hiveNetOptionTexts);
+      console.log(`[LIST] Hive-Net选项(${hiveNetOptionTexts.length}个):`, hiveNetOptionTexts);
       
       // 检查选项数量是否相同
       if (normalizedUserOptions.length !== normalizedHiveNetOptions.length) {
-        console.log(`⚠️ 选项数量不匹配: 用户${normalizedUserOptions.length} vs Hive-Net${normalizedHiveNetOptions.length}`);
+        console.log(`[WARN] 选项数量不匹配: 用户${normalizedUserOptions.length} vs Hive-Net${normalizedHiveNetOptions.length}`);
         continue;
       }
       
@@ -802,7 +802,7 @@ async function fetchHiveNet(questionData) {
       for (const userOpt of normalizedUserOptions) {
         if (!normalizedHiveNetOptions.includes(userOpt)) {
           allMatch = false;
-          console.log(`⚠️ 用户选项未在Hive-Net中找到: "${userOpt}"`);
+          console.log(`[WARN] 用户选项未在Hive-Net中找到: "${userOpt}"`);
           break;
         }
       }
@@ -812,7 +812,7 @@ async function fetchHiveNet(questionData) {
         for (const hiveOpt of normalizedHiveNetOptions) {
           if (!normalizedUserOptions.includes(hiveOpt)) {
             allMatch = false;
-            console.log(`⚠️ Hive-Net选项未在用户选项中找到: "${hiveOpt}"`);
+            console.log(`[WARN] Hive-Net选项未在用户选项中找到: "${hiveOpt}"`);
             break;
           }
         }
@@ -820,13 +820,13 @@ async function fetchHiveNet(questionData) {
       
       if (allMatch) {
         exactMatch = item;
-        console.log(`✓ Hive-Net 找到选项完全相同的题目`);
+        console.log(`[OK] Hive-Net 找到选项完全相同的题目`);
         break;
       }
     }
     
     // 缓存 Hive-Net 返回的所有题目（无论是否匹配当前用户）
-    console.log(`━━━ 缓存 Hive-Net 返回的所有题目 (${result.data.list.length} 道) ━━━`);
+    console.log(`=== 缓存 Hive-Net 返回的所有题目 (${result.data.list.length} 道) ===`);
     for (const item of result.data.list) {
       if (!item.question || !item.answer || !item.answer_options) continue;
 
@@ -878,13 +878,13 @@ async function fetchHiveNet(questionData) {
 
       // 异步保存，不阻塞主流程（saveAnswerToCache 内部会验证答案）
       saveAnswerToCache(itemHash, item.question, itemOptions, itemType, itemAnswers, "hivenet").catch(e => {
-        console.log(`✗ 缓存失败: ${item.question.substring(0, 20)}... - ${e.message}`);
+        console.log(`[X] 缓存失败: ${item.question.substring(0, 20)}... - ${e.message}`);
       });
     }
     
     // 如果没有找到选项完全相同的题目，返回失败
     if (!exactMatch) {
-      console.log(`✗ Hive-Net 未找到选项完全相同的题目，跳过`);
+      console.log(`[X] Hive-Net 未找到选项完全相同的题目，跳过`);
       return { code: 404, msg: "Hive-Net未找到选项完全匹配的题目", data: null };
     }
     
@@ -898,11 +898,11 @@ async function fetchHiveNet(questionData) {
     // 统一答案校验
     const hiveValidation = validateSourceAnswer('Hive-Net', questionData.type, answers, questionData.options);
     if (!hiveValidation.valid) {
-      console.log(`✗ ${hiveValidation.reason}`);
+      console.log(`[X] ${hiveValidation.reason}`);
       return { code: 404, msg: hiveValidation.reason, data: null };
     }
     
-    console.log("✓ Hive-Net 找到答案:", answers);
+    console.log("[OK] Hive-Net 找到答案:", answers);
 
     // 【修复】返回清理后的选项（与缓存一致）
     // 注意：exactMatch.answer_options是原始字符串，需要重新解析并清理
@@ -951,7 +951,7 @@ async function fetchHiveNet(questionData) {
     };
     
   } catch (e) {
-    console.error("✗ Hive-Net 网络错误:", e.message);
+    console.error("[X] Hive-Net 网络错误:", e.message);
     return { 
       code: 500, 
       msg: `Hive-Net网络错误: ${e.message}`, 
@@ -967,12 +967,12 @@ async function fetchYanxi(questionData) {
   const token = getEnv('YANXI_TOKEN');
   
   if (!token) {
-    console.log("✗ 言溪题库未配置 YANXI_TOKEN");
+    console.log("[X] 言溪题库未配置 YANXI_TOKEN");
     return { code: 500, msg: "言溪题库未配置Token", data: null };
   }
   
   try {
-    console.log("━━━ 言溪题库查询中... ━━━");
+    console.log("=== 言溪题库查询中... ===");
     
     // 统计言溪题库调用次数
     await incrementYanxiCalls();
@@ -988,14 +988,14 @@ async function fetchYanxi(questionData) {
     
     // 题型检查
     if (!questionData.type) {
-      console.log("✗ 言溪题库缺少题型参数");
+      console.log("[X] 言溪题库缺少题型参数");
       return { code: 400, msg: "言溪题库缺少题型参数", data: null };
     }
     
     // 单选(0)、多选(1) 需要选项
     const needOptions = ["0", "1"].includes(questionData.type);
     if (needOptions && !questionData.options) {
-      console.log("✗ 言溪题库此题型需要选项参数");
+      console.log("[X] 言溪题库此题型需要选项参数");
       return { code: 400, msg: "言溪题库此题型需要选项参数", data: null };
     }
     
@@ -1022,9 +1022,9 @@ async function fetchYanxi(questionData) {
     }
     
     // 打印请求参数
-    console.log(`📤 言溪请求: 题型=${yanxiType}, 题目="${(questionData.question || '').substring(0, 30)}..."`);
+    console.log(`[UP] 言溪请求: 题型=${yanxiType}, 题目="${(questionData.question || '').substring(0, 30)}..."`);
     if (yanxiOptions) {
-      console.log(`📤 言溪选项: "${yanxiOptions.substring(0, 50)}..."`);
+      console.log(`[UP] 言溪选项: "${yanxiOptions.substring(0, 50)}..."`);
     }
     
     // 构建请求 URL
@@ -1045,7 +1045,7 @@ async function fetchYanxi(questionData) {
     
     // 检查 HTTP 响应状态
     if (!response.ok) {
-      console.log(`✗ 言溪题库 HTTP连接错误: ${response.status} ${response.statusText}`);
+      console.log(`[X] 言溪题库 HTTP连接错误: ${response.status} ${response.statusText}`);
       return { code: response.status, msg: `言溪题库HTTP连接错误: ${response.status}`, data: null };
     }
     
@@ -1055,20 +1055,20 @@ async function fetchYanxi(questionData) {
     await incrementTotalQueries('yanxi');
     
     // 打印言溪返回状态
-    console.log(`📥 言溪返回: code=${result.code}, message="${result.message || ''}"`);
+    console.log(`[DOWN] 言溪返回: code=${result.code}, message="${result.message || ''}"`);
     if (result.data?.times !== undefined) {
-      console.log(`📥 言溪剩余次数: ${result.data.times}`);
+      console.log(`[DOWN] 言溪剩余次数: ${result.data.times}`);
     }
     
     // 言溪返回码说明:
     // code=1 找到答案, code=0 未找到答案
     if (result.code === 0) {
-      console.log(`✗ 言溪题库未找到答案: "${(questionData.question || '').substring(0, 30)}..."`);
+      console.log(`[X] 言溪题库未找到答案: "${(questionData.question || '').substring(0, 30)}..."`);
       return { code: 404, msg: "言溪题库未找到答案", data: null };
     }
     
     if (result.code !== 1) {
-      console.log(`✗ 言溪题库返回异常: code=${result.code}, message="${result.message || '未知错误'}"`);
+      console.log(`[X] 言溪题库返回异常: code=${result.code}, message="${result.message || '未知错误'}"`);
       return { code: result.code, msg: `言溪题库返回异常: ${result.message || '未知错误'}`, data: null };
     }
     
@@ -1079,14 +1079,14 @@ async function fetchYanxi(questionData) {
     
     // API 返回成功但无答案
     if (!result.data || !result.data.answer) {
-      console.log("✗ 言溪题库查询成功但无答案");
+      console.log("[X] 言溪题库查询成功但无答案");
       return { code: 404, msg: "言溪题库无此题", data: result.data };
     }
     
     // 记录是否为 AI 生成
     const isAiGenerated = result.data.ai === true;
     if (isAiGenerated) {
-      console.log("ℹ️ 言溪题库答案为 AI 生成");
+      console.log("[I] 言溪题库答案为 AI 生成");
     }
     
     // 解析答案
@@ -1129,7 +1129,7 @@ async function fetchYanxi(questionData) {
           const parsed = JSON.parse(answerText);
           if (Array.isArray(parsed)) {
             answers = parsed.map(a => typeof a === 'string' ? a.trim() : String(a)).filter(a => a);
-            console.log("📥 言溪答案JSON解析成功:", answers);
+            console.log("[DOWN] 言溪答案JSON解析成功:", answers);
           } else {
             answers = [String(parsed).trim()];
           }
@@ -1170,13 +1170,13 @@ async function fetchYanxi(questionData) {
     if (needOptions) {
       // 单选题返回多个答案，跳过
       if (questionData.type === "0" && answers.length > 1) {
-        console.log(`✗ 言溪题库 答案异常: 单选题返回了${answers.length}个答案，跳过`);
+        console.log(`[X] 言溪题库 答案异常: 单选题返回了${answers.length}个答案，跳过`);
         return { code: 404, msg: "言溪题库答案与题型不匹配(单选返回多答案)", data: { answer: answers } };
       }
       
       // 多选题只返回1个答案，跳过
       if (questionData.type === "1" && answers.length === 1) {
-        console.log(`✗ 言溪题库 答案异常: 多选题只返回了1个答案，跳过`);
+        console.log(`[X] 言溪题库 答案异常: 多选题只返回了1个答案，跳过`);
         return { code: 404, msg: "言溪题库答案与题型不匹配(多选返回单答案)", data: { answer: answers } };
       }
     }
@@ -1203,7 +1203,7 @@ async function fetchYanxi(questionData) {
       });
       
       if (invalidAnswers.length > 0) {
-        console.log(`✗ 言溪题库答案不在选项中: ${invalidAnswers.join(', ')}`);
+        console.log(`[X] 言溪题库答案不在选项中: ${invalidAnswers.join(', ')}`);
         return { code: 404, msg: "言溪题库答案不在选项中", data: { answer: answers, options: yanxiOptions } };
       }
     }
@@ -1213,7 +1213,7 @@ async function fetchYanxi(questionData) {
       const judgeKeywords = /^(正确|错误|对|错|true|false|√|×|是|否|T|F)$/i;
       const allAnswersValid = answers.every(ans => judgeKeywords.test(String(ans).replace(/^[A-Z][.、]\s*/, '').trim()));
       if (!allAnswersValid) {
-        console.log(`✗ 言溪题库答案不符合判断题格式: ${answers.join(', ')}`);
+        console.log(`[X] 言溪题库答案不符合判断题格式: ${answers.join(', ')}`);
         return { code: 404, msg: "言溪题库答案不符合判断题格式", data: { answer: answers } };
       }
     }
@@ -1223,7 +1223,7 @@ async function fetchYanxi(questionData) {
       answers = answers.map(ans => normalizeAnswer(ans, "3"));
     }
     
-    console.log("✓ 言溪题库找到答案:", JSON.stringify(answers));
+    console.log("[OK] 言溪题库找到答案:", JSON.stringify(answers));
     
     return {
       code: 200,
@@ -1237,7 +1237,7 @@ async function fetchYanxi(questionData) {
     };
     
   } catch (e) {
-    console.error("✗ 言溪题库网络错误:", e.message);
+    console.error("[X] 言溪题库网络错误:", e.message);
     return { 
       code: 500, 
       msg: `言溪题库网络错误: ${e.message}`, 
