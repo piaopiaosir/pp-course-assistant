@@ -634,6 +634,41 @@ async function releaseToken(token, lockCount) {
   console.log(`[预锁定] Token ${token.substring(0, 8)}*** 异常释放，${lockCount}次已扣`);
 }
 
+// ==================== 每晚0点重置黑名单Token次数 ====================
+// 将 is_blacklisted = 1 的 token 的 remaining_count 重置为 0（不解除黑名单）
+function scheduleBlacklistReset() {
+  const now = new Date();
+  // 计算下一个0点（UTC+8）
+  const utc8Now = new Date(now.getTime() + 8 * 3600000);
+  const nextMidnightUTC8 = new Date(utc8Now);
+  nextMidnightUTC8.setUTCDate(nextMidnightUTC8.getUTCDate() + 1);
+  nextMidnightUTC8.setUTCHours(0, 0, 0, 0);
+  // 转回本地时间戳
+  const delay = nextMidnightUTC8.getTime() - 8 * 3600000 - now.getTime();
+
+  setTimeout(async () => {
+    await resetBlacklistedTokens();
+    // 之后每24小时执行一次
+    setInterval(resetBlacklistedTokens, 24 * 60 * 60 * 1000);
+  }, delay);
+
+  console.log(`[黑名单重置] 已调度，下次执行: ${nextMidnightUTC8.toISOString().replace('T', ' ').substring(0, 19)} (UTC+8 0点)`);
+}
+
+async function resetBlacklistedTokens() {
+  try {
+    const result = await db.prepare(
+      "UPDATE tokens SET remaining_count = 0 WHERE is_blacklisted = 1"
+    ).run();
+    console.log(`[黑名单重置] 已重置 ${result.changes} 个黑名单Token的remaining_count→0`);
+  } catch (e) {
+    console.error('[黑名单重置] 重置失败:', e.message);
+  }
+}
+
+// 启动时调度
+scheduleBlacklistReset();
+
 // 定期清理过期锁定
 setInterval(() => {
   const now = Date.now();

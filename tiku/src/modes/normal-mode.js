@@ -10,7 +10,7 @@
 const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
 const { validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
-const { MODEL_COLUMN_MAP, getModelConfig, calculateCostFromTokens } = require('../config/ai-models');
+const { MODEL_COLUMN_MAP, getModelConfig, calculateCostFromTokens, getDisplayName } = require('../config/ai-models');
 
 // ==================== 正常模式 AI 补充 ====================
 
@@ -198,7 +198,7 @@ async function fetchAISupplement(questionData) {
                   console.log("==========================");
                   return {
                     code: 200,
-                    data: { answer: thinkingParsed.answer, source: AI_MODEL_NORMAL_THINKING },
+                    data: { answer: thinkingParsed.answer, source: getDisplayName(AI_MODEL_NORMAL_THINKING) },
                     msg: "未命中缓存"
                   };
               }
@@ -226,7 +226,7 @@ async function fetchAISupplement(questionData) {
         
         return {
           code: 200,
-          data: { answer: parsed.answer, source: model },
+          data: { answer: parsed.answer, source: getDisplayName(model) },
           msg: "未命中缓存",
           tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens },
           modelId: model
