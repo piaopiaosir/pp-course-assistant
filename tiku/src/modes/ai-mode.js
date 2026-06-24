@@ -383,10 +383,11 @@ async function handleAIMode(c, params) {
 
     const lockResult = await lockToken(token, prelockCount);
     if (!lockResult.success) {
+      const costLevel = modelConfig.cost || '低消耗';
       log(`预锁定失败: ${lockResult.message}`);
       return c.json({
         code: 403,
-        msg: lockResult.message,
+        msg: `剩余次数过少，无法使用（${costLevel}模型）`,
         data: { num: lockResult.remainingCount || 0, answer: [], sponsorUrl: SPONSOR_URL }
       }, 403);
     }
