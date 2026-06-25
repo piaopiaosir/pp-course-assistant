@@ -70,9 +70,10 @@ function checkIpInWhitelist(ip, whitelist) {
       const prefixParts = prefix.split('.').map(Number);
       if (ipParts.length !== 4 || prefixParts.length !== 4) return false;
       
-      const ipNum = ((ipParts[0] << 24) >>> 0) + ((ipParts[1] << 16) >>> 0) + ((ipParts[2] << 8) >>> 0) + (ipParts[3] >>> 0);
-      const prefixNum = ((prefixParts[0] << 24) >>> 0) + ((prefixParts[1] << 16) >>> 0) + ((prefixParts[2] << 8) >>> 0) + (prefixParts[3] >>> 0);
-      const maskNum = ((~((1 << (32 - mask)) - 1)) >>> 0);
+      // 使用乘法替代位移，避免32位有符号整数溢出（A类地址>127会变负数）
+      const ipNum = ipParts[0] * 256 ** 3 + ipParts[1] * 256 ** 2 + ipParts[2] * 256 + ipParts[3];
+      const prefixNum = prefixParts[0] * 256 ** 3 + prefixParts[1] * 256 ** 2 + prefixParts[2] * 256 + prefixParts[3];
+      const maskNum = (0xFFFFFFFF << (32 - mask)) >>> 0;
       
       return (ipNum & maskNum) === (prefixNum & maskNum);
     }
@@ -180,39 +181,44 @@ async function recordIpViolation(ip) {
   }
 }
 
-// 记录IP访问日志（累计模式）
+// 记录IP访问日志（累计模式，使用原子 UPSERT 避免并发竞态导致重复键错误）
 async function logIpAccess(ip, endpoint, userAgent, isSuspicious = false) {
   const now = Math.floor(Date.now() / 1000);
-  
-  // 检查是否已存在该IP记录
-  const existing = await db.prepare(`SELECT id, access_count FROM ip_access_logs WHERE ip = ?`).get(ip);
-  
-  if (existing) {
-    // 已存在，更新访问次数和时间
-    await db.prepare(`
-      UPDATE ip_access_logs 
-      SET access_count = access_count + 1, 
-          endpoint = ?, 
-          user_agent = ?, 
-          is_suspicious = MAX(is_suspicious, ?),
-          updated_at = ?
-      WHERE ip = ?
-    `).run(endpoint, userAgent, isSuspicious ? 1 : 0, now, ip);
-  } else {
-    // 新IP，获取归属地并插入
-    const location = await getIpLocation(ip);
-    await db.prepare(`
+  const suspiciousFlag = isSuspicious ? 1 : 0;
+
+  try {
+    // 先尝试 INSERT（带 ON DUPLICATE KEY UPDATE），新 IP 默认 location='查询中'
+    const result = await db.prepare(`
       INSERT INTO ip_access_logs (ip, endpoint, user_agent, ip_location, is_suspicious, access_count, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-    `).run(ip, endpoint, userAgent, location, isSuspicious ? 1 : 0, now, now);
+      VALUES (?, ?, ?, '查询中', ?, 1, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        access_count = access_count + 1,
+        endpoint = VALUES(endpoint),
+        user_agent = VALUES(user_agent),
+        is_suspicious = GREATEST(is_suspicious, VALUES(is_suspicious)),
+        updated_at = VALUES(updated_at)
+    `).run(ip, endpoint, userAgent, suspiciousFlag, now, now);
+
+    // 新插入的记录（affectedRows > 0 且是 INSERT）→ 后台异步查归属地
+    // 注意：ON DUPLICATE KEY UPDATE 时 affectedRows=2（更新）或 1（无变化）
+    if (result.changes === 1) {
+      // 新插入的行
+      getIpLocation(ip).then(location => {
+        db.prepare('UPDATE ip_access_logs SET ip_location = ? WHERE ip = ?')
+          .run(location, ip)
+          .catch(e => console.error('[IP归属地] 后台更新失败:', e.message));
+      }).catch(e => console.error('[IP归属地] 查询失败:', e.message));
+    }
+  } catch (e) {
+    console.error('[logIpAccess] 记录失败:', e.message);
   }
 }
 
-// IP请求频率检测（内存缓存）- 单IP单滑动窗口
-const ipRequestCache = new Map(); // ip -> timestamp[]
+// IP请求频率检测（内存缓存）- 按 (ip, endpoint) 维度分别维护滑动窗口
+const ipRequestCache = new Map(); // `${ip}:${endpoint}` -> timestamp[]
 const RATE_WINDOW = 1000; // 1秒窗口
 
-function checkRateLimit(ip, limit = 10) {
+function checkRateLimit(ip, limit = 10, endpoint = 'default') {
   // 白名单IP跳过频率限制
   if (isIpWhitelisted(ip)) {
     return { allowed: true, count: 0, whitelisted: true };
@@ -220,12 +226,13 @@ function checkRateLimit(ip, limit = 10) {
   
   const now = Date.now();
   const windowStart = now - RATE_WINDOW;
+  const cacheKey = `${ip}:${endpoint}`;
   
-  // 单IP使用一个滑动窗口，取所有请求中最大limit限制
-  let requests = ipRequestCache.get(ip);
+  // 按 (ip, endpoint) 维度维护独立滑动窗口
+  let requests = ipRequestCache.get(cacheKey);
   if (!requests) {
     requests = [];
-    ipRequestCache.set(ip, requests);
+    ipRequestCache.set(cacheKey, requests);
   }
   
   // 清理过期记录

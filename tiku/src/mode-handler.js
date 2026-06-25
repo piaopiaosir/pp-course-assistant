@@ -23,7 +23,10 @@ const { getTypeDescription } = require('./utils');
  * @param {string} params.tokenhubApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
- * @param {Function} params.decrementCount - 扣除次数函数
+ * @param {Function} params.lockToken - 预锁定次数函数
+ * @param {Function} params.settleToken - 结算次数函数
+ * @param {Function} params.releaseToken - 释放锁定函数
+ * @param {string} params.taskId - 异步任务ID
  * @returns {Promise<Response>} Hono响应
  */
 async function handleQuery(c, params) {
@@ -40,7 +43,11 @@ async function handleQuery(c, params) {
     log,
     FREE_MODE,
     limitedMode,
+    lockToken,
+    settleToken,
+    releaseToken,
     decrementCount,
+    taskId,
     skipUserIdCheck
   } = params;
 
@@ -71,7 +78,11 @@ async function handleQuery(c, params) {
       hunyuanApiKey: tokenhubApiKey,
       log,
       FREE_MODE,
+      lockToken,
+      settleToken,
+      releaseToken,
       decrementCount,
+      taskId,
       skipUserIdCheck
     });
   }
@@ -87,6 +98,9 @@ async function handleQuery(c, params) {
       questionHash,
       log,
       FREE_MODE,
+      lockToken,
+      settleToken,
+      releaseToken,
       decrementCount,
       skipUserIdCheck,
       model,
@@ -105,6 +119,9 @@ async function handleQuery(c, params) {
       log,
       FREE_MODE,
       limitedMode,
+      lockToken,
+      settleToken,
+      releaseToken,
       decrementCount,
       skipUserIdCheck
     });

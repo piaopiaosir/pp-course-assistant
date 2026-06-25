@@ -1,7 +1,7 @@
 const { Hono } = require('hono');
 const http = require('http');
-const { db, pool, getEnv, getGlobalStats, PORT, FREE_MODE, INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL } = require('./config');
-const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
+const { db, pool, getEnv, getGlobalStats, PORT, FREE_MODE, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL, withTransaction } = require('./config');
+const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, lockToken, settleToken, releaseToken, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
 const { refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
 const { getTypeDescription, getClientIp } = require('./utils');
 const { getLimitedDate } = require('./ip-security');
@@ -10,13 +10,15 @@ const { isIpBanned, recordIpViolation, logIpAccess, checkRateLimit, isIpWhitelis
 const { handleQuery } = require('./mode-handler');
 const { getModelCosts, getFullModelConfig } = require('./modes/ai-mode');
 const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess, _adminSessionCleanupTimer } = require('./admin/session');
-const { queryTasks, queryRateWindow, recordQueryRate, getQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recentlyQueriedQuestions, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer } = require('./query-tasks');
+const { queryTasks, queryRateWindow, recordQueryRate, getQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recentlyQueriedQuestions, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer, saveTaskToDb, getTaskFromDb, recoverPendingTasks } = require('./query-tasks');
 const { registerAdminRoutes } = require('./admin/routes');
 const { handleRemoteScripts } = require('./remote-scripts');
 
 // 显式初始化数据库（建表+迁移）
 const { initDatabase } = require('./config/db-init');
-initDatabase();
+const { loadInvalidKeys } = require('./tavily-search');
+// 数据库初始化完成后再加载Tavily失效密钥（确保表已创建）
+initDatabase().then(() => loadInvalidKeys()).catch(e => console.error('[启动] 初始化失败:', e.message));
 
 // workType 白名单：只允许这些平台使用题库服务
 const ALLOWED_WORK_TYPES = ['zhs', 'ouchn', 'cx', 'stuActive'];
@@ -50,9 +52,8 @@ app.use('*', async (c, next) => {
     
     const ip = getClientIp(c);
     
-    if (!path.startsWith('/query-task/') && !path.startsWith('/internal/')) {
-      console.log(`[IP] 最终=${ip}`);
-    }
+    // /internal/ 路径已在上方提前 return，此处无需再判断
+    console.log(`[IP] 最终=${ip}`);
     
     if (isIpWhitelisted(ip)) {
       console.log(`[白名单] ${ip} 跳过安全检查`);
@@ -70,19 +71,22 @@ app.use('*', async (c, next) => {
     }
     
     let rateLimit = 20;
+    let endpoint = 'other';
     if (c.req.method === 'POST' && path === '/') {
       rateLimit = 100;
+      endpoint = 'query';
     } else if (path.startsWith('/query-task/')) {
       rateLimit = 30;
+      endpoint = 'poll';
     }
     
-    const rateCheck = checkRateLimit(ip, rateLimit);
+    const rateCheck = checkRateLimit(ip, rateLimit, endpoint);
     if (!rateCheck.allowed) {
       console.log(`[频率限制] ${ip} 请求过于频繁: ${rateCheck.count}次/秒 (限制: ${rateLimit}次/秒)`);
       
       const violation = await recordIpViolation(ip);
       
-      logIpAccess(ip, path, c.req.header('user-agent'), true).catch(() => {});
+      logIpAccess(ip, path, c.req.header('user-agent'), true).catch(e => console.error('[logIpAccess] 记录失败:', e.message));
       
       return c.json({
         code: 429,
@@ -91,7 +95,7 @@ app.use('*', async (c, next) => {
       }, 429);
     }
     
-    logIpAccess(ip, path, c.req.header('user-agent')).catch(() => {});
+    logIpAccess(ip, path, c.req.header('user-agent')).catch(e => console.error('[logIpAccess] 记录失败:', e.message));
     
     await next();
   } catch (error) {
@@ -136,9 +140,21 @@ app.get('/poll-interval', async (c) => {
 
 app.get('/query-task/:taskId', async (c) => {
   const taskId = c.req.param('taskId');
-  const task = queryTasks.get(taskId);
+  let task = queryTasks.get(taskId);
   
+  // 内存未命中时回退到数据库查询（服务重启后内存丢失）
   if (!task) {
+    const dbTask = getTaskFromDb(taskId);
+    if (dbTask) {
+      return c.json({
+        code: 200,
+        msg: 'success',
+        data: {
+          status: dbTask.status,
+          result: dbTask.result || null
+        }
+      });
+    }
     return c.json({
       code: 404,
       msg: '任务不存在或已过期',
@@ -574,43 +590,46 @@ app.post('/welfare', async (c) => {
 
     if (targetUserId) {
       // 事务化福利领取：原子检查 welfare_claimed + 解封 + 加次数 + 更新 user_ids
-      // 保证多步操作的原子性，避免中途失败导致状态不一致
-      const conn = await pool.getConnection();
+      // 保证多步操作的原子性，避免中途失败导致状态不一致（Q-04去重：使用 withTransaction）
       try {
-        await conn.beginTransaction();
-
-        // 原子操作：同时检查并设置 welfare_claimed，防止并发重复领取
-        const [claimResult] = await conn.execute(
-          'UPDATE user_ids SET welfare_claimed = 1 WHERE user_id = ? AND (welfare_claimed = 0 OR welfare_claimed IS NULL)',
-          [targetUserId]
-        );
-        if (claimResult.affectedRows === 0) {
-          await conn.rollback();
-          return c.json({ code: 400, msg: '您已领取过免费次数，每人仅限一次' }, 400);
-        }
-
-        // 仅在剩余次数不足时解封（H-13修复：不无条件解封）
-        if (targetToken.is_blacklisted === 1 && targetToken.remaining_count < 0.1) {
-          await conn.execute('UPDATE tokens SET is_blacklisted = 0 WHERE token = ?', [targetToken.token]);
-          console.log(`[福利领取] Token ${targetToken.token.substring(0, 8)}*** 已自动解封`);
-        }
-
-        let addedCount = 200;
-        if (mode === 'random') {
-          const rand = Math.random();
-          if (rand < 0.6) {
-            addedCount = 1 + Math.floor(Math.random() * 200);
-          } else if (rand < 0.9) {
-            addedCount = 200 + Math.floor(Math.random() * 101);
-          } else {
-            addedCount = 300 + Math.floor(Math.random() * 101);
+        const txnResult = await withTransaction(async (conn) => {
+          // 原子操作：同时检查并设置 welfare_claimed，防止并发重复领取
+          const [claimResult] = await conn.execute(
+            'UPDATE user_ids SET welfare_claimed = 1 WHERE user_id = ? AND (welfare_claimed = 0 OR welfare_claimed IS NULL)',
+            [targetUserId]
+          );
+          if (claimResult.affectedRows === 0) {
+            return { error: { code: 400, msg: '您已领取过免费次数，每人仅限一次' } };
           }
+
+          // 仅在剩余次数不足时解封（H-13修复：不无条件解封）
+          if (targetToken.is_blacklisted === 1 && targetToken.remaining_count < 0.1) {
+            await conn.execute('UPDATE tokens SET is_blacklisted = 0 WHERE token = ?', [targetToken.token]);
+            console.log(`[福利领取] Token ${targetToken.token.substring(0, 8)}*** 已自动解封`);
+          }
+
+          let addedCount = 200;
+          if (mode === 'random') {
+            const rand = Math.random();
+            if (rand < 0.6) {
+              addedCount = 1 + Math.floor(Math.random() * 200);
+            } else if (rand < 0.9) {
+              addedCount = 200 + Math.floor(Math.random() * 101);
+            } else {
+              addedCount = 300 + Math.floor(Math.random() * 101);
+            }
+          }
+
+          await conn.execute('UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?', [addedCount, targetToken.token]);
+
+          return { addedCount };
+        });
+
+        if (txnResult.error) {
+          return c.json(txnResult.error, txnResult.error.code);
         }
 
-        await conn.execute('UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?', [addedCount, targetToken.token]);
-
-        await conn.commit();
-
+        const { addedCount } = txnResult;
         console.log(`[福利领取] ${targetUserId ? `用户 ${targetUserId}` : 'Token无绑定用户'} 领取${addedCount}次（${mode === 'random' ? '随机' : '固定'}），Token: ${targetToken.token.substring(0, 8)}***，原余额: ${targetToken.remaining_count}，已解封: ${targetToken.is_blacklisted === 1}`);
 
         return c.json({
@@ -619,11 +638,8 @@ app.post('/welfare', async (c) => {
           data: { addedCount, newTotal: targetToken.remaining_count + addedCount, token: targetToken.token, mode: mode === 'random' ? 'random' : 'fixed' }
         });
       } catch (txnErr) {
-        await conn.rollback();
         console.error('[福利领取] 事务失败:', txnErr.message);
         return c.json({ code: 500, msg: '领取失败，请稍后重试' }, 500);
-      } finally {
-        conn.release();
       }
     } else {
       return c.json({ code: 400, msg: '该Token未绑定用户ID，无法领取次数' }, 400);
@@ -737,21 +753,24 @@ app.get('/', async (c) => {
       console.log(`为新用户 ${userId} 生成Token: ${newToken}, IP: ${userIp}, fid: ${fid || '未知'}`);
       return c.json({
         code: 200,
-        msg: `欢迎新用户！已为您生成Token，赠送${FREE_MODE ? 999999 : INITIAL_COUNT}次查询额度`,
-        data: { valid: true, num: FREE_MODE ? 999999 : INITIAL_COUNT, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
+        msg: `欢迎新用户！已为您生成Token，赠送${FREE_MODE ? 999999 : FREE_TOKEN_INITIAL_COUNT}次查询额度`,
+        data: { valid: true, num: FREE_MODE ? 999999 : FREE_TOKEN_INITIAL_COUNT, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
       });
     } else {
       const validTokens = await getUserValidTokens(userId);
       if (validTokens.length > 0) {
         if (fid) await recordUserId(userId, null, fid);
-        const fidMatch = await verifyUserFid(userId, fid);
-        if (!fidMatch) {
-          console.log(`[Token验证] userId=${userId} fid验证失败，拒绝返回token列表`);
-          return c.json({
-            code: 403,
-            msg: '身份验证失败，请确保在学习通页面内使用',
-            data: { valid: false }
-          }, 403);
+        // fid 未提供时跳过验证（向后兼容旧客户端）
+        if (fid) {
+          const fidMatch = await verifyUserFid(userId, fid);
+          if (!fidMatch) {
+            console.log(`[Token验证] userId=${userId} fid验证失败，拒绝返回token列表`);
+            return c.json({
+              code: 403,
+              msg: '身份验证失败，请确保在学习通页面内使用',
+              data: { valid: false }
+            }, 403);
+          }
         }
         return c.json({
           code: 401,
@@ -771,7 +790,7 @@ app.get('/', async (c) => {
   const verifyResult = verifyUserToken(token, masterSecret);
   
   if (verifyResult.valid) {
-    const { isNew, record, isBlacklisted } = await initOrGetToken(token, userId, verifyResult.count, clientIp);
+    const { isNew, record, isBlacklisted } = await initOrGetToken(token, userId, verifyResult.count, clientIp, verifyResult.isFreeToken);
     
     if (isBlacklisted) {
       return c.json({
@@ -833,6 +852,65 @@ app.get('/', async (c) => {
   }
 });
 
+// F-02去重：统一访问级别判断（替代分散的 limitedMode 条件判断）
+// 返回值: { level: 'FULL' | 'LIMITED', tokenRecord?, skipUserIdCheck?, checkResult? }
+// 若返回 deniedResponse 字段，则表示需要直接拒绝请求（如免费Token不属于当前用户）
+async function determineAccessLevel({ FREE_MODE, token, masterSecret, userId, workType, clientIp, log }) {
+  // 免费模式：完全访问
+  if (FREE_MODE) {
+    return { level: 'FULL' };
+  }
+
+  // 无Token：受限模式
+  if (!token) {
+    log("[WARN] 无Token，进入受限模式（仅查询缓存）");
+    return { level: 'LIMITED' };
+  }
+
+  // Token验证
+  const verifyResult = verifyUserToken(token, masterSecret);
+  log(`Token验证: ${verifyResult.valid ? "[OK] 通过" : "[X] 失败"} - ${verifyResult.message}`);
+
+  // Token无效：受限模式
+  if (!verifyResult.valid) {
+    log("[WARN] Token无效，进入受限模式（仅查询缓存）");
+    return { level: 'LIMITED' };
+  }
+
+  // Token有效：初始化/获取Token记录
+  const tokenRecord = await initOrGetToken(token, userId, verifyResult.count, clientIp, verifyResult.isFreeToken);
+
+  // 免费Token：只允许 zhs/ouchn 跳过用户ID校验，其他平台必须校验
+  if (tokenRecord.record && tokenRecord.record.is_free_token === 1 && userId && workType !== 'zhs' && workType !== 'ouchn') {
+    const tokenOwnerId = tokenRecord.record.user_id;
+
+    if (tokenOwnerId && tokenOwnerId !== userId) {
+      log(`[WARN] 免费Token不属于当前用户 (Token所有者: ${tokenOwnerId}, 当前用户: ${userId})`);
+      return {
+        level: 'DENIED',
+        deniedResponse: {
+          code: 403,
+          msg: '免费token，限制本人学习通使用[可切换赞助获取token，不限制账户]',
+          data: { answer: ['免费token限制本人学习通使用'], num: 0, sponsorUrl: SPONSOR_URL }
+        }
+      };
+    }
+  }
+
+  const skipUserIdCheck = workType === 'zhs' || workType === 'ouchn';
+  const checkResult = await checkTokenStatus(token, userId, skipUserIdCheck);
+  log(`次数检查: ${checkResult.success ? `[OK] 剩余${checkResult.remainingCount}次` : "[X] " + checkResult.message}`);
+
+  // 次数不足：受限模式
+  if (!checkResult.success) {
+    log("[WARN] 次数不足，进入受限模式（仅查询缓存）");
+    return { level: 'LIMITED', tokenRecord, skipUserIdCheck };
+  }
+
+  // 完全访问
+  return { level: 'FULL', tokenRecord, skipUserIdCheck, checkResult };
+}
+
 app.post('/', async (c) => {
   const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
   const log = (msg) => console.log(`[${requestId}] ${msg}`);
@@ -873,48 +951,16 @@ app.post('/', async (c) => {
     log(`verifyAnswer: ${verifyAnswer} (${typeof verifyAnswer})`);
     log(`userId: ${userId}`);
     
-    let limitedMode = false;
-    
-    if (!FREE_MODE) {
-      if (!token) {
-        log("[WARN] 无Token，进入受限模式（仅查询缓存）");
-        limitedMode = true;
-      } else {
-        const verifyResult = verifyUserToken(token, masterSecret);
-        log(`Token验证: ${verifyResult.valid ? "[OK] 通过" : "[X] 失败"} - ${verifyResult.message}`);
-        
-        if (!verifyResult.valid) {
-          log("[WARN] Token无效，进入受限模式（仅查询缓存）");
-          limitedMode = true;
-        } else {
-          const tokenRecord = await initOrGetToken(token, userId, verifyResult.count, clientIp);
+    // F-02去重：使用统一访问级别判断函数
+    const accessLevel = await determineAccessLevel({ FREE_MODE, token, masterSecret, userId, workType, clientIp, log });
 
-          // 免费Token：只允许 zhs/ouchn 跳过用户ID校验，其他平台必须校验
-          if (tokenRecord.record && tokenRecord.record.is_free_token === 1 && userId && workType !== 'zhs' && workType !== 'ouchn') {
-            const tokenOwnerId = tokenRecord.record.user_id;
-
-            if (tokenOwnerId && tokenOwnerId !== userId) {
-              log(`[WARN] 免费Token不属于当前用户 (Token所有者: ${tokenOwnerId}, 当前用户: ${userId})`);
-
-              return c.json({
-                code: 403,
-                msg: '免费token，限制本人学习通使用[可切换赞助获取token，不限制账户]',
-                data: { answer: ['免费token限制本人学习通使用'], num: 0, sponsorUrl: SPONSOR_URL }
-              }, 403);
-            }
-          }
-
-          const skipUserIdCheck = workType === 'zhs' || workType === 'ouchn';
-          const checkResult = await checkTokenStatus(token, userId, skipUserIdCheck);
-          log(`次数检查: ${checkResult.success ? `[OK] 剩余${checkResult.remainingCount}次` : "[X] " + checkResult.message}`);
-
-          if (!checkResult.success) {
-            log("[WARN] 次数不足，进入受限模式（仅查询缓存）");
-            limitedMode = true;
-          }
-        }
-      }
+    // 处理直接拒绝的情况（如免费Token不属于当前用户）
+    if (accessLevel.level === 'DENIED' && accessLevel.deniedResponse) {
+      return c.json(accessLevel.deniedResponse, accessLevel.deniedResponse.code);
     }
+
+    const limitedMode = accessLevel.level === 'LIMITED';
+    const skipUserIdCheck = accessLevel.skipUserIdCheck || false;
     
     if (limitedMode) {
       const quotaCheck = await checkLimitedDailyQuota(userId, clientIp);
@@ -937,8 +983,8 @@ app.post('/', async (c) => {
       }, 403);
     }
     
-    const { async: supportAsync } = body;
-    if (supportAsync !== true) {
+    const supportAsync = body.async === true;
+    if (!supportAsync) {
       log("[WARN] 检测到老客户端请求，拒绝服务");
       return c.json({
         code: 426,
@@ -959,6 +1005,7 @@ app.post('/', async (c) => {
       result: null,
       createdAt: Date.now()
     });
+    saveTaskToDb(taskId, 'pending', null);
     
     log(`创建异步任务: ${taskId}`);
     
@@ -974,12 +1021,24 @@ app.post('/', async (c) => {
           result: null,
           createdAt: existingTask.createdAt
         });
+        saveTaskToDb(taskId, 'processing', null);
         
         log(`开始执行异步查询: ${taskId}`);
         
-        const skipUserIdCheck = workType === 'zhs' || workType === 'ouchn';
+        // F-02去重：复用前面已计算的 skipUserIdCheck
+        // 创建轻量 mock context，避免使用已响应的 Hono Context
+        // handleQuery 及下游函数仅使用 c.json() 构造 Response，不读取 c.req
+        const mockContext = {
+          json: (data, status) => {
+            const body = JSON.stringify(data);
+            return new Response(body, {
+              status: status || 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        };
         
-        const response = await handleQuery(c, {
+        const response = await handleQuery(mockContext, {
           token,
           userId,
           questionData,
@@ -992,7 +1051,11 @@ app.post('/', async (c) => {
           log,
           FREE_MODE,
           limitedMode,
+          lockToken,
+          settleToken,
+          releaseToken,
           decrementCount,
+          taskId,
           skipUserIdCheck
         });
         
@@ -1026,6 +1089,7 @@ app.post('/', async (c) => {
           result: resultData,
           createdAt: taskForComplete.createdAt
         });
+        saveTaskToDb(taskId, 'completed', resultData);
         
         if (resultData.code === 200 && resultData.data && resultData.data.answer) {
           const { generateQuestionHash } = require('./tiku');
@@ -1036,14 +1100,14 @@ app.post('/', async (c) => {
               questionData.options,
               questionData.type
             );
-            recordRecentlyQueried(token || 'anonymous', questionHash);
+            recordRecentlyQueried(questionHash);
             console.log(`[内部记录] 查询题目 ${questionHash.substring(0, 16)}`);
           }
           
           if (questionData.questions && Array.isArray(questionData.questions)) {
             for (const q of questionData.questions) {
               const qHash = generateQuestionHash(q.question, q.options, q.type);
-              recordRecentlyQueried(token || 'anonymous', qHash);
+              recordRecentlyQueried(qHash);
               console.log(`[内部记录] 批量查询题目 ${qHash.substring(0, 16)}`);
             }
           }
@@ -1065,6 +1129,11 @@ app.post('/', async (c) => {
             data: { answer: [], num: 0 }
           },
           createdAt: taskForError.createdAt
+        });
+        saveTaskToDb(taskId, 'completed', {
+          code: 500,
+          msg: '服务器错误: ' + e.message,
+          data: { answer: [], num: 0 }
         });
       }
     });

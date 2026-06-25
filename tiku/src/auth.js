@@ -1,5 +1,6 @@
-const { db, pool, getEnv, INITIAL_COUNT, getCardTypes, FREE_MODE } = require('./config');
+const { db, pool, getEnv, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, FREE_TOKEN_SECRET, getCardTypes, FREE_MODE, withTransaction } = require('./config');
 const { sha256 } = require('./utils');
+const crypto = require('crypto');
 
 // 检查用户ID是否已存在
 async function checkUserIdExists(userId) {
@@ -162,7 +163,18 @@ function verifyUserToken(token, masterSecret) {
     const providedChecksum = token.substring(0, 4);
     const seed = token.substring(4, 16);
     
-    // 首先检查是否匹配任意卡类型
+    // 优先检查免费Token密钥（与赞助卡密钥区分开）
+    if (FREE_TOKEN_SECRET) {
+      const data = `${FREE_TOKEN_SECRET}-${seed}`;
+      const hash = sha256(data);
+      const correctChecksum = (parseInt(hash.substring(0, 8), 16) % 10000).toString().padStart(4, '0');
+      
+      if (providedChecksum === correctChecksum) {
+        return { valid: true, message: "验证成功", count: FREE_TOKEN_INITIAL_COUNT, cardName: '免费Token', isFreeToken: true };
+      }
+    }
+    
+    // 检查赞助卡类型
     const cardTypes = getCardTypes();
     for (const card of cardTypes) {
       const data = `${card.secret}-${seed}`;
@@ -193,7 +205,8 @@ function verifyUserToken(token, masterSecret) {
 
 // 生成有效Token（16位数字，基于masterSecret）- 同步函数
 function generateValidToken(masterSecret) {
-  const seed = Math.floor(Math.random() * 1000000000000).toString().padStart(12, '0');
+  // 使用加密安全的随机数生成器，防止攻击者预测Token
+  const seed = crypto.randomInt(0, 1000000000000).toString().padStart(12, '0');
   const data = `${masterSecret}-${seed}`;
   const hash = sha256(data);
   const checksum = (parseInt(hash.substring(0, 8), 16) % 10000).toString().padStart(4, '0');
@@ -201,6 +214,7 @@ function generateValidToken(masterSecret) {
 }
 
 // 为新用户创建Token（带防重检查，防止并发请求创建多个token）
+// 使用 FREE_TOKEN_SECRET 生成（与赞助卡密钥区分开）
 async function createTokenForNewUser(userId, masterSecret, ip = null) {
   // 防重检查：如果该用户已有未拉黑的免费token，直接返回
   const existingToken = await db.prepare(
@@ -212,18 +226,20 @@ async function createTokenForNewUser(userId, masterSecret, ip = null) {
     return existingToken.token;
   }
 
+  // 免费Token使用独立的密钥生成，与赞助卡区分开
+  const freeSecret = FREE_TOKEN_SECRET || masterSecret;
   const now = Math.floor(Date.now() / 1000);
-  const newToken = generateValidToken(masterSecret);
+  const newToken = generateValidToken(freeSecret);
 
   await db.prepare(
     "INSERT INTO tokens (token, user_id, remaining_count, is_blacklisted, is_free_token, last_ip, created_at, last_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(newToken, userId, 40, 0, 1, ip, now, now);
+  ).run(newToken, userId, FREE_TOKEN_INITIAL_COUNT, 0, 1, ip, now, now);
 
   return newToken;
 }
 
 // 初始化或获取Token记录
-async function initOrGetToken(token, userId = null, cardCount = null, ip = null) {
+async function initOrGetToken(token, userId = null, cardCount = null, ip = null, isFreeToken = false) {
   const now = Math.floor(Date.now() / 1000);
   const initialCount = cardCount || INITIAL_COUNT;
   
@@ -247,12 +263,12 @@ async function initOrGetToken(token, userId = null, cardCount = null, ip = null)
   }
   
   await db.prepare(
-    "INSERT INTO tokens (token, user_id, remaining_count, is_blacklisted, last_ip, created_at, last_used) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  ).run(token, userId, initialCount, 0, ip, now, now);
+    "INSERT INTO tokens (token, user_id, remaining_count, is_blacklisted, is_free_token, last_ip, created_at, last_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(token, userId, initialCount, 0, isFreeToken ? 1 : 0, ip, now, now);
   
   return { 
     isNew: true, 
-    record: { token, user_id: userId, remaining_count: initialCount, is_blacklisted: 0, last_ip: ip, created_at: now, last_used: now },
+    record: { token, user_id: userId, remaining_count: initialCount, is_blacklisted: 0, is_free_token: isFreeToken ? 1 : 0, last_ip: ip, created_at: now, last_used: now },
     isBlacklisted: false
   };
 }
@@ -332,53 +348,54 @@ async function processReferral(referrerId, refereeId) {
   
   console.log(`推荐奖励随机：推荐人+${REFERRER_REWARD}次，被推荐人+${REFEREE_REWARD}次`);
   
-  // 使用事务保证原子性：INSERT推荐记录 + 更新双方Token余额
-  const conn = await pool.getConnection();
+  // 使用事务保证原子性：INSERT推荐记录 + 更新双方Token余额（Q-04去重：使用 withTransaction）
+  let txnResult;
   try {
-    await conn.beginTransaction();
-    
-    // 记录推荐关系（INSERT IGNORE 防并发竞态：若 referee_id 已存在则跳过）
-    const [insertResult] = await conn.execute(
-      "INSERT IGNORE INTO referrals (referrer_id, referee_id, referrer_reward, referee_reward, created_at) VALUES (?, ?, ?, ?, ?)",
-      [referrerId, refereeId, REFERRER_REWARD, REFEREE_REWARD, now]
-    );
-    
-    if (insertResult.affectedRows === 0) {
-      await conn.rollback();
-      return { success: false, message: "您已经填写过推荐人了" };
-    }
-    
-    // 给推荐人增加次数（只更新最新使用的Token）
-    const [referrerRows] = await conn.execute(
-      "SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1",
-      [referrerId]
-    );
-    if (referrerRows.length > 0) {
-      await conn.execute(
-        "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?",
-        [REFERRER_REWARD, referrerRows[0].token]
+    txnResult = await withTransaction(async (conn) => {
+      // 记录推荐关系（INSERT IGNORE 防并发竞态：若 referee_id 已存在则跳过）
+      const [insertResult] = await conn.execute(
+        "INSERT IGNORE INTO referrals (referrer_id, referee_id, referrer_reward, referee_reward, created_at) VALUES (?, ?, ?, ?, ?)",
+        [referrerId, refereeId, REFERRER_REWARD, REFEREE_REWARD, now]
       );
-    }
-    
-    // 给被推荐人增加次数
-    const [refereeRows] = await conn.execute(
-      "SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1",
-      [refereeId]
-    );
-    if (refereeRows.length > 0) {
-      await conn.execute(
-        "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?",
-        [REFEREE_REWARD, refereeRows[0].token]
+
+      if (insertResult.affectedRows === 0) {
+        return { success: false, message: "您已经填写过推荐人了" };
+      }
+
+      // 给推荐人增加次数（只更新最新使用的Token）
+      const [referrerRows] = await conn.execute(
+        "SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1",
+        [referrerId]
       );
-    }
-    
-    await conn.commit();
+      if (referrerRows.length > 0) {
+        await conn.execute(
+          "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?",
+          [REFERRER_REWARD, referrerRows[0].token]
+        );
+      }
+
+      // 给被推荐人增加次数
+      const [refereeRows] = await conn.execute(
+        "SELECT token FROM tokens WHERE user_id = ? AND is_blacklisted = 0 ORDER BY last_used DESC LIMIT 1",
+        [refereeId]
+      );
+      if (refereeRows.length > 0) {
+        await conn.execute(
+          "UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?",
+          [REFEREE_REWARD, refereeRows[0].token]
+        );
+      }
+
+      return null; // 成功标志
+    });
   } catch (e) {
-    await conn.rollback();
     console.error("推荐事务失败:", e.message);
     return { success: false, message: "推荐处理失败，请稍后重试" };
-  } finally {
-    conn.release();
+  }
+
+  // 事务中返回非null表示有业务错误（如已推荐过）
+  if (txnResult) {
+    return txnResult;
   }
   
   return { 
@@ -413,10 +430,15 @@ async function getReferralStats(userId) {
 async function decrementCount(token, userId = null, skipUserIdCheck = false, count = 1, checkOnly = false) {
   const now = Math.floor(Date.now() / 1000);
   
-  const record = await db.prepare("SELECT remaining_count, is_free_token, user_id FROM tokens WHERE token = ?").get(token);
+  const record = await db.prepare("SELECT remaining_count, is_blacklisted, is_free_token, user_id FROM tokens WHERE token = ?").get(token);
   
   if (!record) {
     return { success: false, message: "Token记录不存在", remainingCount: 0 };
+  }
+  
+  // 检查黑名单（checkOnly 模式也需检查）
+  if (record.is_blacklisted === 1) {
+    return { success: false, message: "Token已被拉黑", remainingCount: record.remaining_count };
   }
   
   // 验证免费Token的user_id绑定（智慧树跳过此验证）
@@ -441,54 +463,48 @@ async function decrementCount(token, userId = null, skipUserIdCheck = false, cou
     return { success: true, remainingCount: record.remaining_count };
   }
 
-  // 事务化扣减 + 拉黑：保证"扣减"与"归零拉黑"两步操作的原子性
-  const conn = await pool.getConnection();
+  // 事务化扣减 + 拉黑：保证"扣减"与"归零拉黑"两步操作的原子性（Q-04去重：使用 withTransaction）
   try {
-    await conn.beginTransaction();
+    return await withTransaction(async (conn) => {
+      // 原子扣减：使用 WHERE remaining_count >= ? 保证并发安全
+      const [result] = await conn.execute(
+        "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ? AND remaining_count >= ?",
+        [count, now, token, count]
+      );
 
-    // 原子扣减：使用 WHERE remaining_count >= ? 保证并发安全
-    const [result] = await conn.execute(
-      "UPDATE tokens SET remaining_count = remaining_count - ?, last_used = ? WHERE token = ? AND remaining_count >= ?",
-      [count, now, token, count]
-    );
+      if (result.affectedRows === 0) {
+        // 并发场景下余额已被其他请求消耗
+        return { success: false, message: "余额不足，请赞助获取新token", remainingCount: 0 };
+      }
 
-    if (result.affectedRows === 0) {
-      // 并发场景下余额已被其他请求消耗
-      await conn.rollback();
-      return { success: false, message: "余额不足，请赞助获取新token", remainingCount: 0 };
-    }
-
-    // 检查扣减后是否归零，需要拉黑
-    const [rows] = await conn.execute(
-      "SELECT remaining_count FROM tokens WHERE token = ?",
-      [token]
-    );
-    const updated = rows[0];
-    const finalCount = updated ? parseFloat(Number(updated.remaining_count).toFixed(1)) : 0;
-    if (finalCount < 0.1) {
-      await conn.execute(
-        "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?",
+      // 检查扣减后是否归零，需要拉黑
+      const [rows] = await conn.execute(
+        "SELECT remaining_count FROM tokens WHERE token = ?",
         [token]
       );
-      await conn.commit();
-      return { success: true, remainingCount: 0, justBlacklisted: true };
-    }
+      const updated = rows[0];
+      const finalCount = updated ? parseFloat(Number(updated.remaining_count).toFixed(1)) : 0;
+      if (finalCount < 0.1) {
+        await conn.execute(
+          "UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?",
+          [token]
+        );
+        return { success: true, remainingCount: 0, justBlacklisted: true };
+      }
 
-    await conn.commit();
-    return { success: true, remainingCount: finalCount };
+      return { success: true, remainingCount: finalCount };
+    });
   } catch (e) {
-    await conn.rollback();
     console.error("[decrementCount] 事务失败:", e.message);
     return { success: false, message: "扣减失败，请稍后重试", remainingCount: 0 };
-  } finally {
-    conn.release();
   }
 }
 
 // ==================== AI模式预锁定机制 ====================
 // 防止并发请求导致余额透支，调用AI前锁定一定数量的token，完成后按实际消耗结算
 
-// 内存中存储当前锁定的token：token -> { lockedAt, lockCount }
+// 内存中存储当前锁定的token：token -> { lockedAt, lockCount, refCount }
+// refCount 用于引用计数，支持同一Token并发锁定
 const lockedTokens = new Map();
 const LOCK_EXPIRY = 60 * 1000; // 锁定60秒后自动释放（兜底，防死锁）
 
@@ -516,33 +532,41 @@ async function lockToken(token, lockCount) {
     return { success: false, message: `余额不足，需要${lockCount}次，剩余${record.remaining_count}次，请赞助获取新token` };
   }
   
-  // 锁定：扣除锁定次数
-  const conn = await pool.getConnection();
+  // 锁定：扣除锁定次数（Q-04去重：使用 withTransaction）
   try {
-    await conn.beginTransaction();
-    
-    // 原子扣减锁定次数
-    const [result] = await conn.execute(
-      'UPDATE tokens SET remaining_count = remaining_count - ? WHERE token = ? AND remaining_count >= ?',
-      [lockCount, token, lockCount]
-    );
-    
-    if (result.affectedRows === 0) {
-      await conn.rollback();
-      return { success: false, message: '余额不足，请赞助获取新token' };
+    const lockResult = await withTransaction(async (conn) => {
+      // 原子扣减锁定次数
+      const [result] = await conn.execute(
+        'UPDATE tokens SET remaining_count = remaining_count - ? WHERE token = ? AND remaining_count >= ?',
+        [lockCount, token, lockCount]
+      );
+
+      if (result.affectedRows === 0) {
+        return { success: false, message: '余额不足，请赞助获取新token' };
+      }
+
+      return null; // 成功
+    });
+
+    if (lockResult) {
+      return lockResult; // 返回业务错误
     }
-    
-    await conn.commit();
   } catch (e) {
-    await conn.rollback();
     console.error('[lockToken] 事务失败:', e.message);
     return { success: false, message: '锁定失败，请稍后重试' };
-  } finally {
-    conn.release();
   }
   
-  // 记录锁定
-  lockedTokens.set(token, { lockedAt: Date.now(), lockCount });
+  // 记录锁定（引用计数：同一Token并发锁定时累加 refCount）
+  const current = lockedTokens.get(token);
+  if (current) {
+    lockedTokens.set(token, { 
+      lockedAt: current.lockedAt, 
+      lockCount: current.lockCount + lockCount,
+      refCount: current.refCount + 1
+    });
+  } else {
+    lockedTokens.set(token, { lockedAt: Date.now(), lockCount, refCount: 1 });
+  }
   
   return { 
     success: true, 
@@ -564,8 +588,20 @@ async function lockToken(token, lockCount) {
 async function settleToken(token, lockCount, actualCost) {
   if (!token) return { success: false, message: 'Token为空' };
   
-  // 清除锁定记录
-  lockedTokens.delete(token);
+  // 引用计数递减：仅当所有并发锁定都结算后才删除锁记录
+  const current = lockedTokens.get(token);
+  if (current) {
+    const newRef = current.refCount - 1;
+    if (newRef <= 0) {
+      lockedTokens.delete(token);
+    } else {
+      lockedTokens.set(token, {
+        lockedAt: current.lockedAt,
+        lockCount: current.lockCount - lockCount,
+        refCount: newRef
+      });
+    }
+  }
   
   const diff = lockCount - actualCost; // 正数=退还，负数=补扣
   
@@ -575,63 +611,104 @@ async function settleToken(token, lockCount, actualCost) {
     return { success: true, remainingCount: record ? record.remaining_count : 0 };
   }
   
-  const conn = await pool.getConnection();
+  // 结算：退还或补扣次数（Q-04去重：使用 withTransaction）
   try {
-    await conn.beginTransaction();
-    
-    if (diff > 0) {
-      // 退还多余次数
-      await conn.execute(
-        'UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?',
-        [diff, token]
-      );
-    } else {
-      // 补扣不足次数（actualCost > lockCount 的情况）
-      const extraCost = Math.abs(diff);
-      const [result] = await conn.execute(
-        'UPDATE tokens SET remaining_count = remaining_count - ? WHERE token = ? AND remaining_count >= ?',
-        [extraCost, token, extraCost]
-      );
-      if (result.affectedRows === 0) {
-        // 余额不足以补扣，扣到0并拉黑
+    const settleResult = await withTransaction(async (conn) => {
+      if (diff > 0) {
+        // 退还多余次数
         await conn.execute(
-          'UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?',
+          'UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?',
+          [diff, token]
+        );
+      } else {
+        // 补扣不足次数（actualCost > lockCount 的情况）
+        const extraCost = Math.abs(diff);
+        const [result] = await conn.execute(
+          'UPDATE tokens SET remaining_count = remaining_count - ? WHERE token = ? AND remaining_count >= ?',
+          [extraCost, token, extraCost]
+        );
+        if (result.affectedRows === 0) {
+          // 余额不足以补扣，扣到0并拉黑
+          await conn.execute(
+            'UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?',
+            [token]
+          );
+          console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 余额不足补扣${extraCost}次，已拉黑`);
+          return { success: true, remainingCount: 0 };
+        }
+        // 补扣成功后检查是否归零，若是则拉黑（与 decrementCount 逻辑一致）
+        const [afterRows] = await conn.execute(
+          'SELECT remaining_count FROM tokens WHERE token = ?',
           [token]
         );
-        await conn.commit();
-        console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 余额不足补扣${extraCost}次，已拉黑`);
-        return { success: true, remainingCount: 0 };
+        const afterCount = afterRows[0] ? parseFloat(Number(afterRows[0].remaining_count).toFixed(1)) : 0;
+        if (afterCount < 0.1) {
+          await conn.execute(
+            'UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?',
+            [token]
+          );
+          console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 补扣后余额归零，已拉黑`);
+          return { success: true, remainingCount: 0 };
+        }
       }
+      return null; // 成功，外层查询余额
+    });
+
+    if (settleResult) {
+      return settleResult; // 返回拉黑结果
     }
-    
-    await conn.commit();
-    
+
     // 查询更新后余额
     const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ?').get(token);
-    return { 
-      success: true, 
-      remainingCount: record ? record.remaining_count : 0 
+    return {
+      success: true,
+      remainingCount: record ? record.remaining_count : 0
     };
   } catch (e) {
-    await conn.rollback();
     console.error('[settleToken] 事务失败:', e.message);
     return { success: false, message: '结算失败' };
-  } finally {
-    conn.release();
   }
 }
 
 /**
- * 释放锁定（异常时调用，不返还次数）
- * 注意：正常流程应使用 settleToken 返还多余次数，此方法仅用于异常回退
+ * 释放锁定（异常时调用）
  * @param {string} token - 用户Token
  * @param {number} lockCount - 锁定次数
+ * @param {boolean} isSystemError - 是否为系统异常（API超时、网络错误、5xx等），系统异常时退还预锁定次数
  */
-async function releaseToken(token, lockCount) {
+async function releaseToken(token, lockCount, isSystemError = false) {
   if (!token) return;
-  lockedTokens.delete(token);
-  // 不返还次数，锁定时的扣减保留（异常时用户损失锁定次数，防止恶意利用异常逃费）
-  console.log(`[预锁定] Token ${token.substring(0, 8)}*** 异常释放，${lockCount}次已扣`);
+  
+  // 引用计数递减
+  const current = lockedTokens.get(token);
+  if (current) {
+    const newRef = current.refCount - 1;
+    if (newRef <= 0) {
+      lockedTokens.delete(token);
+    } else {
+      lockedTokens.set(token, {
+        lockedAt: current.lockedAt,
+        lockCount: current.lockCount - lockCount,
+        refCount: newRef
+      });
+    }
+  }
+  
+  if (isSystemError) {
+    // 系统异常：退还预锁定次数，避免用户因系统故障损失
+    try {
+      await pool.execute(
+        'UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?',
+        [lockCount, token]
+      );
+      console.log(`[预锁定] Token ${token.substring(0, 8)}*** 系统异常释放，退还${lockCount}次`);
+    } catch (e) {
+      console.error(`[预锁定] Token ${token.substring(0, 8)}*** 退费失败:`, e.message);
+    }
+  } else {
+    // 用户主动中断：不退还次数（防止恶意利用异常逃费）
+    console.log(`[预锁定] Token ${token.substring(0, 8)}*** 用户中断释放，${lockCount}次已扣`);
+  }
 }
 
 // ==================== 每晚0点重置黑名单Token次数 ====================

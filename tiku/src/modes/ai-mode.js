@@ -7,11 +7,33 @@
  * - fetchAICustom: AI模式专用AI调用（独立参数配置）
  */
 
-const { saveAnswerToCache, getCachedAnswer, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
+const { saveAnswerToCacheAsync, getCachedAnswer, checkAnswerReasonable, safeCheckAnswerReasonable, cleanAndNormalizeAnswer, incrementAiCalls, incrementModelCalls, incrementTotalQueries, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
 const { db, getEnv, SPONSOR_URL } = require('../config');
-const { validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi } = require('../utils');
+const { validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi, buildUserContent } = require('../utils');
 const { getModelConfig, getSupportedModels, getModelCosts, getFullModelConfig, getDisplayName, MODEL_COLUMN_MAP, calculateCostFromTokens, getPrelockCount } = require('../config/ai-models');
 const { lockToken, settleToken, releaseToken } = require('../auth');
+
+// D-04去重：AI提供商配置映射表（统一Key获取、API地址、错误消息）
+const AI_PROVIDER_CONFIG = {
+  tencent: {
+    keyEnv: 'TOKENHUB_API_KEY',
+    apiUrl: 'https://tokenhub.tencentmaas.com/v1/chat/completions',
+    errorMsg: "AI模式需要配置TOKENHUB_API_KEY",
+    logResult: true
+  },
+  '302ai': {
+    keyEnv: '302AI_API_KEY',
+    apiUrl: 'https://api.302ai.com/v1/chat/completions',
+    errorMsg: "AI模式需要配置302AI_API_KEY",
+    logResult: false
+  },
+  deepseek: {
+    keyEnv: 'DEEPSEEK_API_KEY',
+    apiUrl: 'https://api.deepseek.com/v1/chat/completions',
+    errorMsg: "AI模式需要配置DEEPSEEK_API_KEY",
+    logResult: true
+  }
+};
 
 // ==================== AI模式专用AI调用 ====================
 
@@ -35,7 +57,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
   const model = modelConfig.model;
 
-  const apiUrl = customApiUrl || "https://tokenhub.tencentmaas.com/v1/chat/completions";
+  const apiUrl = customApiUrl;
   const providerName = modelConfig.provider || 'unknown';
 
   if (!apiKey) {
@@ -51,22 +73,11 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
   // 如果模型支持视觉且有图片URL，使用多模态格式
   const supportsVision = modelConfig.supportsVision && imageUrls && imageUrls.length > 0;
 
-  // 构建用户消息content（支持多模态图片）
-  let userContent;
-  if (supportsVision) {
-    userContent = [
-      { type: "text", text: user },
-      ...imageUrls.map(url => ({
-        type: "image_url",
-        image_url: { url }
-      }))
-    ];
-  } else {
-    if (imageUrls && imageUrls.length > 0) {
-      console.log(`[WARN] 当前模型不支持视觉，图片将以文本形式传递（可能无法识别）`);
-    }
-    userContent = user;
+  // D-07去重：构建用户消息content（支持多模态图片）
+  if (!supportsVision && imageUrls && imageUrls.length > 0) {
+    console.log(`[WARN] 当前模型不支持视觉，图片将以文本形式传递（可能无法识别）`);
   }
+  const userContent = buildUserContent(user, imageUrls, supportsVision);
 
   // AI模式独立参数配置（每个模型独立）
   const body = {
@@ -125,15 +136,8 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
   try {
     console.log("AI查询中...");
     
-    // 增加AI调用次数统计
-    await incrementAiCalls();
-    await incrementTotalQueries('ai');
-    
-    // 按具体模型分别统计（统一统计，不区分平台）
-    const aiModelColumn = MODEL_COLUMN_MAP[model];
-    if (aiModelColumn) {
-      await incrementModelCalls(aiModelColumn);
-    }
+    // 增加AI调用次数统计（D-01去重：使用统一统计函数）
+    await incrementAIStats(model);
 
     // ========== 多轮工具调用循环 ==========
     // 第0轮：AI可能请求搜索 → 执行搜索
@@ -158,9 +162,9 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
         if (webSearchUsed) {
           messages.push({
             role: "user",
-            content: "请基于上述搜索结果和已有信息，直接输出最终答案。严格按照以下格式输出，不要输出其他内容：\n<answer>{\"answer\":[\"你的答案\"]}</answer>"
+            content: "请基于上述已有信息和你的知识库，直接输出最终答案。你已无法调用任何工具，不得再次请求联网搜索或任何工具调用。分析过程写在<analysis>标签内，最终答案放在<answer>标签内，格式为：\n<answer>{\"answer\":[\"你的答案\"]}</answer>"
           });
-          console.log("[INFO] 最后一轮：已追加强制回答提示");
+          console.log("[INFO] 最后一轮：已追加强制回答提示（禁止再次搜索）");
         }
       }
 
@@ -208,7 +212,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
             console.log(`[SEARCH] 执行联网搜索: "${fnArgs.query || questionData.question}"`);
             
             const searchResult = await tavilySearch(fnArgs.query || questionData.question, {
-              maxResults: 10,
+              maxResults: 20,
               includeAnswer: true,
               autoParameters: true
             });
@@ -248,26 +252,21 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
       // 没有tool_calls，AI返回了最终答案
       console.log("[OK] AI返回最终答案（无tool_calls）");
-      const content = message.content;
+      // 优先从content提取；为空时回退到reasoning_content（深度思考内容）
+      const content = message.content || message.reasoning_content;
+      if (!message.content && message.reasoning_content) {
+        console.log("[INFO] content为空，使用reasoning_content作答");
+      }
 
       const parsed = extractJsonFromContent(content);
       if (parsed) {
-        // 清理AI答案中的"选项X"前缀（安全模式：仅当去掉前缀后匹配选项时才删除）
-        if (Array.isArray(parsed.answer)) {
-          parsed.answer = parsed.answer.map(a => cleanAiAnswer(a, questionData.options));
-        }
-        // 连线题：标准化答案格式（拆分合并字符串）
-        parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
+        // D-06去重：清洗答案并标准化格式
+        parsed.answer = cleanAndNormalizeAnswer(parsed.answer, questionData);
         console.log("[OK] AI解析成功（AI模式）:", JSON.stringify(parsed.answer));
         parsed.answer = mergeSplitAnswers(parsed.answer, questionData.options);
 
-        // 校验答案是否合理
-        let checkResult = { reasonable: true, reason: '' };
-        try {
-          checkResult = checkAnswerReasonable(parsed.answer, questionData.type, questionData.options);
-        } catch (e) {
-          console.log('[WARN] checkAnswerReasonable异常:', e.message);
-        }
+        // 校验答案是否合理（D-03去重：使用安全包装版）
+        const checkResult = safeCheckAnswerReasonable(parsed.answer, questionData.type, questionData.options);
 
         if (!checkResult.reasonable) {
           console.log(`[WARN] AI模式答案校验失败: ${checkResult.reason}`);
@@ -357,12 +356,24 @@ async function handleAIMode(c, params) {
   log(`AI提供商: ${modelConfig.provider}`);
   log(`AI模型: ${modelConfig.name || modelConfig.model}`);
 
+  // 变量声明前置（避免 TDZ 错误：图片URL检查中使用了 remainingCount）
   let answerData;
   let remainingCount = 999999;
   let prelockCount = 0;  // 预锁定次数
 
-  // ========== 免费Token限制：不允许使用中/高消耗模型 ==========
-  if (!FREE_MODE && (modelConfig.cost === '中消耗' || modelConfig.cost === '高消耗')) {
+  // ========== 图片URL检查：不支持视觉的模型不能处理图片题目 ==========
+  const { imageUrls } = buildPrompt(questionData, enableWebSearch);
+  if (imageUrls && imageUrls.length > 0 && !modelConfig.supportsVision) {
+    log(`[X] 当前模型不支持图片输入，题目包含${imageUrls.length}张图片`);
+    return c.json({
+      code: 400,
+      msg: "该模型不支持图片输入，请切换模型或者模式",
+      data: { answer: [], num: remainingCount }
+    }, 400);
+  }
+
+  // ========== 免费Token限制：不允许使用中/高/超高消耗模型 ==========
+  if (!FREE_MODE && (modelConfig.cost === '中消耗' || modelConfig.cost === '高消耗' || modelConfig.cost === '超高消耗')) {
     const tokenRecord = await db.prepare(
       "SELECT is_free_token FROM tokens WHERE token = ?"
     ).get(token);
@@ -400,76 +411,51 @@ async function handleAIMode(c, params) {
   // 导入Tavily搜索函数（如果启用了联网搜索）
   const { tavilySearch } = enableWebSearch ? require('../tavily-search') : { tavilySearch: null };
   
-  // 根据模型提供商选择AI服务
+  // 根据模型提供商选择AI服务（D-04去重：使用配置映射表统一处理）
+  const providerCfg = AI_PROVIDER_CONFIG[modelConfig.provider];
+  if (!providerCfg) {
+    log(`[X] 不支持的提供商: ${modelConfig.provider}`);
+    if (!FREE_MODE && prelockCount > 0) {
+      const settleResult = await settleToken(token, prelockCount, 0);
+      log(`[预锁定] 不支持的提供商，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
+    }
+    return c.json({
+      code: 500,
+      msg: `不支持的AI提供商: ${modelConfig.provider}`,
+      data: { answer: [], num: remainingCount + prelockCount }
+    }, 500);
+  }
+
+  // 打印查询日志（保持各提供商原有日志格式）
   if (modelConfig.provider === 'tencent') {
     log("=== 查询 腾讯云 TokenHub AI ===");
-    const tokenhubApiKey = getEnv('TOKENHUB_API_KEY', '');
-
-    if (!tokenhubApiKey) {
-      log("[X] TOKENHUB_API_KEY 未配置");
-      // API Key未配置属于系统错误，释放预锁定（全额退款）
-      if (!FREE_MODE && prelockCount > 0) {
-        const settleResult = await settleToken(token, prelockCount, 0);
-        log(`[预锁定] API未配置，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
-      }
-      return c.json({
-        code: 500,
-        msg: "AI模式需要配置TOKENHUB_API_KEY",
-        data: { answer: [], num: remainingCount + prelockCount }
-      }, 500);
-    }
-
-    // 使用 fetchAICustom 函数（自定义参数配置）
-    const aiResult = await fetchAICustom(questionData, tokenhubApiKey, modelConfig, null, enableWebSearch, tavilySearch);
-    answerData = aiResult;
-
-    if (aiResult.code === 200) {
-      log(`[OK] ${modelConfig.name} 有答案: ${JSON.stringify(aiResult.data.answer)}`);
-      answerData.data.source = aiResult.data.source || modelConfig.name;
-    } else {
-      log(`[X] ${modelConfig.name} 请求失败: ${aiResult.msg || '未知错误'}`);
-    }
   } else if (modelConfig.provider === '302ai') {
     log(`=== 查询 302.AI (${modelConfig.name}) ===`);
-    const apiKey302 = getEnv('302AI_API_KEY', '');
-
-    if (!apiKey302) {
-      log("[X] 302AI_API_KEY 未配置");
-      if (!FREE_MODE && prelockCount > 0) {
-        const settleResult = await settleToken(token, prelockCount, 0);
-        log(`[预锁定] API未配置，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
-      }
-      return c.json({
-        code: 500,
-        msg: "AI模式需要配置302AI_API_KEY",
-        data: { answer: [], num: remainingCount + prelockCount }
-      }, 500);
-    }
-
-    // 使用 fetchAICustom 函数（OpenAI兼容API）
-    const aiResult = await fetchAICustom(questionData, apiKey302, modelConfig, 'https://api.302ai.com/v1/chat/completions', enableWebSearch, tavilySearch);
-    answerData = aiResult;
   } else if (modelConfig.provider === 'deepseek') {
     log("=== 查询 DeepSeek 官方 API ===");
-    const deepseekApiKey = getEnv('DEEPSEEK_API_KEY', '');
+  }
 
-    if (!deepseekApiKey) {
-      log("[X] DEEPSEEK_API_KEY 未配置");
-      if (!FREE_MODE && prelockCount > 0) {
-        const settleResult = await settleToken(token, prelockCount, 0);
-        log(`[预锁定] API未配置，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
-      }
-      return c.json({
-        code: 500,
-        msg: "AI模式需要配置DEEPSEEK_API_KEY",
-        data: { answer: [], num: remainingCount + prelockCount }
-      }, 500);
+  const apiKey = getEnv(providerCfg.keyEnv, '');
+  if (!apiKey) {
+    log(`[X] ${providerCfg.keyEnv} 未配置`);
+    // API Key未配置属于系统错误，释放预锁定（全额退款）
+    if (!FREE_MODE && prelockCount > 0) {
+      const settleResult = await settleToken(token, prelockCount, 0);
+      log(`[预锁定] API未配置，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
     }
+    return c.json({
+      code: 500,
+      msg: providerCfg.errorMsg,
+      data: { answer: [], num: remainingCount + prelockCount }
+    }, 500);
+  }
 
-    // 使用 fetchAICustom 函数（OpenAI兼容API）
-    const aiResult = await fetchAICustom(questionData, deepseekApiKey, modelConfig, 'https://api.deepseek.com/v1/chat/completions', enableWebSearch, tavilySearch);
-    answerData = aiResult;
+  // 使用 fetchAICustom 函数
+  const aiResult = await fetchAICustom(questionData, apiKey, modelConfig, providerCfg.apiUrl, enableWebSearch, tavilySearch);
+  answerData = aiResult;
 
+  // 成功/失败日志（302ai保持原有行为：不打印）
+  if (providerCfg.logResult) {
     if (aiResult.code === 200) {
       log(`[OK] ${modelConfig.name} 有答案: ${JSON.stringify(aiResult.data.answer)}`);
       answerData.data.source = aiResult.data.source || modelConfig.name;
@@ -545,7 +531,7 @@ async function handleAIMode(c, params) {
   const existingCache = await getCachedAnswer(questionHash);
   if (!existingCache) {
     log("[OK] 保存AI答案到缓存（题库中无此题）");
-    await saveAnswerToCache(
+    saveAnswerToCacheAsync(
       questionHash,
       questionData.question,
       questionData.options,

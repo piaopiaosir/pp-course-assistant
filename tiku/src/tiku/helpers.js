@@ -1,4 +1,4 @@
-const { sha256, normalizeOptions } = require('../utils');
+const { sha256, normalizeOptions, getInvalidSortFormatItems, hasDuplicateSortAnswers, extractOptionLetters, getInvalidSortOptionLetters } = require('../utils');
 
 // 从AI返回内容中提取JSON（处理AI在JSON前后输出分析文字、markdown代码块包裹等情况）
 function extractJsonFromContent(content) {
@@ -336,44 +336,25 @@ function checkAnswerReasonable(answer, questionType, options) {
     }
   }
   
-  // 排序题：答案必须是单个字母（A/B/C/D等）
+  // 排序题：答案必须是单个字母（A/B/C/D等）（D-09去重：复用公共辅助函数）
   if (questionType === "13") {
     // 1. 格式校验：必须是单个字母
-    const validPattern = /^[A-Za-z]$/;
-    const invalidFormat = answer.filter(a => !validPattern.test(String(a).trim()));
+    const invalidFormat = getInvalidSortFormatItems(answer);
     if (invalidFormat.length > 0) {
       return { reasonable: false, reason: `排序题答案格式错误，应为单个字母: ${invalidFormat.join(', ')}` };
     }
-    
+
     // 2. 重复校验：不能有重复字母
-    const uniqueAnswers = new Set(answer.map(a => a.toUpperCase()));
-    if (uniqueAnswers.size !== answer.length) {
+    if (hasDuplicateSortAnswers(answer)) {
       return { reasonable: false, reason: "排序题答案包含重复字母" };
     }
-    
+
     // 3. 选项校验：答案字母必须在选项中
     if (options) {
-      // 提取选项字母（从选项文本中提取A/B/C/D等）
-      let optionLetters = [];
-      try {
-        const optionsData = typeof options === 'string' ? JSON.parse(options) : options;
-        const optionArray = Array.isArray(optionsData) ? optionsData : String(optionsData).split('\n').filter(o => o.trim());
-        
-        // 从选项文本提取字母前缀（如"A. 北京" → "A"）
-        optionLetters = optionArray.map(opt => {
-          const match = String(opt).match(/^([A-Za-z])[.、)\s]/);
-          return match ? match[1].toUpperCase() : null;
-        }).filter(letter => letter);
-      } catch (e) {
-        // 解析失败，跳过选项校验
-      }
-      
-      if (optionLetters.length > 0) {
-        // 检查答案字母是否都在选项中
-        const invalidLetters = answer.filter(a => !optionLetters.includes(a.toUpperCase()));
-        if (invalidLetters.length > 0) {
-          return { reasonable: false, reason: `排序题答案字母不在选项中: ${invalidLetters.join(', ')}` };
-        }
+      const optionLetters = extractOptionLetters(options);
+      const invalidLetters = getInvalidSortOptionLetters(answer, optionLetters);
+      if (invalidLetters.length > 0) {
+        return { reasonable: false, reason: `排序题答案字母不在选项中: ${invalidLetters.join(', ')}` };
       }
     }
   }
@@ -431,6 +412,25 @@ function checkAnswerReasonable(answer, questionType, options) {
   return { reasonable: true, reason: "答案合理" };
 }
 
+// D-03去重：安全包装版，异常时返回"合理"避免阻塞流程
+function safeCheckAnswerReasonable(answer, questionType, options) {
+  try {
+    return checkAnswerReasonable(answer, questionType, options);
+  } catch (e) {
+    console.log('[WARN] checkAnswerReasonable异常:', e.message);
+    return { reasonable: true, reason: '' };
+  }
+}
+
+// D-06去重：清洗AI答案并标准化格式（清理选项前缀 + 连线题标准化）
+function cleanAndNormalizeAnswer(answer, questionData) {
+  if (Array.isArray(answer)) {
+    answer = answer.map(a => cleanAiAnswer(a, questionData.options));
+  }
+  answer = normalizeMatchingAnswer(answer, questionData.type);
+  return answer;
+}
+
 module.exports = {
   // JSON 解析
   extractJsonFromContent,
@@ -450,5 +450,8 @@ module.exports = {
   cleanAnswerData,
   mergeSplitAnswers,
   // 答案合理性校验
-  checkAnswerReasonable
+  checkAnswerReasonable,
+  safeCheckAnswerReasonable,
+  // 答案清洗+标准化
+  cleanAndNormalizeAnswer
 };

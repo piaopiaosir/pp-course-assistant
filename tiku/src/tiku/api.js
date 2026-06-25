@@ -1,7 +1,7 @@
 const { db, getEnv, TIKU_API_URL, HIVENET_API_URL, YANXI_API_URL, getGlobalStats } = require('../config');
-const { normalizeAnswer, fetchWithTimeout, getTypeDescription } = require('../utils');
+const { normalizeAnswer, fetchWithTimeout, getTypeDescription, validateAndCleanAnswer } = require('../utils');
 const { generateQuestionHash } = require('./helpers');
-const { saveAnswerToCache, validateSourceAnswer } = require('./cache');
+const { saveAnswerToCacheAsync } = require('./cache');
 const {
   incrementUcucCalls,
   incrementTotalQueries,
@@ -15,6 +15,33 @@ const {
 
 // UCUC 题库查询
 // API文档: https://so.ucuc.net/system/article/detail?id=2
+
+// D-08去重：解析Hive-Net返回的选项（数组或字符串）为标准化选项数组
+function parseHiveNetOptions(answerOptions) {
+  if (Array.isArray(answerOptions)) {
+    return answerOptions.map(opt =>
+      String(opt).replace(/[。，,.！!？?；;：:]+$/, '').trim()
+    );
+  }
+  if (typeof answerOptions === 'string') {
+    let parts;
+    if (answerOptions.includes('\n')) {
+      parts = answerOptions.split('\n');
+    } else if (answerOptions.match(/[A-Za-z][.、)]/g)?.length >= 2) {
+      parts = answerOptions.split(/(?=[A-Za-z][.、)])/);
+    } else {
+      parts = answerOptions.split(',');
+    }
+    return parts.map(o => o.trim()
+      .replace(/^[A-Za-z][:.、)\s]+/, '')
+      .replace(/[。，,.！!？?；;：:]+$/, '')
+      .trim())
+      .filter(o => o);
+  }
+  return [];
+}
+
+// UCUC 题库
 // POST https://so.ucuc.net/prod-api/system/questionBank/search
 // 返回码: code=200 成功, code=500 失败
 async function fetchUcuc(questionData) {
@@ -60,7 +87,7 @@ async function fetchUcuc(questionData) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
-    });
+    }, 30000);
 
     if (!response.ok) {
       console.log(`[X] UCUC 题库 HTTP错误: ${response.status} ${response.statusText}`);
@@ -129,12 +156,13 @@ async function fetchUcuc(questionData) {
     console.log(`[OK] UCUC 题库找到答案:`, JSON.stringify(answers));
     console.log("==========================");
 
-    // 统一答案校验（单选/多选数量、选项匹配、判断题格式）
-    const ucucValidation = validateSourceAnswer('UCUC题库', questionData.type, answers, questionData.options);
+    // 统一答案校验（单选/多选数量、选项匹配、判断题格式、去标点二次匹配）
+    const ucucValidation = validateAndCleanAnswer(questionData.type, answers, questionData.options);
     if (!ucucValidation.valid) {
-      console.log(`[X] ${ucucValidation.reason}`);
-      return { code: 404, msg: ucucValidation.reason, data: { answer: answers } };
+      console.log(`[X] UCUC题库${ucucValidation.reason}`);
+      return { code: 404, msg: `UCUC题库${ucucValidation.reason}`, data: { answer: ucucValidation.answers } };
     }
+    answers = ucucValidation.answers;
 
     // 判断题多答案矛盾处理（UCUC特有逻辑）
     if (questionData.type === "3" && answers.length > 1) {
@@ -415,12 +443,13 @@ async function fetchAnswer(questionData) {
       
       let answers = result.data.answer;
       
-      // 统一答案校验
-      const sourceValidation = validateSourceAnswer('题库海', questionData.type, answers, questionData.options);
+      // 统一答案校验（含去标点二次匹配）
+      const sourceValidation = validateAndCleanAnswer(questionData.type, answers, questionData.options);
       if (!sourceValidation.valid) {
-        console.log(`[X] ${sourceValidation.reason}`);
-        return { code: 404, msg: sourceValidation.reason, data: result.data };
+        console.log(`[X] 题库海${sourceValidation.reason}`);
+        return { code: 404, msg: `题库海${sourceValidation.reason}`, data: result.data };
       }
+      answers = sourceValidation.answers;
 
       // 判断题标准化
       if (questionData.type === "3") {
@@ -621,8 +650,6 @@ async function fetchHiveNet(questionData) {
   }
   
   try {
-    // 定义 token
-    const HIVENET_PAID_TOKEN = getEnv('HIVENET_PAID_TOKEN', '');  // 付费 token（环境变量，不刷新）
     const HIVENET_FREE_TOKEN = 'free';  // 免费 token（每日0点刷新）
     
     // 获取统计数据
@@ -632,68 +659,39 @@ async function fetchHiveNet(questionData) {
     // 获取今天日期
     const today = new Date().toISOString().split('T')[0];  // "2026-03-20"
     
-    // 判断是否新的一天（免费 token 会刷新）
+    // 判断是否新的一天��免费 token 会刷新）
     const isNewDay = today !== lastDate;
     
     let apiResult;
     
-    if (isNewDay) {
-      // 新的一天，免费 token 已刷新，优先使用
-      console.log(`=== Hive-Net 使用免费 token (新的一天已刷新) ===`);
+    // 新的一天或同一天有剩余次数：使用免费 token
+    const freeRemaining = stats.hivenet_remaining || 0;
+    if (isNewDay || freeRemaining > 0) {
+      console.log(`=== Hive-Net 使用免费 token (${isNewDay ? '新的一天已刷新' : `剩余 ${freeRemaining} 次`}) ===`);
       apiResult = await fetchHiveNetOnce(questionData, HIVENET_FREE_TOKEN, '免费');
       
-      // 如果免费 token 失败，切换到付费 token
-      if (!apiResult.success) {
-        if (!HIVENET_PAID_TOKEN) {
-          console.log(`[X] 免费 token 查询失败，且未配置 HIVENET_PAID_TOKEN`);
-          return apiResult;
-        }
-        console.log(`[SWITCH] 免费 token 查询失败，切换到付费 token...`);
-        apiResult = await fetchHiveNetOnce(questionData, HIVENET_PAID_TOKEN, '付费');
-      } else {
+      if (apiResult.success) {
         // 更新日期和剩余次数
         const newRemaining = apiResult.result?.data?.remain_times;
+        const updateFields = isNewDay
+          ? "hivenet_remaining = ?, hivenet_free_last_date = ?, updated_at = ?"
+          : "hivenet_remaining = ?, updated_at = ?";
+        const updateParams = isNewDay
+          ? [newRemaining, today, Math.floor(Date.now() / 1000)]
+          : [newRemaining, Math.floor(Date.now() / 1000)];
         if (newRemaining !== undefined) {
           await db.prepare(
-            "UPDATE global_stats SET hivenet_remaining = ?, hivenet_free_last_date = ?, updated_at = ? WHERE id = 1"
-          ).run(newRemaining, today, Math.floor(Date.now() / 1000));
+            `UPDATE global_stats SET ${updateFields} WHERE id = 1`
+          ).run(...updateParams);
         }
       }
     } else {
-      // 同一天，检查剩余次数
-      const freeRemaining = stats.hivenet_remaining || 0;
-      if (freeRemaining > 0) {
-        console.log(`=== Hive-Net 使用免费 token (剩余 ${freeRemaining} 次) ===`);
-        apiResult = await fetchHiveNetOnce(questionData, HIVENET_FREE_TOKEN, '免费');
-        
-        if (!apiResult.success) {
-          if (!HIVENET_PAID_TOKEN) {
-            console.log(`[X] 免费 token 查询失败，且未配置 HIVENET_PAID_TOKEN`);
-            return apiResult;
-          }
-          console.log(`[SWITCH] 免费 token 查询失败，切换到付费 token...`);
-          apiResult = await fetchHiveNetOnce(questionData, HIVENET_PAID_TOKEN, '付费');
-        } else {
-          // 更新剩余次数
-          const newRemaining = apiResult.result?.data?.remain_times;
-          if (newRemaining !== undefined) {
-            await db.prepare(
-              "UPDATE global_stats SET hivenet_remaining = ?, updated_at = ? WHERE id = 1"
-            ).run(newRemaining, Math.floor(Date.now() / 1000));
-          }
-        }
-      } else {
-        // 免费次数已用完，直接使用付费 token
-        if (!HIVENET_PAID_TOKEN) {
-          console.log("[X] Hive-Net 免费 token 已耗尽，且未配置 HIVENET_PAID_TOKEN");
-          return { code: 403, msg: "Hive-Net次数耗尽且未配置付费Token", data: null };
-        }
-        console.log("=== Hive-Net 免费 token 已耗尽，使用付费 token ===");
-        apiResult = await fetchHiveNetOnce(questionData, HIVENET_PAID_TOKEN, '付费');
-      }
+      // 免费次数已用完
+      console.log("[X] Hive-Net 免费 token 已耗尽");
+      return { code: 403, msg: "Hive-Net次数耗尽", data: null };
     }
     
-    // 如果仍然失败，返回错误
+    // 如果失败，直接返回错误
     if (!apiResult.success) {
       return apiResult;
     }
@@ -838,48 +836,14 @@ async function fetchHiveNet(questionData) {
       const itemAnswers = parseAnswer(item.answer, item.answer_options);
       if (itemAnswers.length === 0) continue;
 
-      // 【修复】标准化选项后，用于生成哈希和缓存
-      let itemOptions;
-      if (Array.isArray(item.answer_options)) {
-        // 如果已经是数组，去除末尾标点
-        itemOptions = item.answer_options.map(opt =>
-          String(opt).replace(/[。，,.！!？?；;：:]+$/, '').trim()
-        );
-      } else if (typeof item.answer_options === 'string') {
-        // 如果是字符串，先分割再去除末尾标点
-        if (item.answer_options.includes('\n')) {
-          itemOptions = item.answer_options.split('\n')
-            .map(o => o.trim()
-              .replace(/^[A-Za-z][:.、)\s]+/, '')
-              .replace(/[。，,.！!？?；;：:]+$/, '')
-              .trim())
-            .filter(o => o);
-        } else if (item.answer_options.match(/[A-Za-z][.、)]/g)?.length >= 2) {
-          itemOptions = item.answer_options.split(/(?=[A-Za-z][.、)])/)
-            .map(o => o.trim()
-              .replace(/^[A-Za-z][:.、)\s]+/, '')
-              .replace(/[。，,.！!？?；;：:]+$/, '')
-              .trim())
-            .filter(o => o);
-        } else {
-          itemOptions = item.answer_options.split(',')
-            .map(o => o.trim()
-              .replace(/^[A-Za-z][:.、)\s]+/, '')
-              .replace(/[。，,.！!？?；;：:]+$/, '')
-              .trim())
-            .filter(o => o);
-        }
-      } else {
-        itemOptions = [];
-      }
+      // 【修复】标准化选项后，用于生成哈希和缓存（D-08去重）
+      const itemOptions = parseHiveNetOptions(item.answer_options);
 
       // 生成题目哈希并缓存
       const itemHash = generateQuestionHash(item.question, itemOptions, itemType);
 
-      // 异步保存，不阻塞主流程（saveAnswerToCache 内部会验证答案）
-      saveAnswerToCache(itemHash, item.question, itemOptions, itemType, itemAnswers, "hivenet").catch(e => {
-        console.log(`[X] 缓存失败: ${item.question.substring(0, 20)}... - ${e.message}`);
-      });
+      // 异步保存，不阻塞主流程（saveAnswerToCacheAsync 内部会验证答案）
+      saveAnswerToCacheAsync(itemHash, item.question, itemOptions, itemType, itemAnswers, "hivenet");
     }
     
     // 如果没有找到选项完全相同的题目，返回失败
@@ -889,54 +853,25 @@ async function fetchHiveNet(questionData) {
     }
     
     // 智能解析答案
-    const answers = parseAnswer(exactMatch.answer, exactMatch.answer_options);
+    let answers = parseAnswer(exactMatch.answer, exactMatch.answer_options);
     
     if (answers.length === 0) {
       return { code: 404, msg: "Hive-Net答案解析失败", data: null };
     }
     
-    // 统一答案校验
-    const hiveValidation = validateSourceAnswer('Hive-Net', questionData.type, answers, questionData.options);
+    // 统一答案校验（含去标点二次匹配）
+    const hiveValidation = validateAndCleanAnswer(questionData.type, answers, questionData.options);
     if (!hiveValidation.valid) {
-      console.log(`[X] ${hiveValidation.reason}`);
-      return { code: 404, msg: hiveValidation.reason, data: null };
+      console.log(`[X] Hive-Net${hiveValidation.reason}`);
+      return { code: 404, msg: `Hive-Net${hiveValidation.reason}`, data: null };
     }
+    answers = hiveValidation.answers;
     
     console.log("[OK] Hive-Net 找到答案:", answers);
 
     // 【修复】返回清理后的选项（与缓存一致）
-    // 注意：exactMatch.answer_options是原始字符串，需要重新解析并清理
-    let returnOptions;
-    if (Array.isArray(exactMatch.answer_options)) {
-      returnOptions = exactMatch.answer_options.map(opt =>
-        String(opt).replace(/[。，,.！!？?；;：:]+$/, '').trim()
-      );
-    } else if (typeof exactMatch.answer_options === 'string') {
-      if (exactMatch.answer_options.includes('\n')) {
-        returnOptions = exactMatch.answer_options.split('\n')
-          .map(o => o.trim()
-            .replace(/^[A-Za-z][:.、)\s]+/, '')
-            .replace(/[。，,.！!？?；;：:]+$/, '')
-            .trim())
-          .filter(o => o);
-      } else if (exactMatch.answer_options.match(/[A-Za-z][.、)]/g)?.length >= 2) {
-        returnOptions = exactMatch.answer_options.split(/(?=[A-Za-z][.、)])/)
-          .map(o => o.trim()
-            .replace(/^[A-Za-z][:.、)\s]+/, '')
-            .replace(/[。，,.！!？?；;：:]+$/, '')
-            .trim())
-          .filter(o => o);
-      } else {
-        returnOptions = exactMatch.answer_options.split(',')
-          .map(o => o.trim()
-            .replace(/^[A-Za-z][:.、)\s]+/, '')
-            .replace(/[。，,.！!？?；;：:]+$/, '')
-            .trim())
-          .filter(o => o);
-      }
-    } else {
-      returnOptions = [];
-    }
+    // 注意：exactMatch.answer_options是原始字符串，需要重新解析并清理（D-08去重）
+    const returnOptions = parseHiveNetOptions(exactMatch.answer_options);
 
     return {
       code: 200,
@@ -992,46 +927,13 @@ async function fetchYanxi(questionData) {
       return { code: 400, msg: "言溪题库缺少题型参数", data: null };
     }
     
-    // 单选(0)、多选(1) 需要选项
-    const needOptions = ["0", "1"].includes(questionData.type);
-    if (needOptions && !questionData.options) {
-      console.log("[X] 言溪题库此题型需要选项参数");
-      return { code: 400, msg: "言溪题库此题型需要选项参数", data: null };
-    }
-    
-    // 转换选项格式：将选项转换为换行符分隔（言溪要求）
-    // 例如: "A.杭州 B.汝州 C.黄州 D.儋州" → "A.杭州\nB.汝州\nC.黄州\nD.儋州"
-    let yanxiOptions = '';
-    if (questionData.options) {
-      // 处理数组和字符串两种格式
-      if (Array.isArray(questionData.options)) {
-        yanxiOptions = questionData.options.join('\n');
-      } else if (typeof questionData.options === 'string') {
-        yanxiOptions = questionData.options;
-        if (!yanxiOptions.includes('\n')) {
-          // 如果选项中没有换行符，尝试按 A. B. C. D. 分割
-          yanxiOptions = yanxiOptions
-            .replace(/([A-Z])\./g, '\n$1.')
-            .trim()
-            .replace(/^\n/, '');  // 移除开头的换行
-        }
-      } else {
-        // 其他类型转为字符串
-        yanxiOptions = String(questionData.options);
-      }
-    }
-    
     // 打印请求参数
     console.log(`[UP] 言溪请求: 题型=${yanxiType}, 题目="${(questionData.question || '').substring(0, 30)}..."`);
-    if (yanxiOptions) {
-      console.log(`[UP] 言溪选项: "${yanxiOptions.substring(0, 50)}..."`);
-    }
     
     // 构建请求 URL
     const params = new URLSearchParams({
       token: token,
       title: questionData.question || '',
-      options: yanxiOptions,
       type: yanxiType
     });
     const url = `${YANXI_API_URL}?${params.toString()}`;
@@ -1166,57 +1068,13 @@ async function fetchYanxi(questionData) {
       answers = splitAnswers;
     }
     
-    // 单选/多选验证：答案数量与题型是否匹配
-    if (needOptions) {
-      // 单选题返回多个答案，跳过
-      if (questionData.type === "0" && answers.length > 1) {
-        console.log(`[X] 言溪题库 答案异常: 单选题返回了${answers.length}个答案，跳过`);
-        return { code: 404, msg: "言溪题库答案与题型不匹配(单选返回多答案)", data: { answer: answers } };
-      }
-      
-      // 多选题只返回1个答案，跳过
-      if (questionData.type === "1" && answers.length === 1) {
-        console.log(`[X] 言溪题库 答案异常: 多选题只返回了1个答案，跳过`);
-        return { code: 404, msg: "言溪题库答案与题型不匹配(多选返回单答案)", data: { answer: answers } };
-      }
+    // 使用公共校验函数验证答案（含单选/多选数量校验、选项匹配、去标点二次匹配、判断题格式校验）
+    const validation = validateAndCleanAnswer(questionData.type, answers, questionData.options);
+    if (!validation.valid) {
+      console.log(`[X] 言溪题库答案校验失败: ${validation.reason}`);
+      return { code: 404, msg: `言溪题库${validation.reason}`, data: { answer: validation.answers } };
     }
-    
-    // 单选/多选验证：答案必须存在于选项中
-    if (needOptions && yanxiOptions) {
-      // 解析选项
-      const optionLines = yanxiOptions.split('\n').filter(o => o.trim());
-      const validOptions = optionLines.map(opt => {
-        // 提取选项内容：A.杭州 -> 杭州
-        const match = opt.match(/^[A-Z][.、]\s*(.+)$/);
-        return match ? match[1].trim() : opt.trim();
-      });
-      
-      // 检查每个答案是否在选项中
-      const invalidAnswers = answers.filter(ans => {
-        // 答案可能是 "A"、"A.杭州" 或 "杭州"
-        const ansText = ans.replace(/^[A-Z][.、]\s*/, '').trim();
-        
-        // 精确匹配，或答案文本完全包含选项
-        return !validOptions.some(opt => 
-          opt === ans || opt === ansText || ansText.includes(opt)
-        );
-      });
-      
-      if (invalidAnswers.length > 0) {
-        console.log(`[X] 言溪题库答案不在选项中: ${invalidAnswers.join(', ')}`);
-        return { code: 404, msg: "言溪题库答案不在选项中", data: { answer: answers, options: yanxiOptions } };
-      }
-    }
-    
-    // 判断题格式校验
-    if (questionData.type === "3") {
-      const judgeKeywords = /^(正确|错误|对|错|true|false|√|×|是|否|T|F)$/i;
-      const allAnswersValid = answers.every(ans => judgeKeywords.test(String(ans).replace(/^[A-Z][.、]\s*/, '').trim()));
-      if (!allAnswersValid) {
-        console.log(`[X] 言溪题库答案不符合判断题格式: ${answers.join(', ')}`);
-        return { code: 404, msg: "言溪题库答案不符合判断题格式", data: { answer: answers } };
-      }
-    }
+    answers = validation.answers;
 
     // 判断题标准化：将答案统一为 "正确" 或 "错误"
     if (questionData.type === "3") {

@@ -37,9 +37,13 @@ const db = {
     }
   },
   
-  // 准备语句
+  // 准备语句（带缓存：相同SQL复用预编译语句对象）
+  _stmtCache: new Map(),
   prepare(sql) {
-    return {
+    if (this._stmtCache.has(sql)) {
+      return this._stmtCache.get(sql);
+    }
+    const stmt = {
       async all(...params) {
         const [rows] = await pool.query(sql, params);
         return rows;
@@ -53,6 +57,8 @@ const db = {
         return { changes: result.affectedRows, lastInsertRowid: result.insertId };
       }
     };
+    this._stmtCache.set(sql, stmt);
+    return stmt;
   },
   
   // 直接执行
@@ -62,4 +68,33 @@ const db = {
   }
 };
 
-module.exports = { DB_CONFIG, pool, db };
+// ==================== Q-04去重：连接管理工具函数 ====================
+
+// 自动管理连接获取和释放（避免连接泄漏）
+async function withConnection(callback) {
+  const conn = await pool.getConnection();
+  try {
+    return await callback(conn);
+  } finally {
+    conn.release();
+  }
+}
+
+// 自动管理事务（包括连接获取、事务提交/回滚、连接释放）
+// callback 接收 conn 参数，执行业务逻辑；若 callback 抛异常则自动回滚
+async function withTransaction(callback) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const result = await callback(conn);
+    await conn.commit();
+    return result;
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+}
+
+module.exports = { DB_CONFIG, pool, db, withConnection, withTransaction };

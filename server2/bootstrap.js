@@ -155,7 +155,8 @@ async function installDependencies() {
   const requiredPackages = [
     'hono',
     'mysql2',
-    'dotenv'
+    'dotenv',
+    'better-sqlite3'
   ];
   
   return new Promise((resolve, reject) => {

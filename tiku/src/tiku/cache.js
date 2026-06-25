@@ -21,7 +21,7 @@ async function getCachedAnswer(questionHash) {
 }
 
 // 保存答案到缓存
-async function saveAnswerToCache(questionHash, question, options, type, answer, source, isCorrect = null) {
+async function saveAnswerToCache(questionHash, question, options, type, answer, source, isCorrect = undefined) {
   const now = Math.floor(Date.now() / 1000);
   
   try {
@@ -87,8 +87,8 @@ async function saveAnswerToCache(questionHash, question, options, type, answer, 
       }
       
       if (answersMatch) {
-        // 答案一致，仅当有新校验结果且与缓存不同时更新 is_correct
-        const needsCorrectnessUpdate = isCorrect !== null && cached.is_correct !== isCorrect;
+        // 答案一致，仅当显式传入 isCorrect 且与缓存不同时更新
+        const needsCorrectnessUpdate = isCorrect !== undefined && cached.is_correct !== isCorrect;
         if (needsCorrectnessUpdate) {
           await db.prepare(
             "UPDATE answer_cache SET is_correct = ? WHERE question_hash = ?"
@@ -101,13 +101,16 @@ async function saveAnswerToCache(questionHash, question, options, type, answer, 
       }
     }
 
-    // 新增或覆盖缓存，is_correct 使用传入值或 NULL
-    const isCorrectValue = isCorrect !== null ? isCorrect : null;
+    // 新增或覆盖缓存
+    // isCorrect 语义：undefined=不覆盖已有状态, null=显式设为NULL(重查成功重置), 0/1=设为具体值
+    const shouldSetCorrectness = isCorrect !== undefined;
+    const isCorrectValue = shouldSetCorrectness ? isCorrect : null;
+    const isCorrectUpdateExpr = shouldSetCorrectness ? '?' : 'is_correct';
     await db.prepare(
-      "INSERT INTO answer_cache (question_hash, question, options, type, answer, source, is_correct, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE question=?, options=?, type=?, answer=?, source=?, is_correct=?, created_at=?"
-    ).run(questionHash, normalizedQuestion, optionsStr, type, answerStr, source, isCorrectValue, now, normalizedQuestion, optionsStr, type, answerStr, source, isCorrectValue, now);
+      `INSERT INTO answer_cache (question_hash, question, options, type, answer, source, is_correct, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE question=?, options=?, type=?, answer=?, source=?, is_correct=${isCorrectUpdateExpr}, created_at=?`
+    ).run(questionHash, normalizedQuestion, optionsStr, type, answerStr, source, isCorrectValue, now, normalizedQuestion, optionsStr, type, answerStr, source, ...(shouldSetCorrectness ? [isCorrectValue] : []), now);
     
-    console.log("保存缓存成功:", questionHash.substring(0, 8), "来源:", source, cached ? "(覆盖旧答案)" : "(新增)", isCorrect !== null ? `is_correct=${isCorrect}` : "");
+    console.log("保存缓存成功:", questionHash.substring(0, 8), "来源:", source, cached ? "(覆盖旧答案)" : "(新增)", shouldSetCorrectness ? `is_correct=${isCorrect}` : "");
   } catch (e) {
     console.error("保存答案缓存失败:", e.message);
   }
@@ -212,62 +215,6 @@ async function applyCorrectnessUpdate(questionHash, isCorrect, type) {
   }
 }
 
-// 题库源答案统一校验函数（提取自 fetchAnswer/fetchHiveNet/fetchUcuc 的重复逻辑）
-// 返回 { valid, reason } — valid=false 表示应跳过此答案
-function validateSourceAnswer(sourceName, type, answers, options) {
-  // 单选返回多个答案
-  if (type === "0" && answers.length > 1) {
-    return { valid: false, reason: `${sourceName}答案与题型不匹配(单选返回多答案)` };
-  }
-  // 多选只返回1个答案
-  if (type === "1" && answers.length === 1) {
-    return { valid: false, reason: `${sourceName}答案与题型不匹配(多选返回单答案)` };
-  }
-  // 多选题答案数超过选项数校验（全选=选项数是合理的，超过才异常）
-  if (type === "1" && options) {
-    const optionCount = (typeof options === 'string')
-      ? options.split(/[,\s]+/).filter(o => o.trim()).length
-      : (Array.isArray(options) ? options.length : 0);
-    if (optionCount > 0 && answers.length > optionCount) {
-      return { valid: false, reason: `${sourceName}答案校验失败(多选题答案数超过选项数)` };
-    }
-  }
-  // 单选/多选验证：答案必须存在于选项中
-  if ((type === "0" || type === "1") && options) {
-    let optionLines = [];
-    if (typeof options === 'string') {
-      optionLines = options.split(/[,\s]+/).filter(o => o.trim());
-    } else if (Array.isArray(options)) {
-      optionLines = options.map(o => String(o).trim()).filter(o => o);
-    }
-    const validOptions = optionLines.map(opt => {
-      const match = opt.match(/^[A-Za-z][.、:：)]\s*(.+)$/);
-      return match ? match[1].trim() : opt.trim();
-    });
-    if (validOptions.length > 0) {
-      const invalidAnswers = answers.filter(ans => {
-        const ansText = typeof ans === 'string' ? ans.replace(/^[A-Za-z][.、:：)\s]+/, '').trim() : String(ans);
-        return !validOptions.some(opt =>
-          opt === ans || opt === ansText || ansText.includes(opt)
-        );
-      });
-      if (invalidAnswers.length > 0) {
-        return { valid: false, reason: `${sourceName}答案不在选项中: ${invalidAnswers.join(', ')}` };
-      }
-    }
-  }
-  // 判断题格式校验
-  if (type === "3" && answers.length > 0) {
-    const ans = String(answers[0]).trim();
-    const validJudge = ["正确", "错误", "对", "错", "√", "×", "✓", "✗", "true", "false", "t", "f"];
-    const normalized = ans.toLowerCase().replace(/[，。！？、；：""''（）【】\s]/g, '').replace(/[,\.!?;:'"()\[\]]/g, '');
-    if (!validJudge.some(v => normalized === v)) {
-      return { valid: false, reason: `${sourceName}判断题答案格式异常: "${ans}"` };
-    }
-  }
-  return { valid: true };
-}
-
 // 反转判断题答案
 function reverseJudgeAnswer(answer) {
   const normalized = answer.trim().toLowerCase();
@@ -287,13 +234,24 @@ function reverseJudgeAnswer(answer) {
   return null;
 }
 
+// P-03修复：异步低优先级保存缓存（fire-and-forget）
+// 所有非关键路径的缓存保存都应使用此函数，避免阻塞主请求
+// 使用 setImmediate 降低优先级，让事件循环优先处理请求响应
+function saveAnswerToCacheAsync(...args) {
+  setImmediate(() => {
+    saveAnswerToCache(...args).catch(e => {
+      console.error('[saveAnswerToCacheAsync] 异步保存失败:', e.message);
+    });
+  });
+}
+
 module.exports = {
   // 缓存读写
   getCachedAnswer,
   saveAnswerToCache,
+  // 异步低优先级保存（不阻塞主请求，fire-and-forget）
+  saveAnswerToCacheAsync,
   // 正确性上报
   recordCorrectnessReport,
-  applyCorrectnessUpdate,
-  // 源答案校验
-  validateSourceAnswer
+  applyCorrectnessUpdate
 };

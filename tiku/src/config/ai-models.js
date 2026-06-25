@@ -1,7 +1,8 @@
 // 消耗等级划分标准（按输入+输出价格总和，元/百万tokens）：
 //   低消耗：总和 ≤ 10
 //   中消耗：总和 10~25
-//   高消耗：总和 > 25
+//   高消耗：总和 25~50
+//   超高消耗：总和 > 50
 const AI_MODELS = {
   'DeepSeek-V3.2': {
     id: 'DeepSeek-V3.2',
@@ -62,6 +63,17 @@ const AI_MODELS = {
     supportsVision: true,
     cost: '高消耗',
     statsColumn: 'qwen3_7_calls'
+  },
+  'qwen3.7-plus': {
+    id: 'qwen3.7-plus',
+    apiModel: 'qwen3.7-plus',
+    provider: '302ai',
+    displayName: 'Qwen3.7-Plus',
+    temperature: 0.6,
+    enable_thinking: true,
+    supportsVision: true,
+    cost: '低消耗',
+    statsColumn: 'qwen3_7_plus_calls'
   },
   'qwen3.5-plus': {
     id: 'qwen3.5-plus',
@@ -151,7 +163,7 @@ const AI_MODELS = {
     displayName: 'Gemini-3.5',
     temperature: 0.6,
     supportsVision: true,
-    cost: '高消耗',
+    cost: '超高消耗',
     statsColumn: 'gemini_35_calls'
   },
   'GLM-5': {
@@ -173,6 +185,16 @@ const AI_MODELS = {
     thinking: { type: "enabled" },
     cost: '高消耗',
     statsColumn: 'glm_51_calls'
+  },
+  'GLM-5.2': {
+    id: 'GLM-5.2',
+    apiModel: 'glm-5.2',
+    provider: '302ai',
+    displayName: 'GLM-5.2',
+    temperature: 1.0,
+    thinking: { type: "enabled" },
+    cost: '高消耗',
+    statsColumn: 'glm_52_calls'
   },
   'GLM-4.7': {
     id: 'GLM-4.7',
@@ -203,7 +225,38 @@ const AI_MODELS = {
     supportsVision: true,
     cost: '高消耗',
     statsColumn: 'kimi_k25_calls'
-  }
+  },
+  'kimi-k2.7-code': {
+    id: 'kimi-k2.7-code',
+    apiModel: 'kimi-k2.7-code',
+    provider: '302ai',
+    displayName: 'Kimi-K2.7-Code',
+    thinking: { type: "enabled" },
+    cost: '高消耗',
+    statsColumn: 'kimi_k27_code_calls'
+  },
+  'doubao-seed-2-1-turbo-260628': {
+    id: 'doubao-seed-2-1-turbo-260628',
+    apiModel: 'doubao-seed-2-1-turbo-260628',
+    provider: '302ai',
+    displayName: 'Doubao-Seed-2.1-Turbo',
+    temperature: 0.6,
+    thinking: { type: "enabled" },
+    supportsVision: true,
+    cost: '中消耗',
+    statsColumn: 'doubao_seed_21_turbo_calls'
+  },
+  'doubao-seed-2-1-pro-260628': {
+    id: 'doubao-seed-2-1-pro-260628',
+    apiModel: 'doubao-seed-2-1-pro-260628',
+    provider: '302ai',
+    displayName: 'Doubao-Seed-2.1-Pro',
+    temperature: 0.6,
+    thinking: { type: "enabled" },
+    supportsVision: true,
+    cost: '高消耗',
+    statsColumn: 'doubao_seed_21_pro_calls'
+  },
 };
 
 const MODEL_COLUMN_MAP = {};
@@ -253,10 +306,11 @@ function getFullModelConfig() {
   const typeModelMap = {
     'DeepSeek': ['V4-Flash', 'V4-Pro', 'V3.2', 'R1'],
     'HunYuan': ['Hy3-preview'],
-    'Qwen': ['3.5-plus', '3.6-plus', '3.7-Max'],
+    'Doubao': ['2.1-Pro', '2.1-Turbo'],
+    'Qwen': ['3.5-plus', '3.6-plus', '3.7-Plus', '3.7-Max'],
     'MiniMax': ['M3', 'M2.7', 'M2.5'],
-    'GLM': ['5.1', '5.0', '4.7'],
-    'Kimi': ['K2.6', 'K2.5'],
+    'GLM': ['5.2', '5.1', '5.0', '4.7'],
+    'Kimi': ['K2.7-Code', 'K2.6', 'K2.5'],
     'ChatGPT': ['5.4-nano', '5.4'],
     'Gemini': ['3.5', '3.1']
   };
@@ -264,6 +318,7 @@ function getFullModelConfig() {
   const defaultModels = {
     'DeepSeek': 'V4-Flash',
     'HunYuan': 'Hy3-preview',
+    'Doubao': '2.1-Pro',
     'Qwen': '3.7-Max',
     'MiniMax': 'M3',
     'GLM': '5.1',
@@ -282,8 +337,13 @@ function getFullModelConfig() {
     'HunYuan': {
       'Hy3-preview': 'hy3-preview'
     },
+    'Doubao': {
+      '2.1-Pro': 'doubao-seed-2-1-pro-260628',
+      '2.1-Turbo': 'doubao-seed-2-1-turbo-260628'
+    },
     'Qwen': {
       '3.7-Max': 'qwen3.7-max',
+      '3.7-Plus': 'qwen3.7-plus',
       '3.6-plus': 'qwen3.6-plus',
       '3.5-plus': 'qwen3.5-plus'
     },
@@ -293,11 +353,13 @@ function getFullModelConfig() {
       'M2.5': 'minimax-m2.5'
     },
     'GLM': {
+      '5.2': 'GLM-5.2',
       '5.1': 'GLM-5.1',
       '5.0': 'GLM-5',
       '4.7': 'GLM-4.7'
     },
     'Kimi': {
+      'K2.7-Code': 'kimi-k2.7-code',
       'K2.6': 'kimi-k2.6',
       'K2.5': 'kimi-k2.5'
     },
@@ -336,6 +398,7 @@ const MODEL_PRICING = {
   'deepseek-v4-pro': { inputPerMillion: 3.00, outputPerMillion: 6.00 },
   'qwen3.6-plus': { inputPerMillion: 2.10, outputPerMillion: 12.60 },
   'qwen3.7-max': { inputPerMillion: 12.60, outputPerMillion: 37.10 },
+  'qwen3.7-plus': { inputPerMillion: 1.596, outputPerMillion: 6.44 },
   'qwen3.5-plus': { inputPerMillion: 0.84, outputPerMillion: 4.83 },
   'minimax-m2.5': { inputPerMillion: 2.10, outputPerMillion: 8.40 },
   'minimax-m2.7': { inputPerMillion: 2.10, outputPerMillion: 8.40 },
@@ -347,9 +410,13 @@ const MODEL_PRICING = {
   'gemini-3.5-flash': { inputPerMillion: 10.50, outputPerMillion: 63.00 },
   'GLM-5': { inputPerMillion: 4.20, outputPerMillion: 18.20 },
   'GLM-5.1': { inputPerMillion: 9.80, outputPerMillion: 30.80 },
+  'GLM-5.2': { inputPerMillion: 9.80, outputPerMillion: 30.80 },
   'GLM-4.7': { inputPerMillion: 2.002, outputPerMillion: 7.994 },
   'kimi-k2.6': { inputPerMillion: 6.65, outputPerMillion: 28.00 },
-  'kimi-k2.5': { inputPerMillion: 4.389, outputPerMillion: 23.10 }
+  'kimi-k2.5': { inputPerMillion: 4.389, outputPerMillion: 23.10 },
+  'kimi-k2.7-code': { inputPerMillion: 6.65, outputPerMillion: 28.00 },
+  'doubao-seed-2-1-turbo-260628': { inputPerMillion: 3.01, outputPerMillion: 14.98 },
+  'doubao-seed-2-1-pro-260628': { inputPerMillion: 6.02, outputPerMillion: 29.96 },
 };
 
 // ==================== 预锁定机制 ====================
@@ -357,9 +424,10 @@ const MODEL_PRICING = {
 // 防止并发请求导致余额透支，恶意用户无法在余额不足时发起AI请求
 // 预锁定是冻结预授权额度，不是扣费上限；最终扣费按实际token消耗计算，多退少不补
 const COST_PRELOCK = {
-  '低消耗': 4,   // 低消耗模型预锁定4次
-  '中消耗': 8,  // 中消耗模型预锁定8次
-  '高消耗': 16    // 高消耗模型预锁定16次
+  '低消耗': 2,   // 低消耗模型预锁定2次
+  '中消耗': 6,  // 中消耗模型预锁定6次
+  '高消耗': 12,   // 高消耗模型预锁定12次
+  '超高消耗': 20  // 超高消耗模型预锁定20次
 };
 
 /**

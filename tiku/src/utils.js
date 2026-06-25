@@ -2,6 +2,42 @@
 
 const crypto = require('crypto');
 
+// Q-03去重：统一错误处理 - AppError 类（结构化错误）
+class AppError extends Error {
+  constructor(message, code = 500, data = null) {
+    super(message);
+    this.name = 'AppError';
+    this.code = code;
+    this.data = data;
+  }
+
+  // 转换为结构化错误响应对象
+  toResponse() {
+    return { code: this.code, msg: this.message, data: this.data };
+  }
+}
+
+// Q-03去重：统一错误处理 - 创建结构化错误响应
+function createErrorResponse(error, defaultMessage = '内部错误', defaultCode = 500) {
+  if (error instanceof AppError) {
+    return error.toResponse();
+  }
+  if (error && error.message) {
+    return { code: defaultCode, msg: `${defaultMessage}: ${error.message}`, data: null };
+  }
+  return { code: defaultCode, msg: defaultMessage, data: null };
+}
+
+// Q-03去重：统一错误处理 - 静默捕获异常（适用于统计、日志等非关键操作）
+async function safeAsync(fn, errorMessage = '操作失败') {
+  try {
+    return await fn();
+  } catch (e) {
+    console.error(`${errorMessage}:`, e.message);
+    return null;
+  }
+}
+
 // SHA256哈希（Node.js版本）
 function sha256(message) {
   return crypto.createHash('sha256').update(message).digest('hex');
@@ -14,24 +50,26 @@ function stripPunctuation(str) {
 
 // 标准化答案（用于比较和缓存）
 function normalizeAnswer(answer, type = null) {
-  let normalized = answer.trim()
-    .toLowerCase();
+  let normalized = answer.trim().toLowerCase();
   
   // 移除反斜杠（AI 可能返回转义后的引号，如 \"，导致匹配失败）
   normalized = normalized.replace(/\\/g, '');
   
   // 选择题（单选/多选）：去除选项前缀（如 "A、"、"A."、"A:"、"A)" 等）
   if (type === "0" || type === "1") {
-    // 去除字母+分隔符前缀：A. A、 A: A： A) 等
     normalized = normalized.replace(/^[a-z][.、:：)\s]+/, '').trim();
   }
   
-  // 判断题同义词标准化（提前处理，避免标点移除影响）
+  // 统一移除标点和空格（判断题标准化前先清理，避免重复处理）
+  normalized = normalized
+    .replace(/[，。！？、；：""''（）【】\s]/g, '')  // 移除中文标点和空格
+    .replace(/[,!?;:'"()\[\]]/g, '');  // 移除英文标点（保留小数点）
+  
+  // 判断题同义词标准化（标点已移除，直接比对）
   if (type === "3" || !type) {
-    const judgeAnswer = normalized.replace(/[，。！？、；：""''（）【】\s]/g, '').replace(/[,\.!?;:'"()\[\]]/g, '');
-    if (['对', '正确', '√', '✓', 'true', 't', '是', 'yes'].includes(judgeAnswer)) {
+    if (['对', '正确', '√', '✓', 'true', 't', '是', 'yes'].includes(normalized)) {
       return '正确';
-    } else if (['错', '错误', '×', '✗', 'false', 'f', '否', 'no'].includes(judgeAnswer)) {
+    } else if (['错', '错误', '×', '✗', 'false', 'f', '否', 'no'].includes(normalized)) {
       return '错误';
     }
   }
@@ -46,12 +84,41 @@ function normalizeAnswer(answer, type = null) {
     }
   }
   
-  // 最后移除标点和空格（但不移除数字中的小数点）
-  normalized = normalized
-    .replace(/[，。！？、；：""''（）【】\s]/g, '')  // 移除中文标点和空格
-    .replace(/[,!?;:'"()\[\]]/g, '');  // 移除英文标点（保留小数点）
-  
   return normalized;
+}
+
+// D-09去重：排序题校验辅助函数（供 validateAnswer 和 checkAnswerReasonable 共用）
+// 获取格式无效的排序题答案元素（非单个字母）
+function getInvalidSortFormatItems(answer) {
+  const validPattern = /^[A-Za-z]$/;
+  return answer.filter(a => !validPattern.test(String(a).trim()));
+}
+
+// 检查排序题答案是否有重复字母
+function hasDuplicateSortAnswers(answer) {
+  const uniqueAnswers = new Set(answer.map(a => a.toUpperCase()));
+  return uniqueAnswers.size !== answer.length;
+}
+
+// 从选项文本提取字母前缀（如"A. 北京" → "A"），返回大写字母数组
+function extractOptionLetters(options) {
+  if (!options) return [];
+  try {
+    const optionsData = typeof options === 'string' ? JSON.parse(options) : options;
+    const optionArray = Array.isArray(optionsData) ? optionsData : String(optionsData).split('\n').filter(o => o.trim());
+    return optionArray.map(opt => {
+      const match = String(opt).match(/^([A-Za-z])[.、)\s]/);
+      return match ? match[1].toUpperCase() : null;
+    }).filter(letter => letter);
+  } catch (e) {
+    return [];
+  }
+}
+
+// 获取排序题答案中不在选项字母列表内的元素
+function getInvalidSortOptionLetters(answer, optionLetters) {
+  if (optionLetters.length === 0) return [];
+  return answer.filter(a => !optionLetters.includes(a.toUpperCase()));
 }
 
 // 校验答案格式
@@ -84,52 +151,39 @@ function validateAnswer(type, answer, options = null) {
     return { valid: false, reason: "多选题答案数量错误：不能只有1个答案" };
   }
 
-  if ((type === "1" || type === "2") && answer.length === 0) {
-    return { valid: false, reason: `${type === "1" ? "多选" : "填空"}题答案为空` };
+  // 多选题答案数不能超过选项数
+  if (type === "1" && options) {
+    const optionCount = (typeof options === 'string')
+      ? options.split(/[,\s]+/).filter(o => o.trim()).length
+      : (Array.isArray(options) ? options.length : 0);
+    if (optionCount > 0 && answer.length > optionCount) {
+      return { valid: false, reason: `多选题答案数量错误：答案数(${answer.length})超过选项数(${optionCount})` };
+    }
+  }
+
+  if (answer.length === 0) {
+    return { valid: false, reason: "答案为空" };
   }
   
-  // 排序题校验：答案格式为数组，元素为字母 A/B/C/D 等
+  // 排序题校验：答案格式为数组，元素为字母 A/B/C/D 等（D-09去重：复用公共辅助函数）
   if (type === "13") {
-    if (answer.length === 0) {
-      return { valid: false, reason: "排序题答案为空" };
-    }
-    
     // 1. 格式校验：必须是单个字母
-    const validPattern = /^[A-Za-z]$/;
-    const invalidFormat = answer.filter(a => !validPattern.test(String(a).trim()));
+    const invalidFormat = getInvalidSortFormatItems(answer);
     if (invalidFormat.length > 0) {
       return { valid: false, reason: `排序题答案格式错误，应为单个字母: ${invalidFormat.join(', ')}` };
     }
-    
+
     // 2. 重复校验：不能有重复字母
-    const uniqueAnswers = new Set(answer.map(a => a.toUpperCase()));
-    if (uniqueAnswers.size !== answer.length) {
+    if (hasDuplicateSortAnswers(answer)) {
       return { valid: false, reason: "排序题答案包含重复字母" };
     }
-    
+
     // 3. 选项校验：答案字母必须在选项中
     if (options) {
-      // 提取选项字母（从选项文本中提取A/B/C/D等）
-      let optionLetters = [];
-      try {
-        const optionsData = JSON.parse(options);
-        const optionArray = Array.isArray(optionsData) ? optionsData : String(optionsData).split('\n').filter(o => o.trim());
-        
-        // 从选项文本提取字母前缀（如"A. 北京" → "A"）
-        optionLetters = optionArray.map(opt => {
-          const match = String(opt).match(/^([A-Za-z])[.、)\s]/);
-          return match ? match[1].toUpperCase() : null;
-        }).filter(letter => letter);
-      } catch (e) {
-        // 解析失败，跳过选项校验
-      }
-      
-      if (optionLetters.length > 0) {
-        // 检查答案字母是否都在选项中
-        const invalidLetters = answer.filter(a => !optionLetters.includes(a.toUpperCase()));
-        if (invalidLetters.length > 0) {
-          return { valid: false, reason: `排序题答案字母不在选项中: ${invalidLetters.join(', ')}` };
-        }
+      const optionLetters = extractOptionLetters(options);
+      const invalidLetters = getInvalidSortOptionLetters(answer, optionLetters);
+      if (invalidLetters.length > 0) {
+        return { valid: false, reason: `排序题答案字母不在选项中: ${invalidLetters.join(', ')}` };
       }
     }
   }
@@ -375,6 +429,25 @@ function getClientIp(c) {
   return clientIp;
 }
 
+// 检查题库API返回结果是否有有效答案（D-02去重）
+function hasValidAnswer(result) {
+  return result.code === 200 &&
+         result.data &&
+         result.data.answer &&
+         (Array.isArray(result.data.answer) ? result.data.answer.length > 0 : true);
+}
+
+// D-07去重：根据模型是否支持视觉构建多模态消息内容
+function buildUserContent(text, imageUrls, supportsVision) {
+  if (supportsVision && imageUrls && imageUrls.length > 0) {
+    return [
+      { type: "text", text },
+      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
+    ];
+  }
+  return text;
+}
+
 module.exports = {
   sha256,
   stripPunctuation,
@@ -386,5 +459,14 @@ module.exports = {
   getClientIp,
   fetchWithTimeout,
   validateAndCleanAnswer,
-  callAIApi
+  callAIApi,
+  hasValidAnswer,
+  buildUserContent,
+  getInvalidSortFormatItems,
+  hasDuplicateSortAnswers,
+  extractOptionLetters,
+  getInvalidSortOptionLetters,
+  AppError,
+  createErrorResponse,
+  safeAsync
 };

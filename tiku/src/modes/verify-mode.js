@@ -10,8 +10,8 @@
  * - executeWebSearch: 执行Tavily搜索
  */
 
-const { fetchAnswer, fetchYanxi, saveAnswerToCache, incrementAiCalls, incrementModelCalls, incrementTotalQueries, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { normalizeAnswer, validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi } = require('../utils');
+const { fetchAnswer, fetchYanxi, saveAnswerToCacheAsync, cleanAndNormalizeAnswer, incrementAiCalls, incrementModelCalls, incrementTotalQueries, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
+const { normalizeAnswer, fetchWithTimeout, validateAndCleanAnswer, callAIApi, buildUserContent } = require('../utils');
 const { db, getEnv, SPONSOR_URL } = require('../config');
 const { tavilySearch, WEB_SEARCH_TOOL } = require('../tavily-search');
 const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP, calculateCostFromTokens } = require('../config/ai-models');
@@ -46,15 +46,8 @@ async function fetchVerifyFirstAI(questionData) {
 
   // 根据模型是否支持视觉选择消息格式
   const supportsVision = modelConfig?.supportsVision && imageUrls && imageUrls.length > 0;
-  let userContent;
-  if (supportsVision) {
-    userContent = [
-      { type: "text", text: userPrompt },
-      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
-    ];
-  } else {
-    userContent = userPrompt;
-  }
+  // D-07去重：构建用户消息content
+  const userContent = buildUserContent(userPrompt, imageUrls, supportsVision);
 
   const body = {
     model: modelConfig.model,
@@ -75,13 +68,8 @@ async function fetchVerifyFirstAI(questionData) {
   try {
     console.log("AI查询中...");
     
-    await incrementAiCalls();
-    await incrementTotalQueries('ai');
-    
-    const modelColumn = MODEL_COLUMN_MAP[modelConfig.model];
-    if (modelColumn) {
-      await incrementModelCalls(modelColumn);
-    }
+    // 增加AI调用次数统计（D-01去重：使用统一统计函数）
+    await incrementAIStats(modelConfig.model);
     
     const { result, usage } = await callAIApi({ apiUrl, apiKey, body });
     
@@ -98,12 +86,8 @@ async function fetchVerifyFirstAI(questionData) {
       
       const parsed = extractJsonFromContent(content);
       if (parsed) {
-          // 清理AI答案中的"选项X"前缀（安全模式：仅当去掉前缀后匹配选项时才删除）
-          if (Array.isArray(parsed.answer)) {
-            parsed.answer = parsed.answer.map(a => cleanAiAnswer(a, questionData.options));
-          }
-          // 连线题：标准化答案格式（拆分合并字符串）
-          parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
+          // D-06去重：清洗答案并标准化格式
+          parsed.answer = cleanAndNormalizeAnswer(parsed.answer, questionData);
           console.log("[OK] AI解析成功:", JSON.stringify(parsed.answer));
         
         console.log(`[STAT] 本次AI调用token总计: 输入=${usage?.prompt_tokens || 0}, 输出=${usage?.completion_tokens || 0}`);
@@ -185,7 +169,7 @@ async function executeWebSearch(query) {
   console.log(`[SEARCH] AI请求联网搜索: "${query}"`);
   
   const searchResult = await tavilySearch(query, {
-    maxResults: 10,
+    maxResults: 5,
     searchDepth: 'advanced',
     includeAnswer: true,
     autoParameters: false
@@ -205,11 +189,18 @@ async function executeWebSearch(query) {
     console.log(`[INFO] Tavily直接答案: ${searchResult.answer}`);
   }
 
-  // 只使用Tavily的answer摘要，不传results列表（省token）
+  // 校验模式需要详细搜索结果来验证答案，传 results 列表
   const resultParts = [];
   if (searchResult.answer) {
-    resultParts.push(`【搜索结果】${searchResult.answer}`);
-  } else {
+    resultParts.push(`【搜索摘要】${searchResult.answer}`);
+  }
+  if (searchResult.results && searchResult.results.length > 0) {
+    resultParts.push('【详细结果】');
+    for (const result of searchResult.results) {
+      resultParts.push(`${result.title}: ${result.content}`);
+    }
+  }
+  if (resultParts.length === 0) {
     resultParts.push('无搜索结果');
   }
 
@@ -241,17 +232,9 @@ async function fetchDeepSeekThinking(questionData) {
   const { system: systemPrompt, user: basePrompt, imageUrls } = buildPrompt(questionData, true);
 
   try {
-    // 根据模型是否支持视觉选择消息格式
+    // 根据模型是否支持视觉选择消息格式（D-07去重）
   const supportsVision = modelConfig?.supportsVision && imageUrls && imageUrls.length > 0;
-  let userMessage;
-  if (supportsVision) {
-    userMessage = [
-      { type: "text", text: basePrompt },
-      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
-    ];
-  } else {
-    userMessage = basePrompt;
-  }
+  const userMessage = buildUserContent(basePrompt, imageUrls, supportsVision);
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -269,13 +252,8 @@ async function fetchDeepSeekThinking(questionData) {
     console.log("[INFO] 模型:", modelConfig.name);
     console.log("[INFO] 选项:", JSON.stringify(questionData.options));
 
-    await incrementAiCalls();
-    await incrementTotalQueries('ai');
-
-    const thinkingModelColumn = MODEL_COLUMN_MAP[modelConfig.model];
-    if (thinkingModelColumn) {
-      await incrementModelCalls(thinkingModelColumn);
-    }
+    // 增加AI调用次数统计（D-01去重：使用统一统计函数）
+    await incrementAIStats(modelConfig.model);
 
     // ========== 多轮工具调用循环 ==========
     // 第0轮：AI可能请求搜索 → 执行搜索
@@ -291,9 +269,9 @@ async function fetchDeepSeekThinking(questionData) {
         if (webSearchUsed) {
           messages.push({
             role: "user",
-            content: "请基于上述搜索结果和已有信息，直接输出最终答案。严格按照以下格式输出，不要输出其他内容：\n<answer>{\"answer\":[\"你的答案\"]}</answer>"
+            content: "请基于上述已有信息和你的知识库，直接输出最终答案。你已无法调用任何工具，不得再次请求联网搜索或任何工具调用。分析过程写在<analysis>标签内，最终答案放在<answer>标签内，格式为：\n<answer>{\"answer\":[\"你的答案\"]}</answer>"
           });
-          console.log("[INFO] 最后一轮：已追加强制回答提示");
+          console.log("[INFO] 最后一轮：已追加强制回答提示（禁止再次搜索）");
         }
       }
 
@@ -365,12 +343,8 @@ async function fetchDeepSeekThinking(questionData) {
 
       const parsed = extractJsonFromContent(content);
       if (parsed) {
-        // 清理AI答案中的"选项X"前缀（安全模式：仅当去掉前缀后匹配选项时才删除）
-        if (Array.isArray(parsed.answer)) {
-          parsed.answer = parsed.answer.map(a => cleanAiAnswer(a, questionData.options));
-        }
-        // 连线题：标准化答案格式（拆分合并字符串）
-        parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
+        // D-06去重：清洗答案并标准化格式
+        parsed.answer = cleanAndNormalizeAnswer(parsed.answer, questionData);
         // 计算是否使用了搜索
         const usedSearch = messages.some(m => m.role === "tool");
         console.log(`[OK] AI深度思考答案 (${usedSearch ? '使用了联网搜索' : '未使用联网搜索'}):`, JSON.stringify(parsed.answer));
@@ -429,7 +403,10 @@ async function fetchDeepSeekThinking(questionData) {
  * @param {Object} params.checkResult - 校验结果
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
- * @param {Function} params.decrementCount - 扣除次数函数
+ * @param {Function} params.lockToken - 预锁定次数函数
+ * @param {Function} params.settleToken - 结算次数函数
+ * @param {Function} params.releaseToken - 释放锁定函数
+ * @param {string} params.taskId - 异步任务ID
  */
 async function handleVerifyMode(c, params) {
   const {
@@ -442,7 +419,10 @@ async function handleVerifyMode(c, params) {
     hunyuanApiKey,
     log,
     FREE_MODE,
-    decrementCount,
+    lockToken,
+    settleToken,
+    releaseToken,
+    step1Cost: externalStep1Cost,  // 第二轮请求时客户端回传的第一轮费用
     skipUserIdCheck
   } = params;
 
@@ -454,26 +434,26 @@ async function handleVerifyMode(c, params) {
   let aiResultThinking = null; // 用于收集 fetchDeepSeekThinking 的token
   let totalCost = 0;  // 总消耗次数
 
-  // 免费模式不扣除次数
-  // 所有非免费模式（checkOnly=true/false/undefined）都需要检查余额≥1
-  // 扣次规则：
-  //   缓存命中：扣0.8次，直接返回cost
-  //   不命中缓存：扣1次基础 + 第一次AI实际token次数
-  //     题库+AI答案一致 → 最后一步，返回cost
-  //     不一致 → 已扣完，不返回cost，返回202启动第二轮
-  //   第二轮深度思考：扣第二轮AI实际token次数，返回总cost（第一轮+第二轮）
+  // 非免费模式：预锁定2次，确保余额充足后再查询
+  // 扣次规则（每轮独立预锁定2次，结算多退少补）：
+  //   已验证答案命中：结算0.8次（退1.2次）
+  //   第一轮题库+AI一致：结算 1+aiCost 次
+  //   第一轮不一致返回202：释放2次，202响应中携带 step1Cost（不返回cost）
+  //   第二轮深度思考：预锁定2次，结算 1+aiCost1+aiCost2 次，返回最终 cost
+  let prelocked = false;
+  const lockCount = 2;
   if (!FREE_MODE) {
-    // 调用前仅检查余额至少1次，实际扣除在流程结束后
-    const checkBalance = await decrementCount(token, userId, skipUserIdCheck, 1, true);
-    if (!checkBalance.success || checkBalance.remainingCount < 1) {
+    const lockResult = await lockToken(token, lockCount);
+    if (!lockResult.success) {
       return c.json({
         code: 403,
-        msg: "次数已用完，请从新赞助获取token",
-        data: { num: checkBalance.remainingCount || 0, answer: [], sponsorUrl: SPONSOR_URL }
+        msg: lockResult.message,
+        data: { num: 0, answer: [], sponsorUrl: SPONSOR_URL }
       }, 403);
     }
-    remainingCount = checkBalance.remainingCount;
-    log(`调用前余额检查: [OK] 剩余${remainingCount}次`);
+    prelocked = true;
+    remainingCount = lockResult.remainingCount;
+    log(`预锁定${lockCount}次成功，锁定后余额: ${remainingCount}`);
   } else {
     log("免费模式: 不扣除次数");
   }
@@ -498,7 +478,7 @@ async function handleVerifyMode(c, params) {
       }
 
       // 已验证答案也需要校验（防止历史脏数据）
-      const validation = validateAnswer(questionData.type, answerArr, questionData.options);
+      const validation = validateAndCleanAnswer(questionData.type, answerArr, questionData.options);
       if (!validation.valid) {
         log(`[X] 已验证答案校验失败: ${validation.reason}，清除并继续校验流程`);
         await db.prepare(
@@ -506,20 +486,22 @@ async function handleVerifyMode(c, params) {
         ).run(questionHash);
         // 不返回，继续走校验流程
       } else {
-        // 缓存命中，扣除0.8次
-        if (!FREE_MODE) {
-          const decResult = await decrementCount(token, userId, skipUserIdCheck, 0.8);
-          if (decResult.success) {
-            remainingCount = decResult.remainingCount;
+        // 已验证答案命中，结算0.8次（预锁定2次退1.2次）
+        if (!FREE_MODE && prelocked) {
+          const settleResult = await settleToken(token, 0.8);
+          if (settleResult.success) {
+            remainingCount = settleResult.remainingCount;
             totalCost = 0.8;
-            log(`缓存命中，扣除0.8次，剩余: ${remainingCount}`);
+            log(`已验证答案命中，结算0.8次（预锁定2次退1.2次），剩余: ${remainingCount}`);
+          } else {
+            await releaseToken(token, lockCount);
           }
         }
         return c.json({
           code: 200,
           msg: "答案校验一致(题库)",
           data: {
-            answer: answerArr,
+            answer: validation.answers,
             num: remainingCount,
             source: verifiedAnswer.source,
             isVerified: true,
@@ -571,7 +553,7 @@ async function handleVerifyMode(c, params) {
         
         if (!existingCache) {
           log("[OK] 缓存不存在，保存深度思考答案");
-          await saveAnswerToCache(
+          saveAnswerToCacheAsync(
             questionHash,
             questionData.question,
             questionData.options,
@@ -686,8 +668,8 @@ async function handleVerifyMode(c, params) {
           answerData = tikuResult;
           answerData.msg = "答案校验一致(题库)";
           
-          // 扣费：题库和AI校验一致，扣1次基础 + 第一次AI实际token消耗
-          if (!FREE_MODE) {
+          // 答案一致：结算 1+aiCost 次（预锁定2次，多退少补）
+          if (!FREE_MODE && prelocked) {
             let aiPromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
             let aiCompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
             let aiCost = 0;
@@ -695,11 +677,13 @@ async function handleVerifyMode(c, params) {
               aiCost = calculateCostFromTokens('deepseek-v4-pro', aiPromptTokens, aiCompletionTokens);
             }
             const costToDeduct = 1 + aiCost;
-            const decResult = await decrementCount(token, userId, skipUserIdCheck, costToDeduct);
-            if (decResult.success) {
-              remainingCount = decResult.remainingCount;
+            const settleResult = await settleToken(token, lockCount, costToDeduct);
+            if (settleResult.success) {
+              remainingCount = settleResult.remainingCount;
               totalCost = costToDeduct;
-              log(`题库和AI校验一致，扣除${costToDeduct}次（1次基础+${aiCost}次AI），剩余: ${remainingCount}`);
+              log(`题库和AI校验一致，结算${costToDeduct}次（预锁定${lockCount}次，1次基础+${aiCost}次AI），剩余: ${remainingCount}`);
+            } else {
+              await releaseToken(token, lockCount);
             }
           }
           
@@ -710,7 +694,7 @@ async function handleVerifyMode(c, params) {
           
           if (!existingCache) {
             log("[OK] 缓存不存在，保存题库答案（标记为已验证正确）");
-            await saveAnswerToCache(
+            saveAnswerToCacheAsync(
               questionHash,
               questionData.question,
               questionData.options,
@@ -746,17 +730,9 @@ async function handleVerifyMode(c, params) {
               log(`  缓存答案: ${JSON.stringify(cachedAnswerArr)}`);
               log(`  校验答案: ${JSON.stringify(currentAnswer)}`);
               
-              // 覆盖前校验答案格式
-              const validation = validateAnswer(questionData.type, currentAnswer, questionData.options);
-              if (!validation.valid) {
-                log(`[X] 校验答案格式错误: ${validation.reason}，跳过覆盖`);
-              } else {
-                log("[OK] 校验答案格式正确，执行覆盖");
-                await db.prepare(
-                  "UPDATE answer_cache SET answer = ?, source = ?, is_correct = 1 WHERE question_hash = ?"
-                ).run(JSON.stringify(currentAnswer), answerData.data.source || 'tiku', questionHash);
-                log("[OK] 已覆盖缓存答案并设置 is_correct=1");
-              }
+              // 通过 saveAnswerToCacheAsync 覆盖（内置校验）
+              saveAnswerToCacheAsync(questionHash, questionData.question, questionData.options, questionData.type, currentAnswer, answerData.data.source || 'tiku', 1);
+              log("[OK] 已覆盖缓存答案并设置 is_correct=1");
             }
           }
         } else {
@@ -789,20 +765,28 @@ async function handleVerifyMode(c, params) {
         // 如果是检测模式（checkOnly=true），返回202通知客户端
         if (checkOnly) {
           log("=== 检测模式：返回202状态码，通知客户端启动思维模式 ===");
-          // 扣除第一轮费用：1次基础 + 第一次AI实际token消耗（不返回cost，等第二轮统一返回）
-          if (!FREE_MODE) {
+          // 第一轮结算：预锁定2次，实际消耗 step1Cost（多退少补）
+          let step1Cost = 1;
+          if (!FREE_MODE && prelocked) {
             let aiPromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
             let aiCompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
             let aiCost = 0;
             if (aiPromptTokens > 0 || aiCompletionTokens > 0) {
               aiCost = calculateCostFromTokens('deepseek-v4-pro', aiPromptTokens, aiCompletionTokens);
             }
-            const step1Cost = 1 + aiCost;
-            const decResult = await decrementCount(token, userId, skipUserIdCheck, step1Cost);
-            if (decResult.success) {
-              remainingCount = decResult.remainingCount;
-              totalCost = step1Cost;  // 记录第一轮消耗，第二轮累加后返回
-              log(`第一轮完成，扣除${step1Cost}次（1次基础+${aiCost}次AI），剩余: ${remainingCount}`);
+            step1Cost = 1 + aiCost;
+            const settleResult = await settleToken(token, lockCount, step1Cost);
+            if (settleResult.success) {
+              remainingCount = settleResult.remainingCount;
+              log(`第一轮结算完成，预锁定${lockCount}次，实际消耗${step1Cost}次（1次基础+${aiCost}次AI），退还${lockCount - step1Cost}次，剩余: ${remainingCount}`);
+            } else {
+              await releaseToken(token, lockCount);
+              log(`[WARN] 第一轮结算失败，已释放锁定`);
+            }
+            // 保存 step1Cost 到本地数据库，供第二轮计算总 cost
+            if (taskId) {
+              saveStep1Cost(taskId, step1Cost);
+              log(`第一轮 step1Cost=${step1Cost} 已保存到本地数据库`);
             }
           }
           return c.json({
@@ -856,7 +840,7 @@ async function handleVerifyMode(c, params) {
           
           if (!existingCache) {
             log("[OK] 缓存不存在，保存深度思考答案");
-            await saveAnswerToCache(
+            saveAnswerToCacheAsync(
               questionHash,
               questionData.question,
               questionData.options,
@@ -894,42 +878,58 @@ async function handleVerifyMode(c, params) {
     answerData.data.num = remainingCount;
   }
 
-  // ========== 调用后按实际token扣除次数 ==========
-  // checkOnly=true 返回202时已扣第一轮费用，不会走到这里
-  // checkOnly=false 第二轮深度思考，只扣第二轮AI实际消耗（第一轮已在202时扣过）
-  if (!FREE_MODE && checkOnly === false) {
-    // 计算第一轮费用（已在第一次请求时扣除，此处仅用于总费用统计）
-    let step1PromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
-    let step1CompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
-    let step1AiCost = 0;
-    if (step1PromptTokens > 0 || step1CompletionTokens > 0) {
-      step1AiCost = calculateCostFromTokens('deepseek-v4-pro', step1PromptTokens, step1CompletionTokens);
-    }
-    const step1Cost = 1 + step1AiCost; // 第一轮：1次基础 + AI实际消耗
+  // ========== 结算预锁定次数 ==========
+  // 根据 checkOnly 状态区分第一轮/第二轮结算逻辑
 
-    // 第二轮费用：深度思考实际token消耗
+  if (!FREE_MODE && prelocked) {
+    // 计算第二次AI深度思考的实际token消耗
     let step2PromptTokens = aiResultThinking?.tokenUsage?.promptTokens || 0;
     let step2CompletionTokens = aiResultThinking?.tokenUsage?.completionTokens || 0;
     let step2AiCost = 0;
     if (step2PromptTokens > 0 || step2CompletionTokens > 0) {
       step2AiCost = calculateCostFromTokens('deepseek-v4-pro', step2PromptTokens, step2CompletionTokens);
     }
-    const step2Cost = Math.max(step2AiCost, 1); // 最低1次
-    
-    // 总费用 = 第一轮已扣 + 第二轮
-    totalCost = step1Cost + step2Cost;
-    log(`第二轮深度思考完成，第二轮扣除${step2Cost}次，总消耗${totalCost}次`);
-    const decResult = await decrementCount(token, userId, skipUserIdCheck, step2Cost);
-    if (decResult.success) {
-      remainingCount = decResult.remainingCount;
-      log(`第二轮完成，扣除${step2Cost}次，剩余: ${remainingCount}`);
+
+    if (checkOnly === false) {
+      // ===== 第二轮（深度思考）独立结算 =====
+      const step2Cost = Math.max(step2AiCost, 1); // 第二轮最低1次
+      // 第二轮自己锁定2次，自己结算 step2Cost
+      const settleResult = await settleToken(token, lockCount, step2Cost);
+      if (settleResult.success) {
+        remainingCount = settleResult.remainingCount;
+        log(`第二轮结算完成，预锁定${lockCount}次，实际消耗${step2Cost}次，剩余: ${remainingCount}`);
+      } else {
+        await releaseToken(token, lockCount);
+        log(`[WARN] 第二轮结算失败，已释放锁定`);
+      }
+      // 从本地数据库读取第一轮的 step1Cost，计算总 cost 返回给用户
+      const step1Cost = taskId ? getStep1Cost(taskId) : 1;
+      totalCost = step1Cost + step2Cost;
+      log(`总消耗${totalCost}次（第一轮${step1Cost}+第二轮${step2Cost}）`);
     } else {
-      log(`[WARN] 扣除次数失败: ${decResult.message}`);
-      remainingCount = decResult.remainingCount || 0;
+      // ===== 第一轮（一致场景）结算 =====
+      // 计算第一次AI的实际token消耗
+      let step1PromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
+      let step1CompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
+      let step1AiCost = 0;
+      if (step1PromptTokens > 0 || step1CompletionTokens > 0) {
+        step1AiCost = calculateCostFromTokens('deepseek-v4-pro', step1PromptTokens, step1CompletionTokens);
+      }
+      totalCost = 1 + step1AiCost;
+
+      const settleResult = await settleToken(token, lockCount, totalCost);
+      if (settleResult.success) {
+        remainingCount = settleResult.remainingCount;
+        log(`第一轮结算完成，预锁定${lockCount}次，实际消耗${totalCost}次（1次基础+${step1AiCost}次AI），剩余: ${remainingCount}`);
+      } else {
+        await releaseToken(token, lockCount);
+        log(`[WARN] 第一轮结算失败，已释放锁定`);
+      }
     }
-    if (answerData && answerData.data) {
-      answerData.data.num = remainingCount;
-    }
+  }
+
+  if (answerData && answerData.data) {
+    answerData.data.num = remainingCount;
   }
 
   // ========== 先清洗答案，再校验（修复#号导致校验失败的问题） ==========

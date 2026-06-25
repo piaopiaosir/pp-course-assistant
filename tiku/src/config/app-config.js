@@ -27,6 +27,8 @@ function getCardTypes() {
 }
 
 const INITIAL_COUNT = 500;
+const FREE_TOKEN_INITIAL_COUNT = 40; // 免费Token初始次数（新用户赠送）
+const FREE_TOKEN_SECRET = process.env.FREE_TOKEN_SECRET; // 免费Token密钥（与赞助卡密钥区分开，从环境变量读取）
 
 // 免费模式配置（开启后不需要验证token，不扣除次数）
 const FREE_MODE = process.env.FREE_MODE === '1';
@@ -48,8 +50,8 @@ const LATEST_VERSION = getEnv('LATEST_VERSION', '2.2.6');
 // ==================== 固定模式消耗配置（最小扣除次数）====================
 // 正常模式：缓存命中扣0.8次、AI补充扣1次
 const NORMAL_MODE_COST = '0.8-1次';
-// 校验模式：缓存命中0.8次、第一步1次+AI消耗、第二步深度思考1-3次
-const VERIFY_MODE_COST = '0.8-3次';
+// 校验模式：缓存命中0.8次、第一步1次+AI消耗、第二步深度思考0.8-5次
+const VERIFY_MODE_COST = '0.8-5次';
 
 module.exports = {
   PORT,
@@ -58,6 +60,8 @@ module.exports = {
   YANXI_API_URL,
   getCardTypes,
   INITIAL_COUNT,
+  FREE_TOKEN_INITIAL_COUNT,
+  FREE_TOKEN_SECRET,
   FREE_MODE,
   SERVER_ID,
   SPONSOR_URL,

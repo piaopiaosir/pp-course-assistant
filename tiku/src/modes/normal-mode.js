@@ -7,8 +7,8 @@
  * - fetchAISupplement: 正常模式AI补充（含深度思考备用）
  */
 
-const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCache, checkAnswerReasonable, incrementAiCalls, incrementModelCalls, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi } = require('../utils');
+const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCacheAsync, checkAnswerReasonable, safeCheckAnswerReasonable, cleanAndNormalizeAnswer, incrementAiCalls, incrementModelCalls, incrementAIStats, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
+const { fetchWithTimeout, validateAndCleanAnswer, callAIApi, hasValidAnswer, buildUserContent } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
 const { MODEL_COLUMN_MAP, getModelConfig, calculateCostFromTokens, getDisplayName } = require('../config/ai-models');
 
@@ -43,15 +43,8 @@ async function fetchAISupplement(questionData) {
   // 根据模型是否支持视觉选择消息格式
   const modelCfg = getModelConfig(AI_MODEL_NORMAL);
   const supportsVision = modelCfg?.supportsVision && imageUrls && imageUrls.length > 0;
-  let userContent;
-  if (supportsVision) {
-    userContent = [
-      { type: "text", text: userPrompt },
-      ...imageUrls.map(url => ({ type: "image_url", image_url: { url } }))
-    ];
-  } else {
-    userContent = userPrompt;
-  }
+  // D-07去重：构建用户消息content
+  const userContent = buildUserContent(userPrompt, imageUrls, supportsVision);
 
   const body = {
     model: model,
@@ -77,15 +70,8 @@ async function fetchAISupplement(questionData) {
   try {
     console.log("AI查询中...");
     
-    // 增加AI调用次数统计
-    await incrementAiCalls();
-    await incrementTotalQueries('ai');
-    
-    // 按模型统一统计
-    const modelColumn = MODEL_COLUMN_MAP[model];
-    if (modelColumn) {
-      await incrementModelCalls(modelColumn);
-    }
+    // 增加AI调用次数统计（D-01去重：使用统一统计函数）
+    await incrementAIStats(model);
     
     const { result } = await callAIApi({ apiUrl, apiKey: useApiKey, body });
     
@@ -104,22 +90,12 @@ async function fetchAISupplement(questionData) {
       
       const parsed = extractJsonFromContent(content);
       if (parsed) {
-          // 清理AI答案中的"选项X"前缀（安全模式：仅当去掉前缀后匹配选项时才删除）
-          if (Array.isArray(parsed.answer)) {
-            parsed.answer = parsed.answer.map(a => cleanAiAnswer(a, questionData.options));
-          }
-          // 连线题：标准化答案格式（拆分合并字符串）
-          parsed.answer = normalizeMatchingAnswer(parsed.answer, questionData.type);
+          // D-06去重：清洗答案并标准化格式
+          parsed.answer = cleanAndNormalizeAnswer(parsed.answer, questionData);
           console.log("[OK] AI解析成功:", JSON.stringify(parsed.answer));
         
-        // 检查答案是否合理
-        let checkResult;
-        try {
-          checkResult = checkAnswerReasonable(parsed.answer, questionData.type, questionData.options);
-        } catch (e) {
-          console.log('[WARN] checkAnswerReasonable异常:', e.message);
-          checkResult = { reasonable: true, reason: '' };
-        }
+        // 检查答案是否合理（D-03去重：使用安全包装版）
+        const checkResult = safeCheckAnswerReasonable(parsed.answer, questionData.type, questionData.options);
         
         if (!checkResult.reasonable) {
           // 答案不合理，启用深度思考重新查询
@@ -138,11 +114,8 @@ async function fetchAISupplement(questionData) {
           };
           
           try {
-            // 增加深度思考模型调用次数统计
-            const thinkingModelColumn = MODEL_COLUMN_MAP[AI_MODEL_NORMAL_THINKING];
-            if (thinkingModelColumn) {
-              await incrementModelCalls(thinkingModelColumn);
-            }
+            // 增加深度思考模型调用次数统计（D-01去重：使用统一统计函数，深度思考也是一次AI调用）
+            await incrementAIStats(AI_MODEL_NORMAL_THINKING);
             console.log("深度思考查询中...");
             
             const { result: thinkingResult } = await callAIApi({ apiUrl: "https://api.deepseek.com/v1/chat/completions", apiKey: useApiKey, body: thinkingBody });
@@ -182,17 +155,6 @@ async function fetchAISupplement(questionData) {
                     };
                   }
 
-                  // 深度思考答案合理，选择题目去标点重试
-                  if ((questionData.type === "0" || questionData.type === "1")) {
-                    const thinkingValidation = validateAnswer(questionData.type, thinkingParsed.answer, questionData.options);
-                    if (!thinkingValidation.valid && thinkingValidation.reason.includes('答案不在选项中')) {
-                      const fixed = retryWithStrippedPunctuation(questionData, thinkingParsed.answer);
-                      if (fixed) {
-                        thinkingParsed.answer = fixed;
-                      }
-                    }
-                  }
-
                   // 深度思考答案合理，返回
                   console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
                   console.log("==========================");
@@ -207,17 +169,6 @@ async function fetchAISupplement(questionData) {
             console.log("[X] 深度思考解析失败，使用原答案");
           } catch (thinkingError) {
             console.log("[X] 深度思考请求失败:", thinkingError.message);
-          }
-        }
-        
-        // 选择题去标点重试
-        if ((questionData.type === "0" || questionData.type === "1")) {
-          const firstValidation = validateAnswer(questionData.type, parsed.answer, questionData.options);
-          if (!firstValidation.valid && firstValidation.reason.includes('答案不在选项中')) {
-            const fixed = retryWithStrippedPunctuation(questionData, parsed.answer);
-            if (fixed) {
-              parsed.answer = fixed;
-            }
           }
         }
         
@@ -268,7 +219,9 @@ async function fetchAISupplement(questionData) {
  * @param {string} params.hunyuanApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
- * @param {Function} params.decrementCount - 扣除次数函数
+ * @param {Function} params.lockToken - 预锁定次数函数
+ * @param {Function} params.settleToken - 结算次数函数
+ * @param {Function} params.releaseToken - 释放锁定函数
  */
 async function handleNormalMode(c, params) {
   const {
@@ -280,7 +233,9 @@ async function handleNormalMode(c, params) {
     log,
     FREE_MODE,
     limitedMode,
-    decrementCount,
+    lockToken,
+    settleToken,
+    releaseToken,
     skipUserIdCheck
   } = params;
 
@@ -289,50 +244,70 @@ async function handleNormalMode(c, params) {
     log("[WARN] 受限模式：仅查询缓存");
   }
 
+  // 非免费、非受限模式：预锁定1次，确保余额充足后再查询
+  let prelocked = false;
+  if (!FREE_MODE && !limitedMode) {
+    const lockResult = await lockToken(token, 1);
+    if (!lockResult.success) {
+      return c.json({
+        code: 403,
+        msg: lockResult.message,
+        data: { num: 0, answer: [], sponsorUrl: SPONSOR_URL }
+      }, 403);
+    }
+    prelocked = true;
+    log(`预锁定1次成功，锁定后余额: ${lockResult.remainingCount}`);
+  }
+
   log("=== 开始查询缓存 ===");
   const cachedAnswer = await getCachedAnswer(questionHash);
   if (cachedAnswer) {
     log("[OK] 缓存命中！");
 
-    // 统计缓存命中
-    incrementCacheHits();
-    incrementTotalQueries('cache');
-
-    // 受限模式或免费模式不扣除次数
-    let remainingCount = 999999;
-    let actualCost = 0;  // 实际消耗次数
-    if (!FREE_MODE && !limitedMode) {
-      const cacheCost = 0.8;
-      const decrementResult = await decrementCount(token, userId, skipUserIdCheck, cacheCost);
-      if (!decrementResult.success) {
-        return c.json({
-          code: 403,
-          msg: decrementResult.message,
-          data: { num: decrementResult.remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
-        }, 403);
-      }
-      remainingCount = decrementResult.remainingCount;
-      actualCost = cacheCost;
-      log(`扣除次数: ${cacheCost}（缓存命中，按0.8次计费）`);
-    }
-
-    if (!limitedMode) {
-      log(`剩余次数: ${remainingCount}`);
-    }
-    log("=== 查询完成（缓存） ===");
-
     // 缓存答案校验（防止历史脏数据）
+    // 先校验后扣费：避免校验失败导致用户被扣 0.8 次后又走正常查询再扣 1 次（共 1.8 次）
     const cachedAnswerArr = JSON.parse(cachedAnswer.answer);
-    const cacheValidation = validateAnswer(questionData.type, cachedAnswerArr, questionData.options);
+    const cacheValidation = validateAndCleanAnswer(questionData.type, cachedAnswerArr, questionData.options);
     if (!cacheValidation.valid) {
       log(`[X] 缓存答案校验失败: ${cacheValidation.reason}，跳过缓存继续查询`);
     } else {
+      // 校验通过，统计缓存命中
+      incrementCacheHits();
+      incrementTotalQueries('cache');
+
+      // 受限模式或免费模式不扣除次数
+      let remainingCount = 999999;
+      let actualCost = 0;  // 实际消耗次数
+      if (!FREE_MODE && !limitedMode) {
+        // 预锁定已扣1次，缓存命中按0.8次结算（退0.2次）
+        const cacheCost = 0.8;
+        const settleResult = await settleToken(token, 1, cacheCost);
+        if (settleResult.success) {
+          remainingCount = settleResult.remainingCount;
+          actualCost = cacheCost;
+          log(`结算次数: ${cacheCost}（缓存命中，预锁定1次退0.2次），剩余: ${remainingCount}`);
+        } else {
+          // 结算失败（极端情况），释放锁定
+          await releaseToken(token, 1);
+          return c.json({
+            code: 403,
+            msg: settleResult.message || '结算失败',
+            data: { num: 0, answer: [], sponsorUrl: SPONSOR_URL }
+          }, 403);
+        }
+      }
+
+      if (!limitedMode) {
+        log(`剩余次数: ${remainingCount}`);
+      }
+      log("=== 查询完成（缓存） ===");
+
       // 受限模式不返回消耗次数
       return c.json({
         code: 200,
         msg: '缓存命中',
         data: {
-          answer: cachedAnswerArr,
+          answer: cacheValidation.answers,
           source: "cache",
           num: limitedMode ? "免费题库中" : remainingCount,
           cost: limitedMode ? undefined : actualCost
@@ -376,22 +351,20 @@ async function handleNormalMode(c, params) {
 
         log("=== 查询完成 ===");
 
-        // 免费模式不扣除次数
+        // 预锁定已扣1次，排序题按1次结算（无需调整）
         let actualCost = 0;  // 实际消耗次数
-        if (!FREE_MODE) {
-          const normalCost = 1;  // 正常模式固定1次（AI补充不额外收费）
-          const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
-          if (!decrementResult.success) {
-            return c.json({
-              code: 403,
-              msg: decrementResult.message,
-              data: { num: remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
-            }, 403);
+        if (!FREE_MODE && prelocked) {
+          const normalCost = 1;
+          const settleResult = await settleToken(token, 1, normalCost);
+          if (settleResult.success) {
+            remainingCount = settleResult.remainingCount;
+            actualCost = normalCost;
+            log(`结算次数: ${normalCost}，剩余: ${remainingCount}`);
+          } else {
+            await releaseToken(token, 1);
           }
-          remainingCount = decrementResult.remainingCount;
-          actualCost = normalCost;
-          log(`扣除次数: ${normalCost}`);
-          log(`剩余次数: ${remainingCount}`);
+        } else if (!FREE_MODE) {
+          // 免费模式
         } else {
           log("免费模式: 不扣除次数");
         }
@@ -465,10 +438,7 @@ async function handleNormalMode(c, params) {
     log("=== 1. 查询 Hive-Net ===");
     const hiveNetResult = await fetchHiveNet(questionData);
 
-    hasAnswer = hiveNetResult.code === 200 &&
-                hiveNetResult.data &&
-                hiveNetResult.data.answer &&
-                (Array.isArray(hiveNetResult.data.answer) ? hiveNetResult.data.answer.length > 0 : true);
+    hasAnswer = hasValidAnswer(hiveNetResult);
 
     if (hasAnswer) {
       log("[OK] Hive-Net 有答案");
@@ -490,10 +460,7 @@ async function handleNormalMode(c, params) {
       log("=== 2. 查询 UCUC 题库 ===");
       const ucucResult = await fetchUcuc(questionData);
 
-      hasAnswer = ucucResult.code === 200 &&
-                  ucucResult.data &&
-                  ucucResult.data.answer &&
-                  (Array.isArray(ucucResult.data.answer) ? ucucResult.data.answer.length > 0 : true);
+      hasAnswer = hasValidAnswer(ucucResult);
 
       if (hasAnswer) {
         log("[OK] UCUC 题库 有答案");
@@ -511,10 +478,7 @@ async function handleNormalMode(c, params) {
     log("=== 3. 查询 言溪题库 ===");
     const yanxiResult = await fetchYanxi(questionData);
 
-    hasAnswer = yanxiResult.code === 200 &&
-                yanxiResult.data &&
-                yanxiResult.data.answer &&
-                (Array.isArray(yanxiResult.data.answer) ? yanxiResult.data.answer.length > 0 : true);
+    hasAnswer = hasValidAnswer(yanxiResult);
 
     if (hasAnswer) {
       log("[OK] 言溪题库 有答案");
@@ -529,10 +493,7 @@ async function handleNormalMode(c, params) {
     log("=== 4. 查询 题库海 ===");
     const tikuResult = await fetchAnswer(questionData);
 
-    hasAnswer = tikuResult.code === 200 &&
-                tikuResult.data &&
-                tikuResult.data.answer &&
-                (Array.isArray(tikuResult.data.answer) ? tikuResult.data.answer.length > 0 : true);
+    hasAnswer = hasValidAnswer(tikuResult);
 
     if (hasAnswer) {
       log("[OK] 题库海 有答案");
@@ -580,7 +541,7 @@ async function handleNormalMode(c, params) {
     }
 
     log("[OK] 答案校验通过，保存缓存");
-    await saveAnswerToCache(
+    saveAnswerToCacheAsync(
       questionHash,
       questionData.question,
       questionData.options,
@@ -599,22 +560,20 @@ async function handleNormalMode(c, params) {
 
     log("=== 查询完成 ===");
 
-    // 免费模式不扣除次数
+    // 预锁定已扣1次，正常查询按1次结算（无需调整）
     let actualCost = 0;  // 实际消耗次数
-    if (!FREE_MODE) {
-      const normalCost = 1;  // 正常模式固定1次（题库或AI补充都只收1次）
-      const decrementResult = await decrementCount(token, userId, skipUserIdCheck, normalCost);
-      if (!decrementResult.success) {
-        return c.json({
-          code: 403,
-          msg: decrementResult.message,
-          data: { num: remainingCount, answer: [], sponsorUrl: SPONSOR_URL }
-        }, 403);
+    if (!FREE_MODE && prelocked) {
+      const normalCost = 1;
+      const settleResult = await settleToken(token, 1, normalCost);
+      if (settleResult.success) {
+        remainingCount = settleResult.remainingCount;
+        actualCost = normalCost;
+        log(`结算次数: ${normalCost}，剩余: ${remainingCount}`);
+      } else {
+        await releaseToken(token, 1);
       }
-      remainingCount = decrementResult.remainingCount;
-      actualCost = normalCost;
-      log(`扣除次数: ${normalCost}`);
-      log(`剩余次数: ${remainingCount}`);
+    } else if (!FREE_MODE) {
+      // 非预锁定场景（不应到达此处，保留兼容）
     } else {
       log("免费模式: 不扣除次数");
     }

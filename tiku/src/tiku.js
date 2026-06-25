@@ -27,6 +27,8 @@ module.exports = {
   cleanAnswerData: helpers.cleanAnswerData,
   mergeSplitAnswers: helpers.mergeSplitAnswers,
   checkAnswerReasonable: helpers.checkAnswerReasonable,
+  safeCheckAnswerReasonable: helpers.safeCheckAnswerReasonable,
+  cleanAndNormalizeAnswer: helpers.cleanAndNormalizeAnswer,
   // 透传 utils 中的通用函数（保持原有导出契约）
   getTypeDescription,
 
@@ -36,9 +38,9 @@ module.exports = {
   // ===== cache =====
   getCachedAnswer: cache.getCachedAnswer,
   saveAnswerToCache: cache.saveAnswerToCache,
+  saveAnswerToCacheAsync: cache.saveAnswerToCacheAsync,
   recordCorrectnessReport: cache.recordCorrectnessReport,
   applyCorrectnessUpdate: cache.applyCorrectnessUpdate,
-  validateSourceAnswer: cache.validateSourceAnswer,
 
   // ===== stats =====
   incrementAiCalls: stats.incrementAiCalls,
@@ -52,6 +54,7 @@ module.exports = {
   incrementUcucCalls: stats.incrementUcucCalls,
   incrementCacheHits: stats.incrementCacheHits,
   incrementTotalQueries: stats.incrementTotalQueries,
+  incrementAIStats: stats.incrementAIStats,
 
   // ===== api =====
   getAvailableTikuKey: api.getAvailableTikuKey,

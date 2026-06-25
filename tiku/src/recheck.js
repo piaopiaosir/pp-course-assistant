@@ -20,9 +20,9 @@ const envPath = path.join(__dirname, '../.env');
 require('dotenv').config({ path: envPath });
 
 const { db, pool } = require('./config');
-const { validateAnswer, getTypeDescription } = require('./utils');
+const { validateAndCleanAnswer, getTypeDescription } = require('./utils');
 const { fetchDeepSeekThinking } = require('./modes/verify-mode');
-const { incrementTikuCalls, incrementAiCalls, incrementTotalQueries } = require('./tiku');
+const { incrementTikuCalls, incrementAiCalls, incrementTotalQueries, saveAnswerToCacheAsync } = require('./tiku');
 const { getDisplayName } = require('./config/ai-models');
 
 // ==================== 配置 ====================
@@ -55,13 +55,13 @@ let stats = {
  */
 async function callTikuApi(questionData) {
   // 从数据库获取当前使用的密钥
-  const stats = await db.prepare(
+  const keyStats = await db.prepare(
     "SELECT current_tiku_key, tiku_remaining_1, tiku_remaining_2 FROM global_stats WHERE id = 1"
   ).get();
   
-  let currentKey = stats?.current_tiku_key || 1;
-  const remaining1 = stats?.tiku_remaining_1 || 0;
-  const remaining2 = stats?.tiku_remaining_2 || 0;
+  let currentKey = keyStats?.current_tiku_key || 1;
+  const remaining1 = keyStats?.tiku_remaining_1 || 0;
+  const remaining2 = keyStats?.tiku_remaining_2 || 0;
   
   // 智能选择密钥：优先使用有次数的
   if (remaining1 > 0 && remaining2 <= 0) {
@@ -236,11 +236,11 @@ async function recheckQuestion(row) {
       const newSource = 'tiku';
 
       console.log('\n[SEARCH] 正在校验答案...');
-      const validation = validateAnswer(row.type, newAnswer, options);
+      const validation = validateAndCleanAnswer(row.type, newAnswer, options);
 
       if (validation.valid) {
         console.log('[OK] 校验通过');
-        await updateDatabase(row.question_hash, newAnswer, newSource);
+        await updateDatabase(row.question_hash, row.question, options, row.type, validation.answers, newSource);
         return { status: 'success', source: 'tiku', answer: newAnswer };
       } else {
         console.log(`[X] 校验失败: ${validation.reason}，继续调用 AI 深度思考...`);
@@ -261,11 +261,11 @@ async function recheckQuestion(row) {
 
       console.log(`[OK] AI 返回答案: ${JSON.stringify(newAnswer)}`);
       console.log('[SEARCH] 正在校验答案...');
-      const validation = validateAnswer(row.type, newAnswer, options);
+      const validation = validateAndCleanAnswer(row.type, newAnswer, options);
 
       if (validation.valid) {
         console.log('[OK] 校验通过');
-        await updateDatabase(row.question_hash, newAnswer, newSource);
+        await updateDatabase(row.question_hash, row.question, options, row.type, validation.answers, newSource);
         return { status: 'success', source: 'ai', answer: newAnswer };
       } else {
         console.log(`[X] 校验失败: ${validation.reason}，从数据库删除该题目`);
@@ -295,19 +295,13 @@ async function deleteRecord(questionHash) {
 }
 
 /**
- * 更新数据库
+ * 更新数据库（通过 saveAnswerToCache，内置校验）
  */
-async function updateDatabase(questionHash, answer, source) {
-  const now = Math.floor(Date.now() / 1000);
-  const answerStr = JSON.stringify(answer);
+async function updateDatabase(questionHash, question, options, type, answer, source) {
+  // 传 null 显式将 is_correct 从 0(错误) 重置为 NULL(未验证)
+  saveAnswerToCacheAsync(questionHash, question, options, type, answer, source, null);
 
-  await db.prepare(
-    `UPDATE answer_cache 
-     SET answer = ?, source = ?, is_correct = NULL, created_at = ?
-     WHERE question_hash = ?`
-  ).run(answerStr, source, now, questionHash);
-
-  console.log(`[OK] 数据库已更新: 答案="${answerStr}", 来源="${source}", is_correct=NULL`);
+  console.log(`[OK] 数据库已更新: 答案="${JSON.stringify(answer)}", 来源="${source}", is_correct=NULL`);
   stats.updated++;
 }
 

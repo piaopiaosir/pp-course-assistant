@@ -43,22 +43,39 @@ function pushRecheckLog(level, message) {
 function pushSSEMessage(data) {
   const message = `data: ${data}\n\n`;
   console.log(`[SSE] 推送消息给 ${recheckSSEClients.length} 个客户端:`, data.substring(0, 100));
-  for (const client of recheckSSEClients) {
-    if (client.aborted) continue;
+  // 先收集失败的客户端索引，循环结束后统一清理，避免迭代中修改状态
+  const failedIndices = new Set();
+  recheckSSEClients.forEach((client, idx) => {
+    if (client.aborted) {
+      failedIndices.add(idx);
+      return;
+    }
     try {
       client.controller.enqueue(client.encoder.encode(message));
     } catch (e) {
       console.log('[SSE] 推送失败:', e.message);
-      client.aborted = true;
+      failedIndices.add(idx);
     }
+  });
+  if (failedIndices.size > 0) {
+    recheckSSEClients = recheckSSEClients.filter((_, idx) => !failedIndices.has(idx));
   }
-  recheckSSEClients = recheckSSEClients.filter(c => !c.aborted);
 }
 
 let dedupTask = null;
 let dedupSSEClients = [];
 let dedupLogBuffer = [];
 let dedupProgressBuffer = null;
+
+// D-05去重：创建SSE响应通道（统一SSE响应头）
+function createSSEChannel(c, stream) {
+  return c.body(stream, 200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+}
 
 function pushDedupProgress() {
   if (!dedupTask) return;
@@ -802,12 +819,8 @@ function registerAdminRoutes(app) {
       }
     });
 
-    return c.body(stream, 200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no'
-    });
+    // D-05去重：使用统一的SSE响应通道
+    return createSSEChannel(c, stream);
   });
 
   app.post('/admin/recheck', async (c) => {
@@ -993,12 +1006,8 @@ function registerAdminRoutes(app) {
       }
     });
 
-    return c.body(stream, 200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no'
-    });
+    // D-05去重：使用统一的SSE响应通道
+    return createSSEChannel(c, stream);
   });
 
   app.post('/admin/dedup', async (c) => {
