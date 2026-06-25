@@ -1005,6 +1005,10 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #9333ea;">${globalStats.kimi_k25_calls || 0}</span>
           </div>
           <div class="detail-item">
+            <span class="detail-label">Kimi-K2.7-Code</span>
+            <span class="detail-value" style="color: #a855f7;">${globalStats.kimi_k27_code_calls || 0}</span>
+          </div>
+          <div class="detail-item">
             <span class="detail-label">Qwen3.5</span>
             <span class="detail-value" style="color: #0ea5e9;">${globalStats.qwen3_5_calls || 0}</span>
           </div>
@@ -1013,14 +1017,18 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #38bdf8;">${globalStats.qwen3_6_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Qwen3.7</span>
+            <span class="detail-label">Qwen3.7-Max</span>
             <span class="detail-value" style="color: #7dd3fc;">${globalStats.qwen3_7_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Qwen3.7-Plus</span>
+            <span class="detail-value" style="color: #38bdf8;">${globalStats.qwen3_7_plus_calls || 0}</span>
           </div>
         </div>
       </div>
           
       <div class="detail-card">
-        <h3 class="detail-title">MiniMax & 混元</h3>
+        <h3 class="detail-title">MiniMax & 混元 & 豆包</h3>
         <div class="detail-list">
           <div class="detail-item">
             <span class="detail-label">MiniMax-M2.5</span>
@@ -1037,6 +1045,14 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
           <div class="detail-item">
             <span class="detail-label">Hy3-preview</span>
             <span class="detail-value" style="color: #667eea;">${globalStats.hy3_preview_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">豆包-Seed-2.1-Turbo</span>
+            <span class="detail-value" style="color: #14b8a6;">${globalStats.doubao_seed_21_turbo_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">豆包-Seed-2.1-Pro</span>
+            <span class="detail-value" style="color: #0d9488;">${globalStats.doubao_seed_21_pro_calls || 0}</span>
           </div>
         </div>
       </div>
@@ -1061,12 +1077,16 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #06b6d4;">${globalStats.gemini_35_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">GLM-5</span>
-            <span class="detail-value" style="color: #7c3aed;">${globalStats.glm_5_calls || 0}</span>
+            <span class="detail-label">GLM-5.2</span>
+            <span class="detail-value" style="color: #7c3aed;">${globalStats.glm_52_calls || 0}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">GLM-5.1</span>
             <span class="detail-value" style="color: #8b5cf6;">${globalStats.glm_51_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">GLM-5</span>
+            <span class="detail-value" style="color: #a78bfa;">${globalStats.glm_5_calls || 0}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">GLM-4.7</span>
@@ -1330,10 +1350,12 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         ai: '#ec4899', cache: '#4ade80',
         deepseek_v3: '#ec4899', deepseek_r1: '#8b5cf6', deepseek_v4_flash: '#3b82f6',
         deepseek_v4_pro: '#2563eb', kimi_k26: '#7c3aed', kimi_k25: '#9333ea',
-        qwen3_5: '#0ea5e9', qwen3_6: '#38bdf8', qwen3_7: '#7dd3fc', minimax_m25: '#f97316',
-        minimax_m27: '#fb923c', minimax_m3: '#ea580c', hy3_preview: '#667eea',
-        gpt_54_mini: '#10b981', gpt_54_nano: '#059669', gemini_31: '#0891b2', gemini_35: '#06b6d4',
-        glm_5: '#7c3aed', glm_51: '#8b5cf6', glm_47: '#6366f1'
+        kimi_k27_code: '#a855f7', qwen3_5: '#0ea5e9', qwen3_6: '#38bdf8', qwen3_7: '#7dd3fc',
+        qwen3_7_plus: '#38bdf8', minimax_m25: '#f97316', minimax_m27: '#fb923c',
+        minimax_m3: '#ea580c', hy3_preview: '#667eea', douba_seed_21_turbo: '#14b8a6',
+        douba_seed_21_pro: '#0d9488', gpt_54_mini: '#10b981', gpt_54_nano: '#059669',
+        gemini_31: '#0891b2', gemini_35: '#06b6d4', glm_52: '#7c3aed', glm_5: '#8b5cf6',
+        glm_51: '#a78bfa', glm_47: '#6366f1'
       };
       
       Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif';
@@ -1354,19 +1376,24 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         { label: 'DeepSeek-V4 Pro', value: globalStats.deepseek_v4_pro_calls||0, color: colors.deepseek_v4_pro },
         { label: 'Kimi-K2.6', value: globalStats.kimi_k26_calls||0, color: colors.kimi_k26 },
         { label: 'Kimi-K2.5', value: globalStats.kimi_k25_calls||0, color: colors.kimi_k25 },
+        { label: 'Kimi-K2.7-Code', value: globalStats.kimi_k27_code_calls||0, color: colors.kimi_k27_code },
         { label: 'Qwen3.5', value: globalStats.qwen3_5_calls||0, color: colors.qwen3_5 },
         { label: 'Qwen3.6', value: globalStats.qwen3_6_calls||0, color: colors.qwen3_6 },
-        { label: 'Qwen3.7', value: globalStats.qwen3_7_calls||0, color: colors.qwen3_7 },
+        { label: 'Qwen3.7-Max', value: globalStats.qwen3_7_calls||0, color: colors.qwen3_7 },
+        { label: 'Qwen3.7-Plus', value: globalStats.qwen3_7_plus_calls||0, color: colors.qwen3_7_plus },
         { label: 'MiniMax-M2.5', value: globalStats.minimax_m25_calls||0, color: colors.minimax_m25 },
         { label: 'MiniMax-M2.7', value: globalStats.minimax_m27_calls||0, color: colors.minimax_m27 },
         { label: 'MiniMax-M3', value: globalStats.minimax_m3_calls||0, color: colors.minimax_m3 },
         { label: 'Hy3-preview', value: globalStats.hy3_preview_calls||0, color: colors.hy3_preview },
+        { label: '豆包-Seed-2.1-Turbo', value: globalStats.doubao_seed_21_turbo_calls||0, color: colors.doubao_seed_21_turbo },
+        { label: '豆包-Seed-2.1-Pro', value: globalStats.doubao_seed_21_pro_calls||0, color: colors.doubao_seed_21_pro },
         { label: 'GPT-5.4-mini', value: globalStats.gpt_54_mini_calls||0, color: colors.gpt_54_mini },
         { label: 'GPT-5.4-nano', value: globalStats.gpt_54_nano_calls||0, color: colors.gpt_54_nano },
         { label: 'Gemini 3.1', value: globalStats.gemini_31_calls||0, color: colors.gemini_31 },
         { label: 'Gemini 3.5', value: globalStats.gemini_35_calls||0, color: colors.gemini_35 },
-        { label: 'GLM-5', value: globalStats.glm_5_calls||0, color: colors.glm_5 },
+        { label: 'GLM-5.2', value: globalStats.glm_52_calls||0, color: colors.glm_52 },
         { label: 'GLM-5.1', value: globalStats.glm_51_calls||0, color: colors.glm_51 },
+        { label: 'GLM-5', value: globalStats.glm_5_calls||0, color: colors.glm_5 },
         { label: 'GLM-4.7', value: globalStats.glm_47_calls||0, color: colors.glm_47 }
       ].filter(m => m.value > 0);
       
