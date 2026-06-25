@@ -52,6 +52,13 @@ async function fetchUcuc(questionData) {
     return { code: 500, msg: "UCUC题库未配置ApiKey", data: null };
   }
 
+  // 题目包含URL/图片时直接跳过，UCUC不支持此类题目
+  const rawQuestion = questionData.question || '';
+  if (/<img\s/i.test(rawQuestion) || /https?:\/\//i.test(rawQuestion)) {
+    console.log("[SKIP] UCUC 题库：题目包含图片/URL，跳过");
+    return { code: 404, msg: "UCUC题库不支持含图片/URL的题目", data: null };
+  }
+
   try {
     console.log("=== UCUC 题库查询中... ===");
 

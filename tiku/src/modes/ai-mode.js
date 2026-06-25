@@ -142,7 +142,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
     // ========== 多轮工具调用循环 ==========
     // 第0轮：AI可能请求搜索 → 执行搜索
     // 第N轮（最后一轮）：去掉tools参数，要求AI基于已有信息返回最终答案
-    const MAX_TOOL_ROUNDS = 1;
+    const MAX_TOOL_ROUNDS = 2;
     let messages = [{ role: "system", content: system }, { role: "user", content: userContent }];
     let webSearchUsed = false;  // 标记是否使用了联网搜索
     let totalPromptTokens = 0;

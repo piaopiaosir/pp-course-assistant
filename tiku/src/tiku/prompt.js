@@ -30,7 +30,8 @@ function buildPrompt(questionData, enableWebSearch = false) {
     '- <answer>标签只输出最终答案，不要将分析步骤放入answer数组。',
     '- 最终答案必须放在<answer>标签内，格式为 {"answer":["答案内容"]}',
     '- <answer>标签内只放纯JSON，不要用markdown代码块包裹。',
-    '- 不要根据题目关键词自由联想、推测或编造答案，必须基于知识认真推理后给出确定答案。'
+    '- 不要根据题目关键词自由联想、推测或编造答案，必须基于知识认真推理后给出确定答案。',
+    '- 当用户要求你停止联网搜索或停止使用工具时，你必须严格听从用户指令。'
   ];
   // 选择题专用规则：答案文本必须与选项一致
   if (questionData.type === "0" || questionData.type === "1") {

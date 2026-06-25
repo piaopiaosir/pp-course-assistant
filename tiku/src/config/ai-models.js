@@ -1,5 +1,6 @@
 // 消耗等级划分标准（按输入+输出价格总和，元/百万tokens）：
-//   低消耗：总和 ≤ 10
+//   超低消耗：总和 ≤ 5
+//   低消耗：总和 5~10
 //   中消耗：总和 10~25
 //   高消耗：总和 25~50
 //   超高消耗：总和 > 50
@@ -29,7 +30,7 @@ const AI_MODELS = {
     displayName: 'DeepSeek-V4-Flash',
     thinking: { type: "enabled" },
     reasoning_effort: "max",
-    cost: '低消耗',
+    cost: '超低消耗',
     statsColumn: 'deepseek_v4_flash_calls'
   },
   'deepseek-v4-pro': {
@@ -54,15 +55,15 @@ const AI_MODELS = {
     statsColumn: 'qwen3_6_calls'
   },
   'qwen3.7-max': {
-    id: 'qwen3.7-max-2026-06-08',
-    apiModel: 'qwen3.7-max',
+    id: 'qwen3.7-max',
+    apiModel: 'qwen3.7-max-2026-06-08',
     provider: '302ai',
     displayName: 'Qwen3.7-Max',
     temperature: 0.6,
     enable_thinking: true,
     supportsVision: true,
     cost: '高消耗',
-    statsColumn: 'qwen3_7_calls'
+    statsColumn: 'qwen3_7_max_calls'
   },
   'qwen3.7-plus': {
     id: 'qwen3.7-plus',
@@ -171,7 +172,7 @@ const AI_MODELS = {
     apiModel: 'glm-5',
     provider: '302ai',
     displayName: 'GLM-5',
-    temperature: 1.0,
+    temperature: 0.6,
     thinking: { type: "enabled" },
     cost: '中消耗',
     statsColumn: 'glm_5_calls'
@@ -181,7 +182,7 @@ const AI_MODELS = {
     apiModel: 'glm-5.1',
     provider: '302ai',
     displayName: 'GLM-5.1',
-    temperature: 1.0,
+    temperature: 0.6,
     thinking: { type: "enabled" },
     cost: '高消耗',
     statsColumn: 'glm_51_calls'
@@ -191,7 +192,7 @@ const AI_MODELS = {
     apiModel: 'glm-5.2',
     provider: '302ai',
     displayName: 'GLM-5.2',
-    temperature: 1.0,
+    temperature: 0.6,
     thinking: { type: "enabled" },
     cost: '高消耗',
     statsColumn: 'glm_52_calls'
@@ -201,7 +202,7 @@ const AI_MODELS = {
     apiModel: 'glm-4.7',
     provider: '302ai',
     displayName: 'GLM-4.7',
-    temperature: 1.0,
+    temperature: 0.6,
     thinking: { type: "enabled" },
     cost: '低消耗',
     statsColumn: 'glm_47_calls'
@@ -235,8 +236,8 @@ const AI_MODELS = {
     cost: '高消耗',
     statsColumn: 'kimi_k27_code_calls'
   },
-  'doubao-seed-2-1-turbo-260628': {
-    id: 'doubao-seed-2-1-turbo-260628',
+  'doubao-seed-2.1-turbo': {
+    id: 'doubao-seed-2.1-turbo',
     apiModel: 'doubao-seed-2-1-turbo-260628',
     provider: '302ai',
     displayName: 'Doubao-Seed-2.1-Turbo',
@@ -246,8 +247,8 @@ const AI_MODELS = {
     cost: '中消耗',
     statsColumn: 'doubao_seed_21_turbo_calls'
   },
-  'doubao-seed-2-1-pro-260628': {
-    id: 'doubao-seed-2-1-pro-260628',
+  'doubao-seed-2.1-pro': {
+    id: 'doubao-seed-2.1-pro',
     apiModel: 'doubao-seed-2-1-pro-260628',
     provider: '302ai',
     displayName: 'Doubao-Seed-2.1-Pro',
@@ -256,6 +257,50 @@ const AI_MODELS = {
     supportsVision: true,
     cost: '高消耗',
     statsColumn: 'doubao_seed_21_pro_calls'
+  },
+  'doubao-seed-2.0-code': {
+    id: 'doubao-seed-2.0-code',
+    apiModel: 'doubao-seed-2-0-code-260215',
+    provider: '302ai',
+    displayName: 'Doubao-Seed-2.0-Code',
+    temperature: 0.6,
+    thinking: { type: "enabled" },
+    supportsVision: true,
+    cost: '中消耗',
+    statsColumn: 'doubao_seed_20_code_calls'
+  },
+  'doubao-seed-2.0-mini': {
+    id: 'doubao-seed-2.0-mini',
+    apiModel: 'doubao-seed-2-0-mini-260215',
+    provider: '302ai',
+    displayName: 'Doubao-Seed-2.0-Mini',
+    temperature: 0.6,
+    thinking: { type: "enabled" },
+    supportsVision: true,
+    cost: '超低消耗',
+    statsColumn: 'doubao_seed_20_mini_calls'
+  },
+  'doubao-seed-2.0-lite': {
+    id: 'doubao-seed-2.0-lite',
+    apiModel: 'doubao-seed-2-0-lite-260215',
+    provider: '302ai',
+    displayName: 'Doubao-Seed-2.0-Lite',
+    temperature: 0.6,
+    thinking: { type: "enabled" },
+    supportsVision: true,
+    cost: '低消耗',
+    statsColumn: 'doubao_seed_20_lite_calls'
+  },
+  'doubao-seed-2.0-pro': {
+    id: 'doubao-seed-2.0-pro',
+    apiModel: 'doubao-seed-2-0-pro-260215',
+    provider: '302ai',
+    displayName: 'Doubao-Seed-2.0-Pro',
+    temperature: 0.6,
+    thinking: { type: "enabled" },
+    supportsVision: true,
+    cost: '中消耗',
+    statsColumn: 'doubao_seed_20_pro_calls'
   },
 };
 
@@ -294,7 +339,7 @@ function getModelCosts() {
   const costs = {};
   // 各AI模型的消耗等级（汉字描述）
   for (const [modelId, entry] of Object.entries(AI_MODELS)) {
-    costs[modelId] = entry.cost || '低消耗';
+    costs[modelId] = (entry.cost || '低消耗') + '模型';
   }
   // 固定模式消耗（完整字符串，如"1次"、"1-3次"）
   costs.normal = NORMAL_MODE_COST;
@@ -305,26 +350,26 @@ function getModelCosts() {
 function getFullModelConfig() {
   const typeModelMap = {
     'DeepSeek': ['V4-Flash', 'V4-Pro', 'V3.2', 'R1'],
-    'HunYuan': ['Hy3-preview'],
-    'Doubao': ['2.1-Pro', '2.1-Turbo'],
-    'Qwen': ['3.5-plus', '3.6-plus', '3.7-Plus', '3.7-Max'],
+    'HunYuan': ['3-Preview'],
+    'DouBao': ['2.1-Pro', '2.1-Turbo', '2.0-Pro', '2.0-Code', '2.0-Lite', '2.0-Mini'],
+    'Qwen': ['3.7-Max', '3.7-Plus', '3.6-Plus', '3.5-Plus'],
     'MiniMax': ['M3', 'M2.7', 'M2.5'],
     'GLM': ['5.2', '5.1', '5.0', '4.7'],
     'Kimi': ['K2.7-Code', 'K2.6', 'K2.5'],
-    'ChatGPT': ['5.4-nano', '5.4'],
-    'Gemini': ['3.5', '3.1']
+    'ChatGPT': ['5.4-Nano', '5.4-Mini'],
+    'Gemini': ['3.5-Flash', '3.1-Flash']
   };
 
   const defaultModels = {
     'DeepSeek': 'V4-Flash',
-    'HunYuan': 'Hy3-preview',
+    'HunYuan': '3-Preview',
     'Doubao': '2.1-Pro',
     'Qwen': '3.7-Max',
     'MiniMax': 'M3',
-    'GLM': '5.1',
+    'GLM': '5.2',
     'Kimi': 'K2.6',
-    'ChatGPT': '5.4-nano',
-    'Gemini': '3.5'
+    'ChatGPT': '5.4-Nano',
+    'Gemini': '3.5-Flash'
   };
 
   const modelIdMap = {
@@ -335,17 +380,21 @@ function getFullModelConfig() {
       'R1': 'DeepSeek-R1-0528'
     },
     'HunYuan': {
-      'Hy3-preview': 'hy3-preview'
+      '3-Preview': 'hy3-preview'
     },
     'Doubao': {
-      '2.1-Pro': 'doubao-seed-2-1-pro-260628',
-      '2.1-Turbo': 'doubao-seed-2-1-turbo-260628'
+      '2.1-Pro': 'doubao-seed-2.1-pro',
+      '2.1-Turbo': 'doubao-seed-2.1-turbo',
+      '2.0-Pro': 'doubao-seed-2.0-pro',
+      '2.0-Code': 'doubao-seed-2.0-code',
+      '2.0-Lite': 'doubao-seed-2.0-lite',
+      '2.0-Mini': 'doubao-seed-2.0-mini'
     },
     'Qwen': {
       '3.7-Max': 'qwen3.7-max',
       '3.7-Plus': 'qwen3.7-plus',
-      '3.6-plus': 'qwen3.6-plus',
-      '3.5-plus': 'qwen3.5-plus'
+      '3.6-Plus': 'qwen3.6-plus',
+      '3.5-Plus': 'qwen3.5-plus'
     },
     'MiniMax': {
       'M3': 'minimax-m3',
@@ -364,12 +413,12 @@ function getFullModelConfig() {
       'K2.5': 'kimi-k2.5'
     },
     'ChatGPT': {
-      '5.4-nano': 'gpt-5.4-nano',
-      '5.4': 'gpt-5.4-mini'
+      '5.4-Nano': 'gpt-5.4-nano',
+      '5.4-Mini': 'gpt-5.4-mini'
     },
     'Gemini': {
-      '3.5': 'gemini-3.5-flash',
-      '3.1': 'gemini-3.1-flash-lite'
+      '3.5-Flash': 'gemini-3.5-flash',
+      '3.1-Flash': 'gemini-3.1-flash-lite'
     }
   };
 
@@ -415,8 +464,12 @@ const MODEL_PRICING = {
   'kimi-k2.6': { inputPerMillion: 6.65, outputPerMillion: 28.00 },
   'kimi-k2.5': { inputPerMillion: 4.389, outputPerMillion: 23.10 },
   'kimi-k2.7-code': { inputPerMillion: 6.65, outputPerMillion: 28.00 },
-  'doubao-seed-2-1-turbo-260628': { inputPerMillion: 3.01, outputPerMillion: 14.98 },
-  'doubao-seed-2-1-pro-260628': { inputPerMillion: 6.02, outputPerMillion: 29.96 },
+  'doubao-seed-2.1-turbo': { inputPerMillion: 3.01, outputPerMillion: 14.98 },
+  'doubao-seed-2.1-pro': { inputPerMillion: 6.02, outputPerMillion: 29.96 },
+  'doubao-seed-2.0-code': { inputPerMillion: 3.22, outputPerMillion: 16.03 },
+  'doubao-seed-2.0-mini': { inputPerMillion: 0.805, outputPerMillion: 0.805 },
+  'doubao-seed-2.0-lite': { inputPerMillion: 0.896, outputPerMillion: 5.46 },
+  'doubao-seed-2.0-pro': { inputPerMillion: 3.22, outputPerMillion: 15.96 },
 };
 
 // ==================== 预锁定机制 ====================
@@ -424,6 +477,7 @@ const MODEL_PRICING = {
 // 防止并发请求导致余额透支，恶意用户无法在余额不足时发起AI请求
 // 预锁定是冻结预授权额度，不是扣费上限；最终扣费按实际token消耗计算，多退少不补
 const COST_PRELOCK = {
+  '超低消耗': 1,  // 超低消耗模型预锁定1次
   '低消耗': 2,   // 低消耗模型预锁定2次
   '中消耗': 6,  // 中消耗模型预锁定6次
   '高消耗': 12,   // 高消耗模型预锁定12次
@@ -446,12 +500,12 @@ const PRICE_PER_COUNT = 0.007;
 
 /**
  * 根据实际消耗的token计算应扣除的次数
- * 不考虑缓存命中价格，不满1次按1次扣除
+ * 不考虑缓存命中价格，不满0.5次按0.5次扣除
  *
  * @param {string} modelId - 模型ID（如 'deepseek-v4-flash'）
  * @param {number} promptTokens - 输入token数
  * @param {number} completionTokens - 输出token数
- * @returns {number} 应扣除的次数（向上取整，最小1）
+ * @returns {number} 应扣除的次数（最小0.5）
  */
 function calculateCostFromTokens(modelId, promptTokens, completionTokens) {
   const pricing = MODEL_PRICING[modelId];
@@ -466,10 +520,12 @@ function calculateCostFromTokens(modelId, promptTokens, completionTokens) {
   const outputCost = (completionTokens / 1000000) * pricing.outputPerMillion;
   const totalCost = inputCost + outputCost;
 
-  // 转换为次数（保留1位小数向上取整，不满1次按1次）
+  // 转换为次数（保留1位小数向上取整，不满0.5次按0.5次）
   const rawCount = totalCost / PRICE_PER_COUNT;
   const count = Math.ceil(rawCount * 10) / 10;
-  return Math.max(1, count);
+  const finalCount = Math.max(0.5, count);
+  console.log(`[COST] 费用计算: 输入${promptTokens}tokens=${inputCost.toFixed(6)}元, 输出${completionTokens}tokens=${outputCost.toFixed(6)}元, 总费用=${totalCost.toFixed(6)}元, rawCount=${rawCount.toFixed(4)}, count=${count}, finalCount=${finalCount}`);
+  return finalCount;
 }
 
 module.exports = {

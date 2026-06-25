@@ -10,7 +10,7 @@ const { isIpBanned, recordIpViolation, logIpAccess, checkRateLimit, isIpWhitelis
 const { handleQuery } = require('./mode-handler');
 const { getModelCosts, getFullModelConfig } = require('./modes/ai-mode');
 const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess, _adminSessionCleanupTimer } = require('./admin/session');
-const { queryTasks, queryRateWindow, recordQueryRate, getQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recentlyQueriedQuestions, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer, saveTaskToDb, getTaskFromDb, recoverPendingTasks } = require('./query-tasks');
+const { queryTasks, queryRateWindow, recordQueryRate, getQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer, saveTaskToDb, getTaskFromDb, recoverPendingTasks } = require('./query-tasks');
 const { registerAdminRoutes } = require('./admin/routes');
 const { handleRemoteScripts } = require('./remote-scripts');
 
@@ -998,6 +998,19 @@ app.post('/', async (c) => {
     
     const taskId = 'task_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 8);
     
+    // 查询开始时就记录 recentlyQueried（而非查询成功后），避免重启中断导致记录丢失
+    const { generateQuestionHash } = require('./tiku');
+    if (questionData?.question) {
+      const questionHash = generateQuestionHash(questionData.question, questionData.options, questionData.type);
+      recordRecentlyQueried(questionHash);
+    }
+    if (questionData?.questions && Array.isArray(questionData.questions)) {
+      for (const q of questionData.questions) {
+        const qHash = generateQuestionHash(q.question, q.options, q.type);
+        recordRecentlyQueried(qHash);
+      }
+    }
+    
     recordQueryRate();
     
     queryTasks.set(taskId, {
@@ -1090,28 +1103,6 @@ app.post('/', async (c) => {
           createdAt: taskForComplete.createdAt
         });
         saveTaskToDb(taskId, 'completed', resultData);
-        
-        if (resultData.code === 200 && resultData.data && resultData.data.answer) {
-          const { generateQuestionHash } = require('./tiku');
-          
-          if (questionData.question) {
-            const questionHash = generateQuestionHash(
-              questionData.question,
-              questionData.options,
-              questionData.type
-            );
-            recordRecentlyQueried(questionHash);
-            console.log(`[内部记录] 查询题目 ${questionHash.substring(0, 16)}`);
-          }
-          
-          if (questionData.questions && Array.isArray(questionData.questions)) {
-            for (const q of questionData.questions) {
-              const qHash = generateQuestionHash(q.question, q.options, q.type);
-              recordRecentlyQueried(qHash);
-              console.log(`[内部记录] 批量查询题目 ${qHash.substring(0, 16)}`);
-            }
-          }
-        }
         
         log(`异步查询完成: ${taskId}, 结果code=${resultData.code}`);
       } catch (e) {

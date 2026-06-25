@@ -164,48 +164,52 @@ const _queryTaskCleanupTimer = setInterval(() => {
   cleanupExpiredTasks();
 }, 60 * 1000);
 
-const recentlyQueriedQuestions = new Map(); // questionHash -> lastAccessTime
-const RECENTLY_QUERIED_EXPIRY = 30 * 60 * 1000;
-const RECENTLY_QUERIED_MAX_SIZE = 50000;
+// ==================== 最近查询记录（SQLite 持久化） ====================
+// 使用本地 SQLite 替代内存 Map，服务重启后记录不丢失
+const RECENTLY_QUERIED_EXPIRY = 30 * 60; // 30分钟（秒）
+
+// 创建 recently_queried 表
+taskDb.exec(`
+  CREATE TABLE IF NOT EXISTS recently_queried (
+    question_hash TEXT PRIMARY KEY,
+    last_access INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_recently_queried_last_access ON recently_queried(last_access);
+`);
+
+// 预编译语句
+const stmtRecordRecently = taskDb.prepare(
+  `INSERT INTO recently_queried (question_hash, last_access) VALUES (?, ?)
+   ON CONFLICT(question_hash) DO UPDATE SET last_access = excluded.last_access`
+);
+const stmtIsRecentlyQueried = taskDb.prepare(
+  'SELECT 1 FROM recently_queried WHERE question_hash = ?'
+);
+const stmtCleanupRecently = taskDb.prepare(
+  'DELETE FROM recently_queried WHERE last_access < ?'
+);
+const stmtCountRecently = taskDb.prepare('SELECT COUNT(*) as cnt FROM recently_queried');
 
 function recordRecentlyQueried(questionHash) {
-  // 写入时即时检查容量，避免高并发下等待60秒清理周期导致超限
-  if (recentlyQueriedQuestions.size >= RECENTLY_QUERIED_MAX_SIZE) {
-    // 淘汰最旧的一条（Map迭代顺序=插入顺序）
-    const oldestKey = recentlyQueriedQuestions.keys().next().value;
-    if (oldestKey !== undefined) {
-      recentlyQueriedQuestions.delete(oldestKey);
-    }
-  }
-  recentlyQueriedQuestions.set(questionHash, Date.now());
+  const now = Math.floor(Date.now() / 1000);
+  stmtRecordRecently.run(questionHash, now);
 }
 
 function isRecentlyQueried(questionHash) {
-  return recentlyQueriedQuestions.has(questionHash);
+  const row = stmtIsRecentlyQueried.get(questionHash);
+  return !!row;
 }
 
 const _recentlyQueriedCleanupTimer = setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
-  for (const [hash, lastAccess] of recentlyQueriedQuestions.entries()) {
-    if (now - lastAccess > RECENTLY_QUERIED_EXPIRY) {
-      recentlyQueriedQuestions.delete(hash);
-      cleaned++;
+  const cutoff = Math.floor(Date.now() / 1000) - RECENTLY_QUERIED_EXPIRY;
+  try {
+    const result = stmtCleanupRecently.run(cutoff);
+    if (result.changes > 0) {
+      const { cnt } = stmtCountRecently.get();
+      console.log(`[最近查询追踪] 清理${result.changes}个过期记录，剩余${cnt}个`);
     }
-  }
-  if (cleaned > 0) {
-    console.log(`[最近查询追踪] 清理${cleaned}个过期记录，剩余${recentlyQueriedQuestions.size}个`);
-  }
-  // 容量限制：超出时淘汰最旧条目
-  if (recentlyQueriedQuestions.size > RECENTLY_QUERIED_MAX_SIZE) {
-    const excess = recentlyQueriedQuestions.size - RECENTLY_QUERIED_MAX_SIZE;
-    let deleted = 0;
-    for (const key of recentlyQueriedQuestions.keys()) {
-      if (deleted >= excess) break;
-      recentlyQueriedQuestions.delete(key);
-      deleted++;
-    }
-    console.log(`[最近查询追踪] 缓存超限，清理${deleted}个条目`);
+  } catch (e) {
+    console.error('[最近查询追踪] 清理失败:', e.message);
   }
 }, 60 * 1000);
 
@@ -248,7 +252,6 @@ const _verifyThinkingGrantCleanupTimer = setInterval(() => {
 
 module.exports = {
   queryTasks,
-  recentlyQueriedQuestions,
   recordQueryRate,
   getQueryRate,
   POLL_INTERVAL,

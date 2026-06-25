@@ -185,6 +185,8 @@ async function recordIpViolation(ip) {
 async function logIpAccess(ip, endpoint, userAgent, isSuspicious = false) {
   const now = Math.floor(Date.now() / 1000);
   const suspiciousFlag = isSuspicious ? 1 : 0;
+  // better-sqlite3 不允许 undefined 参数，需转为 null
+  const safeUserAgent = userAgent ?? null;
 
   try {
     // 先尝试 INSERT（带 ON DUPLICATE KEY UPDATE），新 IP 默认 location='查询中'
@@ -197,7 +199,7 @@ async function logIpAccess(ip, endpoint, userAgent, isSuspicious = false) {
         user_agent = VALUES(user_agent),
         is_suspicious = GREATEST(is_suspicious, VALUES(is_suspicious)),
         updated_at = VALUES(updated_at)
-    `).run(ip, endpoint, userAgent, suspiciousFlag, now, now);
+    `).run(ip, endpoint, safeUserAgent, suspiciousFlag, now, now);
 
     // 新插入的记录（affectedRows > 0 且是 INSERT）→ 后台异步查归属地
     // 注意：ON DUPLICATE KEY UPDATE 时 affectedRows=2（更新）或 1（无变化）

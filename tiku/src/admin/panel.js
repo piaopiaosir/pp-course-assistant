@@ -13,10 +13,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     'ucuc': 'OK题库',
     'yanxi': '言溪题库',
     // AI模型不再统一映射为"AI解析"，显示具体模型名称
-    // 'ai': 'AI解析',  // 已移除
-    // 'ai-t1': 'AI解析',  // 已移除
-    // 'ai-kimi-thinking': 'AI解析',  // 已移除
-    // 'kimi-k2.6': 'AI解析',  // 已移除
+
+    
   };
   const getBadgeText = (source) => SOURCE_DISPLAY[source] || source;
 
@@ -29,24 +27,33 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
       'ai': 'ai',
       'hy3-preview': 'hy3-preview',
       'deepseek-v3.2': 'deepseek-v3.2',
-      'deepseek-v3.2-think': 'deepseek-v3.2-think',
+      'deepseek-v4-flash': 'deepseek-v4-flash',
+      'deepseek-v4-pro': 'deepseek-v4-pro',
       'deepseek-r1-0528': 'deepseek-r1-0528',
-      'deepseek-r1': 'deepseek-r1',
       'qwen3.6-plus': 'qwen3.6-plus',
       'qwen3.7-max': 'qwen3.7-max',
+      'qwen3.7-plus': 'qwen3.7-plus',
       'qwen3.5-plus': 'qwen3.5-plus',
-      'qwen3-235b-a22b': 'qwen3-235b-a22b',
       'minimax-m2.5': 'minimax-m2.5',
       'minimax-m2.7': 'minimax-m2.7',
       'minimax-m3': 'minimax-m3',
       'gpt-5.4-mini': 'gpt-5.4-mini',
       'gpt-5.4-nano': 'gpt-5.4-nano',
-      'gemini-3.1': 'gemini-3.1',
-      'gemini-3.5': 'gemini-3.5',
+      'gemini-3.1-flash-lite': 'gemini-3.1-flash-lite',
+      'gemini-3.5-flash': 'gemini-3.5-flash',
       'glm-5': 'glm-5',
       'glm-5.1': 'glm-5.1',
+      'glm-5.2': 'glm-5.2',
       'glm-4.7': 'glm-4.7',
-      'kimi-k2.6': 'kimi-k2.6'
+      'kimi-k2.7-code': 'kimi-k2.7-code',
+      'kimi-k2.6': 'kimi-k2.6',
+      'kimi-k2.5': 'kimi-k2.5',
+      'doubao-seed-2.1-turbo': 'doubao-seed-2-1-turbo',
+      'doubao-seed-2.1-pro': 'doubao-seed-2-1-pro',
+      'doubao-seed-2.0-code': 'doubao-seed-2-0-code',
+      'doubao-seed-2.0-mini': 'doubao-seed-2-0-mini',
+      'doubao-seed-2.0-lite': 'doubao-seed-2-0-lite',
+      'doubao-seed-2.0-pro': 'doubao-seed-2-0-pro'
     };
     
     const lowerSource = source.toLowerCase();
@@ -385,13 +392,13 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     .badge-ai { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
     .badge-hy3-preview { background: rgba(102, 126, 234, 0.15); color: #667eea; }
     .badge-deepseek-v3\\.2 { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
-    .badge-deepseek-v3\\.2-think { background: rgba(244, 114, 182, 0.15); color: #f472b6; }
+    .badge-deepseek-v4-flash { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .badge-deepseek-v4-pro { background: rgba(37, 99, 235, 0.15); color: #2563eb; }
     .badge-deepseek-r1-0528 { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
-    .badge-deepseek-r1 { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
     .badge-qwen3\\.6-plus { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
     .badge-qwen3\\.7-max { background: rgba(125, 211, 252, 0.15); color: #7dd3fc; }
+    .badge-qwen3\\.7-plus { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
     .badge-qwen3\\.5-plus { background: rgba(14, 165, 233, 0.15); color: #0ea5e9; }
-    .badge-qwen3-235b-a22b { background: rgba(2, 132, 199, 0.15); color: #0284c7; }
     .badge-minimax-m2\\.5 { background: rgba(249, 115, 22, 0.15); color: #f97316; }
     .badge-minimax-m2\\.7 { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
     .badge-minimax-m3 { background: rgba(234, 88, 12, 0.15); color: #ea580c; }
@@ -401,8 +408,17 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     .badge-gemini-3\\.5 { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
     .badge-glm-5 { background: rgba(124, 58, 237, 0.15); color: #7c3aed; }
     .badge-glm-5\\.1 { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+    .badge-glm-5\\.2 { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
     .badge-glm-4\\.7 { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
+    .badge-kimi-k2\\.7-code { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
     .badge-kimi-k2\\.6 { background: rgba(124, 58, 237, 0.15); color: #7c3aed; }
+    .badge-kimi-k2\\.5 { background: rgba(147, 51, 234, 0.15); color: #9333ea; }
+    .badge-doubao-seed-2-1-turbo { background: rgba(20, 184, 166, 0.15); color: #14b8a6; }
+    .badge-doubao-seed-2-1-pro { background: rgba(13, 148, 136, 0.15); color: #0d9488; }
+    .badge-doubao-seed-2-0-code { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+    .badge-doubao-seed-2-0-mini { background: rgba(94, 234, 212, 0.15); color: #5eead4; }
+    .badge-doubao-seed-2-0-lite { background: rgba(153, 246, 228, 0.15); color: #99f6e4; }
+    .badge-doubao-seed-2-0-pro { background: rgba(20, 184, 166, 0.15); color: #14b8a6; }
     
     .token-mask {
       font-family: 'SF Mono', 'Fira Code', monospace;
@@ -979,7 +995,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #ec4899;">${globalStats.deepseek_v3_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">DeepSeek-R1</span>
+            <span class="detail-label">DeepSeek-R1-0528</span>
             <span class="detail-value" style="color: #8b5cf6;">${globalStats.deepseek_r1_calls || 0}</span>
           </div>
           <div class="detail-item">
@@ -1009,16 +1025,16 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #a855f7;">${globalStats.kimi_k27_code_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Qwen3.5</span>
+            <span class="detail-label">Qwen3.5-Plus</span>
             <span class="detail-value" style="color: #0ea5e9;">${globalStats.qwen3_5_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Qwen3.6</span>
+            <span class="detail-label">Qwen3.6-Plus</span>
             <span class="detail-value" style="color: #38bdf8;">${globalStats.qwen3_6_calls || 0}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Qwen3.7-Max</span>
-            <span class="detail-value" style="color: #7dd3fc;">${globalStats.qwen3_7_calls || 0}</span>
+            <span class="detail-value" style="color: #7dd3fc;">${globalStats.qwen3_7_max_calls || 0}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Qwen3.7-Plus</span>
@@ -1054,6 +1070,22 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-label">豆包-Seed-2.1-Pro</span>
             <span class="detail-value" style="color: #0d9488;">${globalStats.doubao_seed_21_pro_calls || 0}</span>
           </div>
+          <div class="detail-item">
+            <span class="detail-label">豆包-Seed-2.0-Code</span>
+            <span class="detail-value" style="color: #2dd4bf;">${globalStats.doubao_seed_20_code_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">豆包-Seed-2.0-Mini</span>
+            <span class="detail-value" style="color: #5eead4;">${globalStats.doubao_seed_20_mini_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">豆包-Seed-2.0-Lite</span>
+            <span class="detail-value" style="color: #99f6e4;">${globalStats.doubao_seed_20_lite_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">豆包-Seed-2.0-Pro</span>
+            <span class="detail-value" style="color: #14b8a6;">${globalStats.doubao_seed_20_pro_calls || 0}</span>
+          </div>
         </div>
       </div>
           
@@ -1069,11 +1101,11 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #059669;">${globalStats.gpt_54_nano_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Gemini 3.1</span>
+            <span class="detail-label">Gemini-3.1</span>
             <span class="detail-value" style="color: #0891b2;">${globalStats.gemini_31_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Gemini 3.5</span>
+            <span class="detail-label">Gemini-3.5</span>
             <span class="detail-value" style="color: #06b6d4;">${globalStats.gemini_35_calls || 0}</span>
           </div>
           <div class="detail-item">
@@ -1350,12 +1382,14 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         ai: '#ec4899', cache: '#4ade80',
         deepseek_v3: '#ec4899', deepseek_r1: '#8b5cf6', deepseek_v4_flash: '#3b82f6',
         deepseek_v4_pro: '#2563eb', kimi_k26: '#7c3aed', kimi_k25: '#9333ea',
-        kimi_k27_code: '#a855f7', qwen3_5: '#0ea5e9', qwen3_6: '#38bdf8', qwen3_7: '#7dd3fc',
+        kimi_k27_code: '#a855f7', qwen3_5: '#0ea5e9', qwen3_6: '#38bdf8', qwen3_7_max: '#7dd3fc',
         qwen3_7_plus: '#38bdf8', minimax_m25: '#f97316', minimax_m27: '#fb923c',
-        minimax_m3: '#ea580c', hy3_preview: '#667eea', douba_seed_21_turbo: '#14b8a6',
-        douba_seed_21_pro: '#0d9488', gpt_54_mini: '#10b981', gpt_54_nano: '#059669',
-        gemini_31: '#0891b2', gemini_35: '#06b6d4', glm_52: '#7c3aed', glm_5: '#8b5cf6',
-        glm_51: '#a78bfa', glm_47: '#6366f1'
+        minimax_m3: '#ea580c', hy3_preview: '#667eea', doubao_seed_21_turbo: '#14b8a6',
+        doubao_seed_21_pro: '#0d9488', doubao_seed_20_code: '#2dd4bf', doubao_seed_20_mini: '#5eead4',
+        doubao_seed_20_lite: '#99f6e4', doubao_seed_20_pro: '#14b8a6',
+        gpt_54_mini: '#10b981', gpt_54_nano: '#059669',
+        gemini_31: '#0891b2', gemini_35: '#06b6d4', glm_52: '#a78bfa', glm_5: '#8b5cf6',
+        glm_51: '#8b5cf6', glm_47: '#6366f1'
       };
       
       Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif';
@@ -1371,15 +1405,15 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
       // Chart 1: AI Model Calls (不依赖趋势数据，可立即渲染)
       const aiModels = [
         { label: 'DeepSeek-V3.2', value: globalStats.deepseek_v3_calls||0, color: colors.deepseek_v3 },
-        { label: 'DeepSeek-R1', value: globalStats.deepseek_r1_calls||0, color: colors.deepseek_r1 },
+        { label: 'DeepSeek-R1-0528', value: globalStats.deepseek_r1_calls||0, color: colors.deepseek_r1 },
         { label: 'DeepSeek-V4 Flash', value: globalStats.deepseek_v4_flash_calls||0, color: colors.deepseek_v4_flash },
         { label: 'DeepSeek-V4 Pro', value: globalStats.deepseek_v4_pro_calls||0, color: colors.deepseek_v4_pro },
         { label: 'Kimi-K2.6', value: globalStats.kimi_k26_calls||0, color: colors.kimi_k26 },
         { label: 'Kimi-K2.5', value: globalStats.kimi_k25_calls||0, color: colors.kimi_k25 },
         { label: 'Kimi-K2.7-Code', value: globalStats.kimi_k27_code_calls||0, color: colors.kimi_k27_code },
-        { label: 'Qwen3.5', value: globalStats.qwen3_5_calls||0, color: colors.qwen3_5 },
-        { label: 'Qwen3.6', value: globalStats.qwen3_6_calls||0, color: colors.qwen3_6 },
-        { label: 'Qwen3.7-Max', value: globalStats.qwen3_7_calls||0, color: colors.qwen3_7 },
+        { label: 'Qwen3.5-Plus', value: globalStats.qwen3_5_calls||0, color: colors.qwen3_5 },
+        { label: 'Qwen3.6-Plus', value: globalStats.qwen3_6_calls||0, color: colors.qwen3_6 },
+        { label: 'Qwen3.7-Max', value: globalStats.qwen3_7_max_calls||0, color: colors.qwen3_7_max },
         { label: 'Qwen3.7-Plus', value: globalStats.qwen3_7_plus_calls||0, color: colors.qwen3_7_plus },
         { label: 'MiniMax-M2.5', value: globalStats.minimax_m25_calls||0, color: colors.minimax_m25 },
         { label: 'MiniMax-M2.7', value: globalStats.minimax_m27_calls||0, color: colors.minimax_m27 },
@@ -1387,10 +1421,14 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         { label: 'Hy3-preview', value: globalStats.hy3_preview_calls||0, color: colors.hy3_preview },
         { label: '豆包-Seed-2.1-Turbo', value: globalStats.doubao_seed_21_turbo_calls||0, color: colors.doubao_seed_21_turbo },
         { label: '豆包-Seed-2.1-Pro', value: globalStats.doubao_seed_21_pro_calls||0, color: colors.doubao_seed_21_pro },
+        { label: '豆包-Seed-2.0-Code', value: globalStats.doubao_seed_20_code_calls||0, color: colors.doubao_seed_20_code },
+        { label: '豆包-Seed-2.0-Mini', value: globalStats.doubao_seed_20_mini_calls||0, color: colors.doubao_seed_20_mini },
+        { label: '豆包-Seed-2.0-Lite', value: globalStats.doubao_seed_20_lite_calls||0, color: colors.doubao_seed_20_lite },
+        { label: '豆包-Seed-2.0-Pro', value: globalStats.doubao_seed_20_pro_calls||0, color: colors.doubao_seed_20_pro },
         { label: 'GPT-5.4-mini', value: globalStats.gpt_54_mini_calls||0, color: colors.gpt_54_mini },
         { label: 'GPT-5.4-nano', value: globalStats.gpt_54_nano_calls||0, color: colors.gpt_54_nano },
-        { label: 'Gemini 3.1', value: globalStats.gemini_31_calls||0, color: colors.gemini_31 },
-        { label: 'Gemini 3.5', value: globalStats.gemini_35_calls||0, color: colors.gemini_35 },
+        { label: 'Gemini-3.1', value: globalStats.gemini_31_calls||0, color: colors.gemini_31 },
+        { label: 'Gemini-3.5', value: globalStats.gemini_35_calls||0, color: colors.gemini_35 },
         { label: 'GLM-5.2', value: globalStats.glm_52_calls||0, color: colors.glm_52 },
         { label: 'GLM-5.1', value: globalStats.glm_51_calls||0, color: colors.glm_51 },
         { label: 'GLM-5', value: globalStats.glm_5_calls||0, color: colors.glm_5 },
