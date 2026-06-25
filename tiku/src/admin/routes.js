@@ -1,7 +1,7 @@
 const { db, getEnv, getGlobalStats } = require('../config');
 const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess } = require('./session');
 const { generateLoginHTML, generateAdminHTML } = require('.');
-const { isIpBanned, recordIpViolation, logIpAccess, checkRateLimit, isIpWhitelisted, getIpWhitelist, clearWhitelistCache, getIpLocation } = require('../ip-security');
+const { clearWhitelistCache } = require('../ip-security');
 const { recheckSingleQuestion, findDuplicates, removeDuplicateRecords } = require('../recheck');
 const { getClientIp } = require('../utils');
 const { refreshAllTikuKeys } = require('../tiku');

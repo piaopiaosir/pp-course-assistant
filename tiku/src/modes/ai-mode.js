@@ -7,11 +7,11 @@
  * - fetchAICustom: AI模式专用AI调用（独立参数配置）
  */
 
-const { saveAnswerToCacheAsync, getCachedAnswer, checkAnswerReasonable, safeCheckAnswerReasonable, cleanAndNormalizeAnswer, incrementAiCalls, incrementModelCalls, incrementTotalQueries, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
+const { saveAnswerToCacheAsync, getCachedAnswer, safeCheckAnswerReasonable, cleanAndNormalizeAnswer, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAnswerData, mergeSplitAnswers } = require('../tiku');
 const { db, getEnv, SPONSOR_URL } = require('../config');
-const { validateAnswer, retryWithStrippedPunctuation, fetchWithTimeout, validateAndCleanAnswer, callAIApi, buildUserContent } = require('../utils');
+const { validateAndCleanAnswer, callAIApi, buildUserContent } = require('../utils');
 const { getModelConfig, getSupportedModels, getModelCosts, getFullModelConfig, getDisplayName, MODEL_COLUMN_MAP, calculateCostFromTokens, getPrelockCount } = require('../config/ai-models');
-const { lockToken, settleToken, releaseToken } = require('../auth');
+const { lockToken, settleToken } = require('../auth');
 
 // D-04去重：AI提供商配置映射表（统一Key获取、API地址、错误消息）
 const AI_PROVIDER_CONFIG = {
@@ -321,23 +321,20 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
  * @param {Object} c - Hono context
  * @param {Object} params - 请求参数
  * @param {string} params.token - 用户token
- * @param {string} params.userId - 用户ID
  * @param {Object} params.questionData - 题目数据
+ * @param {string} params.questionHash - 题目哈希
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
- * @param {Function} params.decrementCount - 扣除次数函数
  * @param {string} params.model - AI模型标识符
+ * @param {boolean} params.enableWebSearch - 是否启用联网搜索
  */
 async function handleAIMode(c, params) {
   const {
     token,
-    userId,
     questionData,
     questionHash,
     log,
     FREE_MODE,
-    decrementCount,
-    skipUserIdCheck,
     model = 'DeepSeek-R1-0528',
     enableWebSearch = false
   } = params;

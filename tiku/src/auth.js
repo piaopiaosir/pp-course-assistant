@@ -1,4 +1,4 @@
-const { db, pool, getEnv, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, FREE_TOKEN_SECRET, getCardTypes, FREE_MODE, withTransaction } = require('./config');
+const { db, pool, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, FREE_TOKEN_SECRET, getCardTypes, FREE_MODE, withTransaction } = require('./config');
 const { sha256 } = require('./utils');
 const crypto = require('crypto');
 

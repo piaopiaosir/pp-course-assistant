@@ -7,10 +7,10 @@
  * - fetchAISupplement: 正常模式AI补充（含深度思考备用）
  */
 
-const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCacheAsync, checkAnswerReasonable, safeCheckAnswerReasonable, cleanAndNormalizeAnswer, incrementAiCalls, incrementModelCalls, incrementAIStats, getTypeDescription, buildPrompt, extractImageUrls, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { fetchWithTimeout, validateAndCleanAnswer, callAIApi, hasValidAnswer, buildUserContent } = require('../utils');
+const { fetchAnswer, fetchYanxi, fetchHiveNet, fetchUcuc, getCachedAnswer, incrementCacheHits, incrementTotalQueries, saveAnswerToCacheAsync, checkAnswerReasonable, safeCheckAnswerReasonable, cleanAndNormalizeAnswer, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
+const { validateAndCleanAnswer, callAIApi, hasValidAnswer, buildUserContent } = require('../utils');
 const { getEnv, SPONSOR_URL } = require('../config');
-const { MODEL_COLUMN_MAP, getModelConfig, calculateCostFromTokens, getDisplayName } = require('../config/ai-models');
+const { getModelConfig, getDisplayName } = require('../config/ai-models');
 
 // ==================== 正常模式 AI 补充 ====================
 

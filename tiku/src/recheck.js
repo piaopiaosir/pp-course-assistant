@@ -13,7 +13,6 @@
  */
 
 const path = require('path');
-const fs = require('fs');
 
 // 加载环境变量
 const envPath = path.join(__dirname, '../.env');

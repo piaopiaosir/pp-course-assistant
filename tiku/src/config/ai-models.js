@@ -351,7 +351,7 @@ function getFullModelConfig() {
   const typeModelMap = {
     'DeepSeek': ['V4-Flash', 'V4-Pro', 'V3.2', 'R1'],
     'HunYuan': ['3-Preview'],
-    'DouBao': ['2.1-Pro', '2.1-Turbo', '2.0-Pro', '2.0-Code', '2.0-Lite', '2.0-Mini'],
+    'Doubao': ['2.1-Pro', '2.1-Turbo', '2.0-Pro', '2.0-Code', '2.0-Lite', '2.0-Mini'],
     'Qwen': ['3.7-Max', '3.7-Plus', '3.6-Plus', '3.5-Plus'],
     'MiniMax': ['M3', 'M2.7', 'M2.5'],
     'GLM': ['5.2', '5.1', '5.0', '4.7'],

@@ -1,4 +1,4 @@
-const { db, getEnv } = require('./config');
+const { db } = require('./config');
 
 // ==================== IP安全机制 ====================
 

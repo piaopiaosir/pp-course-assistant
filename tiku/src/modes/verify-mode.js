@@ -10,11 +10,12 @@
  * - executeWebSearch: 执行Tavily搜索
  */
 
-const { fetchAnswer, fetchYanxi, saveAnswerToCacheAsync, cleanAndNormalizeAnswer, incrementAiCalls, incrementModelCalls, incrementTotalQueries, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAiAnswer, normalizeMatchingAnswer, cleanAnswerData } = require('../tiku');
-const { normalizeAnswer, fetchWithTimeout, validateAndCleanAnswer, callAIApi, buildUserContent } = require('../utils');
+const { fetchAnswer, fetchYanxi, saveAnswerToCacheAsync, cleanAndNormalizeAnswer, incrementAIStats, getTypeDescription, buildPrompt, extractJsonFromContent, cleanAnswerData } = require('../tiku');
+const { normalizeAnswer, validateAndCleanAnswer, callAIApi, buildUserContent } = require('../utils');
 const { db, getEnv, SPONSOR_URL } = require('../config');
 const { tavilySearch, WEB_SEARCH_TOOL } = require('../tavily-search');
-const { getModelConfig, getDisplayName, MODEL_COLUMN_MAP, calculateCostFromTokens } = require('../config/ai-models');
+const { getModelConfig, getDisplayName, calculateCostFromTokens } = require('../config/ai-models');
+const { saveStep1Cost, getStep1Cost } = require('../query-tasks');
 
 
 // ==================== 校验模式第一次查询（非深度思考） ====================
@@ -395,12 +396,10 @@ async function fetchDeepSeekThinking(questionData) {
  * @param {Object} c - Hono context
  * @param {Object} params - 请求参数
  * @param {string} params.token - 用户token
- * @param {string} params.userId - 用户ID
  * @param {Object} params.questionData - 题目数据
- * @param {boolean} params.verifyAnswer - 是否校验答案
+ * @param {string} params.questionHash - 题目哈希
  * @param {boolean} params.checkOnly - 是否仅检测
  * @param {string} params.hunyuanApiKey - TokenHub API密钥
- * @param {Object} params.checkResult - 校验结果
  * @param {Function} params.log - 日志函数
  * @param {boolean} params.FREE_MODE - 免费模式
  * @param {Function} params.lockToken - 预锁定次数函数
@@ -411,10 +410,8 @@ async function fetchDeepSeekThinking(questionData) {
 async function handleVerifyMode(c, params) {
   const {
     token,
-    userId,
     questionData,
     questionHash,
-    verifyAnswer,
     checkOnly,
     hunyuanApiKey,
     log,
@@ -422,8 +419,7 @@ async function handleVerifyMode(c, params) {
     lockToken,
     settleToken,
     releaseToken,
-    step1Cost: externalStep1Cost,  // 第二轮请求时客户端回传的第一轮费用
-    skipUserIdCheck
+    taskId
   } = params;
 
   log("=== 校验答案模式 ===");
@@ -488,7 +484,7 @@ async function handleVerifyMode(c, params) {
       } else {
         // 已验证答案命中，结算0.8次（预锁定2次退1.2次）
         if (!FREE_MODE && prelocked) {
-          const settleResult = await settleToken(token, 0.8);
+          const settleResult = await settleToken(token, lockCount, 0.8);
           if (settleResult.success) {
             remainingCount = settleResult.remainingCount;
             totalCost = 0.8;

@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.2.0
+// @version      3.2.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://wk.piao.one/assets/%E5%9B%BE%E5%B1%82%201-D6uQ9z8H.png
@@ -8947,10 +8947,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               question.source = answerData.data.source;  
               await this.fillQuestion(question);
               const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
-              const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
+              const msgLines = (answerData.msg || '').split('\n');
+              const firstLine = msgLines.shift();
+              const msgHint = firstLine ? ` - ${firstLine}` : "";
               this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              for (const line of msgLines) {
+                if (line.trim()) this.addLog(line, "primary");
+              }
               if (answerData.data.cost !== undefined) {
-                this.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+                this.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
               }
               this.correctNum += 1;
             } else {
@@ -11534,10 +11539,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         }
         
         const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
-        const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
+        const msgLines = (answerData.msg || '').split('\n');
+        const firstLine = msgLines.shift();
+        const msgHint = firstLine ? ` - ${firstLine}` : "";
         logStore.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+        for (const line of msgLines) {
+          if (line.trim()) logStore.addLog(line, "primary");
+        }
         if (answerData.data.cost !== undefined) {
-          logStore.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+          logStore.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
         }
       } else {
         
@@ -11735,10 +11745,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               await this.fillQuestion(question);
               
               const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
-              const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
+              const msgLines = (answerData.msg || '').split('\n');
+              const firstLine = msgLines.shift();
+              const msgHint = firstLine ? ` - ${firstLine}` : "";
               this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              for (const line of msgLines) {
+                if (line.trim()) this.addLog(line, "primary");
+              }
               if (answerData.data.cost !== undefined) {
-                this.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+                this.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
               }
             } else {
               this.addLog(`第${index + 1}道题搜索失败：${answerData.msg}`, "danger");

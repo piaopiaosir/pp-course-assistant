@@ -1,16 +1,14 @@
 const { Hono } = require('hono');
 const http = require('http');
-const { db, pool, getEnv, getGlobalStats, PORT, FREE_MODE, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL, withTransaction } = require('./config');
+const { db, getEnv, PORT, FREE_MODE, FREE_TOKEN_INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL, withTransaction } = require('./config');
 const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, lockToken, settleToken, releaseToken, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
 const { refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
-const { getTypeDescription, getClientIp } = require('./utils');
-const { getLimitedDate } = require('./ip-security');
-const { generateLoginHTML, generateAdminHTML } = require('./admin');
-const { isIpBanned, recordIpViolation, logIpAccess, checkRateLimit, isIpWhitelisted, getIpWhitelist, clearWhitelistCache, checkLimitedDailyQuota, incrementLimitedCount } = require('./ip-security');
+const { getClientIp } = require('./utils');
+const { getLimitedDate, isIpBanned, recordIpViolation, logIpAccess, checkRateLimit, isIpWhitelisted, getIpWhitelist, checkLimitedDailyQuota, incrementLimitedCount } = require('./ip-security');
 const { handleQuery } = require('./mode-handler');
 const { getModelCosts, getFullModelConfig } = require('./modes/ai-mode');
-const { verifyAdminSession, getSessionFromCookie, validateAdminSession, createAdminSession, checkAdminLoginLimit, recordAdminLoginFailure, clearAdminLoginAttempts, safeComparePassword, logAdminAccess, _adminSessionCleanupTimer } = require('./admin/session');
-const { queryTasks, queryRateWindow, recordQueryRate, getQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer, saveTaskToDb, getTaskFromDb, recoverPendingTasks } = require('./query-tasks');
+const { _adminSessionCleanupTimer } = require('./admin/session');
+const { queryTasks, recordQueryRate, POLL_INTERVAL, _queryTaskCleanupTimer, recordRecentlyQueried, isRecentlyQueried, _recentlyQueriedCleanupTimer, _verifyThinkingGrantCleanupTimer, saveTaskToDb, getTaskFromDb } = require('./query-tasks');
 const { registerAdminRoutes } = require('./admin/routes');
 const { handleRemoteScripts } = require('./remote-scripts');
 

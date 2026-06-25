@@ -256,15 +256,8 @@ async function pm2Restart() {
 // ==================== 主流程 ====================
 async function main() {
   try {
-    // 检查是否是同步触发的重启（通过标志文件判断）
-    const skipSyncFlag = path.join(__dirname, '.skip_sync');
-    if (fs.existsSync(skipSyncFlag)) {
-      console.log('🔄 检测到同步触发的重启，跳过首次同步');
-      fs.unlinkSync(skipSyncFlag);
-    } else {
-      // 首次同步
-      await syncCode();
-    }
+    // 首次启动同步代码
+    await syncCode();
     
     // 安装依赖
     await installDependencies();
@@ -295,11 +288,8 @@ async function main() {
           console.warn('⚠️ 同步请求鉴权失败');
           return;
         }
-        console.log('\n🔔 收到同步通知，开始同步...');
+        console.log('\n🔔 收到同步通知，重启服务...');
         try {
-          await syncCode();
-          await installDependencies();
-          fs.writeFileSync(path.join(__dirname, '.skip_sync'), '1');
           await pm2Restart();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ code: 200, msg: '同步成功，pm2已重启' }));
@@ -324,8 +314,6 @@ async function main() {
       setInterval(async () => {
         try {
           console.log('\n🔄 定时同步检查...');
-          await syncCode();
-          await installDependencies();
           await pm2Restart();
         } catch (e) {
           console.error('定时同步失败:', e.message);

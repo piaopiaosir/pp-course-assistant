@@ -8967,10 +8967,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               question.source = answerData.data.source;  
               await this.fillQuestion(question);
               const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
-              const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
+              const msgLines = (answerData.msg || '').split('\n');
+              const firstLine = msgLines.shift();
+              const msgHint = firstLine ? ` - ${firstLine}` : "";
               this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              for (const line of msgLines) {
+                if (line.trim()) this.addLog(line, "primary");
+              }
               if (answerData.data.cost !== undefined) {
-                this.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+                this.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
               }
               this.correctNum += 1;
             } else {
@@ -11555,10 +11560,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         }
         
         const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
-        const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
+        const msgLines = (answerData.msg || '').split('\n');
+        const firstLine = msgLines.shift();
+        const msgHint = firstLine ? ` - ${firstLine}` : "";
         logStore.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+        for (const line of msgLines) {
+          if (line.trim()) logStore.addLog(line, "primary");
+        }
         if (answerData.data.cost !== undefined) {
-          logStore.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+          logStore.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
         }
       } else {
         
@@ -11756,10 +11766,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               await this.fillQuestion(question);
               
               const sourceHint = answerData.data.source === "ai" ? "(AI生成)" : "";
-              const msgHint = answerData.msg ? ` - ${answerData.msg}` : "";
+              const msgLines = (answerData.msg || '').split('\n');
+              const firstLine = msgLines.shift();
+              const msgHint = firstLine ? ` - ${firstLine}` : "";
               this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              for (const line of msgLines) {
+                if (line.trim()) this.addLog(line, "primary");
+              }
               if (answerData.data.cost !== undefined) {
-                this.addLog(`本题消耗${answerData.data.cost}次`, "primary");
+                this.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
               }
             } else {
               this.addLog(`第${index + 1}道题搜索失败：${answerData.msg}`, "danger");
