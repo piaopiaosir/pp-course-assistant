@@ -1,4 +1,4 @@
-const { db, pool, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, FREE_TOKEN_SECRET, getCardTypes, FREE_MODE, withTransaction } = require('./config');
+const { db, INITIAL_COUNT, FREE_TOKEN_INITIAL_COUNT, FREE_TOKEN_SECRET, getCardTypes, withTransaction } = require('./config');
 const { sha256 } = require('./utils');
 const crypto = require('crypto');
 
@@ -135,10 +135,9 @@ async function getUserValidTokens(userId) {
     WHERE user_id = ? AND is_blacklisted = 0 AND remaining_count >= 1
     ORDER BY is_free_token ASC, remaining_count DESC
   `).all(userId);
-  // 免费模式下返回次数为99999
-  return records.map(r => ({ 
+  return records.map(r => ({
     token: r.token, 
-    remainingCount: FREE_MODE ? 99999 : r.remaining_count, 
+    remainingCount: r.remaining_count, 
     isFreeToken: r.is_free_token 
   }));
 }
@@ -293,7 +292,8 @@ async function checkTokenStatus(token, userId = null, skipUserIdCheck = false) {
     }
   }
   
-  if (record.is_blacklisted === 1 || record.remaining_count < 0.1) {
+  // 次数不足以发起任何查询，直接拉黑
+  if (record.is_blacklisted === 1 || record.remaining_count < 1) {
     if (record.is_blacklisted !== 1) {
       await db.prepare("UPDATE tokens SET is_blacklisted = 1 WHERE token = ?").run(token);
     }
@@ -523,16 +523,22 @@ async function lockToken(token, lockCount) {
     lockedTokens.delete(token);
   }
   
-  // 检查余额是否足够
-  const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ? AND is_blacklisted = 0').get(token);
+  // 检查余额是否足够（db 层已内置网络错误重试）
+  let record;
+  try {
+    record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ? AND is_blacklisted = 0').get(token);
+  } catch (e) {
+    console.error('[lockToken] 查询余额失败:', e.message);
+    return { success: false, message: '服务暂时不可用，请稍后重试' };
+  }
   if (!record) {
     return { success: false, message: 'Token无效或已被拉黑' };
   }
   if (record.remaining_count < lockCount) {
-    return { success: false, message: `余额不足，需要${lockCount}次，剩余${record.remaining_count}次，请赞助获取新token` };
+    return { success: false, message: `余额不足，需要${lockCount}次，剩余${record.remaining_count}次，请赞助获取新token`, remainingCount: record.remaining_count };
   }
   
-  // 锁定：扣除锁定次数（Q-04去重：使用 withTransaction）
+  // 锁定：扣除锁定次数（Q-04去重：使用 withTransaction，底层已内置重试）
   try {
     const lockResult = await withTransaction(async (conn) => {
       // 原子扣减锁定次数
@@ -588,6 +594,18 @@ async function lockToken(token, lockCount) {
 async function settleToken(token, lockCount, actualCost) {
   if (!token) return { success: false, message: 'Token为空' };
   
+  // 防御性校验：防止 NaN/Infinity/负数导致 MySQL DOUBLE out of range
+  lockCount = Number(lockCount) || 0;
+  actualCost = Number(actualCost) || 0;
+  if (!Number.isFinite(lockCount) || !Number.isFinite(actualCost)) {
+    console.error(`[settleToken] 参数异常: lockCount=${lockCount}, actualCost=${actualCost}, token=${token.substring(0, 8)}***`);
+    // actualCost 异常时按0结算（全额退还预锁定），避免用户损失
+    await releaseToken(token, lockCount, true);
+    return { success: false, message: '结算参数异常，已退还预锁定' };
+  }
+  if (actualCost < 0) actualCost = 0;
+  if (lockCount < 0) lockCount = 0;
+  
   // 引用计数递减：仅当所有并发锁定都结算后才删除锁记录
   const current = lockedTokens.get(token);
   if (current) {
@@ -606,12 +624,17 @@ async function settleToken(token, lockCount, actualCost) {
   const diff = lockCount - actualCost; // 正数=退还，负数=补扣
   
   if (diff === 0) {
-    // 刚好相等，无需操作
-    const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ?').get(token);
-    return { success: true, remainingCount: record ? record.remaining_count : 0 };
+    // 刚好相等，无需操作（db 层已内置重试）
+    try {
+      const record = await db.prepare('SELECT remaining_count FROM tokens WHERE token = ?').get(token);
+      return { success: true, remainingCount: record ? record.remaining_count : 0 };
+    } catch (e) {
+      console.error('[settleToken] 查询余额失败:', e.message);
+      return { success: true, remainingCount: 0 }; // 无需操作，返回成功即可
+    }
   }
   
-  // 结算：退还或补扣次数（Q-04去重：使用 withTransaction）
+  // 结算：退还或补扣次数（Q-04去重：使用 withTransaction，底层已内置重试）
   try {
     const settleResult = await withTransaction(async (conn) => {
       if (diff > 0) {
@@ -695,15 +718,12 @@ async function releaseToken(token, lockCount, isSystemError = false) {
   }
   
   if (isSystemError) {
-    // 系统异常：退还预锁定次数，避免用户因系统故障损失
+    // 系统异常：退还预锁定次数，避免用户因系统故障损失（db 层已内置重试）
     try {
-      await pool.execute(
-        'UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?',
-        [lockCount, token]
-      );
+      await db.prepare('UPDATE tokens SET remaining_count = remaining_count + ? WHERE token = ?').run(lockCount, token);
       console.log(`[预锁定] Token ${token.substring(0, 8)}*** 系统异常释放，退还${lockCount}次`);
     } catch (e) {
-      console.error(`[预锁定] Token ${token.substring(0, 8)}*** 退费失败:`, e.message);
+      console.error(`[预锁定] Token ${token.substring(0, 8)}*** 退费失败(重试耗尽):`, e.message);
     }
   } else {
     // 用户主动中断：不退还次数（防止恶意利用异常逃费）

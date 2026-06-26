@@ -67,6 +67,10 @@ async function fetchAISupplement(questionData) {
     console.log("[INFO] 多模态:", supportsVision ? "已启用" : "未启用(模型不支持视觉)");
   }
   
+  // 变量前置声明（避免 TDZ 错误：catch 块需要访问 token 统计变量）
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+
   try {
     console.log("AI查询中...");
     
@@ -76,8 +80,8 @@ async function fetchAISupplement(questionData) {
     const { result } = await callAIApi({ apiUrl, apiKey: useApiKey, body });
     
     // token统计
-    let totalPromptTokens = result.usage?.prompt_tokens || 0;
-    let totalCompletionTokens = result.usage?.completion_tokens || 0;
+    totalPromptTokens = result.usage?.prompt_tokens || 0;
+    totalCompletionTokens = result.usage?.completion_tokens || 0;
     if (result.usage) {
       console.log(`[STAT] token统计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     }
@@ -150,7 +154,7 @@ async function fetchAISupplement(questionData) {
                     console.log("==========================");
                     return {
                       code: 500,
-                      msg: `AI答案校验失败(深度思考:${thinkingCheckResult.reason})`,
+                      msg: `AI答案不合理(深度思考:${thinkingCheckResult.reason})`,
                       data: null
                     };
                   }
@@ -193,14 +197,14 @@ async function fetchAISupplement(questionData) {
     
   } catch (e) {
     console.error("[ERROR] AI查询失败:", e.message);
-    console.log("[STAT] 本次AI调用token总计: 输入=0, 输出=0 (异常)");
+    console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens} (异常)`);
     console.log("==========================");
     
-    return { 
-      code: 500, 
-      msg: `AI查询失败: ${e.message}`, 
+    return {
+      code: 500,
+      msg: `AI查询失败: ${e.message}`,
       data: null,
-      tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens },
       modelId: model
     };
   }
@@ -218,7 +222,6 @@ async function fetchAISupplement(questionData) {
  * @param {Object} params.checkResult - 校验结果
  * @param {string} params.hunyuanApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
- * @param {boolean} params.FREE_MODE - 免费模式
  * @param {Function} params.lockToken - 预锁定次数函数
  * @param {Function} params.settleToken - 结算次数函数
  * @param {Function} params.releaseToken - 释放锁定函数
@@ -231,32 +234,31 @@ async function handleNormalMode(c, params) {
     questionHash,
     hunyuanApiKey,
     log,
-    FREE_MODE,
-    limitedMode,
     lockToken,
     settleToken,
     releaseToken,
     skipUserIdCheck
   } = params;
 
+  // limitedMode 用 let 声明，预锁定失败时可回退为受限模式
+  let limitedMode = params.limitedMode;
+
   log("=== 正常模式（先题库后AI） ===");
   if (limitedMode) {
     log("[WARN] 受限模式：仅查询缓存");
   }
 
-  // 非免费、非受限模式：预锁定1次，确保余额充足后再查询
+  // 预锁定1次，确保余额充足后再查询
   let prelocked = false;
-  if (!FREE_MODE && !limitedMode) {
+  if (!limitedMode) {
     const lockResult = await lockToken(token, 1);
     if (!lockResult.success) {
-      return c.json({
-        code: 403,
-        msg: lockResult.message,
-        data: { num: 0, answer: [], sponsorUrl: SPONSOR_URL }
-      }, 403);
+      log(`[X] 预锁定失败: ${lockResult.message}，回退到受限模式（仅查询缓存）`);
+      limitedMode = true;
+    } else {
+      prelocked = true;
+      log(`预锁定1次成功，锁定后余额: ${lockResult.remainingCount}`);
     }
-    prelocked = true;
-    log(`预锁定1次成功，锁定后余额: ${lockResult.remainingCount}`);
   }
 
   log("=== 开始查询缓存 ===");
@@ -275,10 +277,10 @@ async function handleNormalMode(c, params) {
       incrementCacheHits();
       incrementTotalQueries('cache');
 
-      // 受限模式或免费模式不扣除次数
+      // 受限模式不扣除次数
       let remainingCount = 999999;
       let actualCost = 0;  // 实际消耗次数
-      if (!FREE_MODE && !limitedMode) {
+      if (!limitedMode) {
         // 预锁定已扣1次，缓存命中按0.8次结算（退0.2次）
         const cacheCost = 0.8;
         const settleResult = await settleToken(token, 1, cacheCost);
@@ -322,7 +324,7 @@ async function handleNormalMode(c, params) {
     log("[WARN] 受限模式：缓存未命中");
     return c.json({
       code: 403,
-      msg: '免费题库：无答案<br>飘飘全能答题模型：有答案',
+      msg: '免费题库：无答案，飘飘全能答题模型：有答案',
       data: { limitedMode: true, answer: [], num: 0, sponsorUrl: SPONSOR_URL }
     }, 403);
   }
@@ -353,7 +355,7 @@ async function handleNormalMode(c, params) {
 
         // 预锁定已扣1次，排序题按1次结算（无需调整）
         let actualCost = 0;  // 实际消耗次数
-        if (!FREE_MODE && prelocked) {
+        if (prelocked) {
           const normalCost = 1;
           const settleResult = await settleToken(token, 1, normalCost);
           if (settleResult.success) {
@@ -363,10 +365,6 @@ async function handleNormalMode(c, params) {
           } else {
             await releaseToken(token, 1);
           }
-        } else if (!FREE_MODE) {
-          // 免费模式
-        } else {
-          log("免费模式: 不扣除次数");
         }
 
         if (answerData.data) {
@@ -562,7 +560,7 @@ async function handleNormalMode(c, params) {
 
     // 预锁定已扣1次，正常查询按1次结算（无需调整）
     let actualCost = 0;  // 实际消耗次数
-    if (!FREE_MODE && prelocked) {
+    if (prelocked) {
       const normalCost = 1;
       const settleResult = await settleToken(token, 1, normalCost);
       if (settleResult.success) {
@@ -572,10 +570,6 @@ async function handleNormalMode(c, params) {
       } else {
         await releaseToken(token, 1);
       }
-    } else if (!FREE_MODE) {
-      // 非预锁定场景（不应到达此处，保留兼容）
-    } else {
-      log("免费模式: 不扣除次数");
     }
 
     // 设置剩余次数和消耗信息

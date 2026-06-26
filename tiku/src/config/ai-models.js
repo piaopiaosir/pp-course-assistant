@@ -260,7 +260,7 @@ const AI_MODELS = {
   },
   'doubao-seed-2.0-code': {
     id: 'doubao-seed-2.0-code',
-    apiModel: 'doubao-seed-2-0-code-260215',
+    apiModel: 'doubao-seed-2-0-code-preview-260215',
     provider: '302ai',
     displayName: 'Doubao-Seed-2.0-Code',
     temperature: 0.6,

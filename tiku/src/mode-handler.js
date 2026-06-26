@@ -22,7 +22,6 @@ const { getTypeDescription } = require('./utils');
  * @param {string} params.model - AI模型标识符（ai模式）
  * @param {string} params.tokenhubApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
- * @param {boolean} params.FREE_MODE - 免费模式
  * @param {Function} params.lockToken - 预锁定次数函数
  * @param {Function} params.settleToken - 结算次数函数
  * @param {Function} params.releaseToken - 释放锁定函数
@@ -41,7 +40,6 @@ async function handleQuery(c, params) {
     model,
     tokenhubApiKey,
     log,
-    FREE_MODE,
     limitedMode,
     lockToken,
     settleToken,
@@ -77,7 +75,6 @@ async function handleQuery(c, params) {
       checkOnly,
       hunyuanApiKey: tokenhubApiKey,
       log,
-      FREE_MODE,
       lockToken,
       settleToken,
       releaseToken,
@@ -97,7 +94,6 @@ async function handleQuery(c, params) {
       questionData,
       questionHash,
       log,
-      FREE_MODE,
       lockToken,
       settleToken,
       releaseToken,
@@ -117,7 +113,6 @@ async function handleQuery(c, params) {
       questionHash,
       hunyuanApiKey: tokenhubApiKey,
       log,
-      FREE_MODE,
       limitedMode,
       lockToken,
       settleToken,

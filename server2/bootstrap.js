@@ -256,7 +256,7 @@ async function pm2Restart() {
 // ==================== 主流程 ====================
 async function main() {
   try {
-    // 首次启动同步代码
+    // 同步代码
     await syncCode();
     
     // 安装依赖

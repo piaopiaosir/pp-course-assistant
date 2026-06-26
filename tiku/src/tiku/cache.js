@@ -112,7 +112,11 @@ async function saveAnswerToCache(questionHash, question, options, type, answer, 
     
     console.log("保存缓存成功:", questionHash.substring(0, 8), "来源:", source, cached ? "(覆盖旧答案)" : "(新增)", shouldSetCorrectness ? `is_correct=${isCorrect}` : "");
   } catch (e) {
-    console.error("保存答案缓存失败:", e.message);
+    if (e.code === 'ETIMEDOUT' || e.code === 'ECONNREFUSED' || e.code === 'PROTOCOL_CONNECTION_LOST') {
+      console.warn("保存答案缓存失败(数据库不可达):", e.code);
+    } else {
+      console.error("保存答案缓存失败:", e.message);
+    }
   }
 }
 
@@ -157,7 +161,11 @@ async function recordCorrectnessReport(questionHash, token, userId, clientIp, is
     return { applied, pending: false };
     
   } catch (e) {
-    console.error("记录正确性上报失败:", e.message);
+    if (e.code === 'ETIMEDOUT' || e.code === 'ECONNREFUSED' || e.code === 'PROTOCOL_CONNECTION_LOST') {
+      console.warn("记录正确性上报失败(数据库不可达):", e.code);
+    } else {
+      console.error("记录正确性上报失败:", e.message);
+    }
     return { applied: false, pending: false };
   }
 }

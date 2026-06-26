@@ -133,6 +133,10 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
     console.log("[INFO] 多模态:", supportsVision ? "已启用(视觉模型)" : "未启用(模型不支持视觉)");
   }
 
+  // 变量前置声明（避免 TDZ 错误：catch 块需要访问 token 统计变量）
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+
   try {
     console.log("AI查询中...");
     
@@ -145,8 +149,6 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
     const MAX_TOOL_ROUNDS = 2;
     let messages = [{ role: "system", content: system }, { role: "user", content: userContent }];
     let webSearchUsed = false;  // 标记是否使用了联网搜索
-    let totalPromptTokens = 0;
-    let totalCompletionTokens = 0;
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       console.log(`=== 第${round + 1}轮调用 ===`);
@@ -182,7 +184,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
 
       if (!result.choices || !result.choices[0]) {
         console.log("[ERROR] AI返回无效响应");
-        return { code: 500, msg: "AI返回无效响应", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
+        return { code: 500, msg: "AI返回无效响应", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'communication' };
       }
 
       const choice = result.choices[0];
@@ -272,7 +274,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
           console.log(`[WARN] AI模式答案校验失败: ${checkResult.reason}`);
           console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
           console.log("==========================");
-          return { code: 500, msg: `AI答案校验失败: ${checkResult.reason}`, data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
+          return { code: 500, msg: `AI答案不合理: ${checkResult.reason}`, data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'quality' };
         }
 
         console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
@@ -292,13 +294,13 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
       console.log("[ERROR] AI解析失败: 响应中未找到有效答案");
       console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
       console.log("==========================");
-      return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
+      return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'quality' };
     }
 
     // 不应到达这里
     console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("==========================");
-    return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
+    return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'quality' };
 
   } catch (e) {
     console.error("[ERROR] AI查询失败（AI模式）:", e.message);
@@ -309,7 +311,8 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
       code: 500,
       msg: `AI查询失败: ${e.message}`,
       data: null,
-      tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }
+      tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens },
+      failureType: 'communication'
     };
   }
 }
@@ -324,7 +327,6 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
  * @param {Object} params.questionData - 题目数据
  * @param {string} params.questionHash - 题目哈希
  * @param {Function} params.log - 日志函数
- * @param {boolean} params.FREE_MODE - 免费模式
  * @param {string} params.model - AI模型标识符
  * @param {boolean} params.enableWebSearch - 是否启用联网搜索
  */
@@ -334,7 +336,6 @@ async function handleAIMode(c, params) {
     questionData,
     questionHash,
     log,
-    FREE_MODE,
     model = 'DeepSeek-R1-0528',
     enableWebSearch = false
   } = params;
@@ -370,7 +371,7 @@ async function handleAIMode(c, params) {
   }
 
   // ========== 免费Token限制：不允许使用中/高/超高消耗模型 ==========
-  if (!FREE_MODE && (modelConfig.cost === '中消耗' || modelConfig.cost === '高消耗' || modelConfig.cost === '超高消耗')) {
+  if (modelConfig.cost === '中消耗' || modelConfig.cost === '高消耗' || modelConfig.cost === '超高消耗') {
     const tokenRecord = await db.prepare(
       "SELECT is_free_token FROM tokens WHERE token = ?"
     ).get(token);
@@ -385,25 +386,21 @@ async function handleAIMode(c, params) {
   }
 
   // ========== 调用前：预锁定Token次数 ==========
-  if (!FREE_MODE) {
-    prelockCount = getPrelockCount(actualModelId);
-    log(`预锁定: ${prelockCount}次（${modelConfig.cost}模型: ${modelConfig.name}）`);
+  prelockCount = getPrelockCount(actualModelId);
+  log(`预锁定: ${prelockCount}次（${modelConfig.cost}模型: ${modelConfig.name}）`);
 
-    const lockResult = await lockToken(token, prelockCount);
-    if (!lockResult.success) {
-      const costLevel = modelConfig.cost || '低消耗';
-      log(`预锁定失败: ${lockResult.message}`);
-      return c.json({
-        code: 403,
-        msg: `剩余次数过少，无法使用（${costLevel}模型）`,
-        data: { num: lockResult.remainingCount || 0, answer: [], sponsorUrl: SPONSOR_URL }
-      }, 403);
-    }
-    remainingCount = lockResult.remainingCount;
-    log(`预锁定成功: [OK] 剩余${remainingCount}次（锁定${prelockCount}次）`);
-  } else {
-    log("免费模式: 不扣除次数");
+  const lockResult = await lockToken(token, prelockCount);
+  if (!lockResult.success) {
+    const costLevel = modelConfig.cost || '低消耗';
+    log(`预锁定失败: ${lockResult.message}`);
+    return c.json({
+      code: 403,
+      msg: `余额不足，该模式至少需要${prelockCount}次（${costLevel}模型），当前剩余${lockResult.remainingCount || 0}次`,
+      data: { num: lockResult.remainingCount || 0, answer: [], sponsorUrl: SPONSOR_URL }
+    }, 403);
   }
+  remainingCount = lockResult.remainingCount;
+  log(`预锁定成功: [OK] 剩余${remainingCount}次（锁定${prelockCount}次）`);
 
   // 导入Tavily搜索函数（如果启用了联网搜索）
   const { tavilySearch } = enableWebSearch ? require('../tavily-search') : { tavilySearch: null };
@@ -412,7 +409,7 @@ async function handleAIMode(c, params) {
   const providerCfg = AI_PROVIDER_CONFIG[modelConfig.provider];
   if (!providerCfg) {
     log(`[X] 不支持的提供商: ${modelConfig.provider}`);
-    if (!FREE_MODE && prelockCount > 0) {
+    if (prelockCount > 0) {
       const settleResult = await settleToken(token, prelockCount, 0);
       log(`[预锁定] 不支持的提供商，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
     }
@@ -436,7 +433,7 @@ async function handleAIMode(c, params) {
   if (!apiKey) {
     log(`[X] ${providerCfg.keyEnv} 未配置`);
     // API Key未配置属于系统错误，释放预锁定（全额退款）
-    if (!FREE_MODE && prelockCount > 0) {
+    if (prelockCount > 0) {
       const settleResult = await settleToken(token, prelockCount, 0);
       log(`[预锁定] API未配置，全额退还${prelockCount}次，剩余: ${settleResult.remainingCount}`);
     }
@@ -461,42 +458,65 @@ async function handleAIMode(c, params) {
     }
   }
 
-  // ========== 调用后：根据实际token消耗结算预锁定 ==========
-  if (!FREE_MODE) {
-    let actualCost = 1; // 默认实际消耗1次
+  // ========== 调用后：根据失败类型结算预锁定 ==========
+  // 通讯故障（请求失败/异常/无效响应）→ 全额退还，不扣次数
+  // 质量问题（AI正常返回但解析失败/校验失败）→ 扣 实际消耗*0.5 次
+  const failureType = answerData?.failureType;
+  const tokenUsage = answerData?.tokenUsage;
+  const promptTokens = tokenUsage?.promptTokens || 0;
+  const completionTokens = tokenUsage?.completionTokens || 0;
+  let actualCost = 0;
 
-    if (answerData && answerData.tokenUsage) {
-      const { promptTokens, completionTokens } = answerData.tokenUsage;
-      if (promptTokens > 0 || completionTokens > 0) {
-        actualCost = calculateCostFromTokens(actualModelId, promptTokens, completionTokens);
-        log(`[STAT] 实际token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
-        log(`[MONEY] 费用换算: 实际消耗${actualCost}次（${modelConfig.name}）`);
-      } else {
-        log(`[WARN] token消耗为0，默认消耗1次`);
-      }
+  if (failureType === 'communication') {
+    // 通讯故障：不扣次数，全额退还预锁定
+    actualCost = 0;
+    log(`[WARN] AI通讯故障: ${answerData?.msg}，全额退还预锁定${prelockCount}次`);
+  } else if (failureType === 'quality') {
+    // 质量问题：AI已正常返回（有token消耗），扣实际消耗*0.5次
+    if (promptTokens > 0 || completionTokens > 0) {
+      const fullCost = calculateCostFromTokens(actualModelId, promptTokens, completionTokens);
+      actualCost = fullCost * 0.5;
+      log(`[STAT] 实际token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
+      log(`[MONEY] AI回答质量问题，按实际消耗的50%结算: ${fullCost}*0.5=${actualCost}次（${modelConfig.name}）`);
     } else {
-      // AI查询失败，默认消耗1次
-      log(`[WARN] AI查询失败，默认消耗1次`);
+      actualCost = 0;
+      log(`[WARN] AI回答质量问题，但token消耗为0，不扣次数`);
     }
+  } else if (answerData?.code === 200) {
+    // 成功：按实际token消耗结算
+    if (promptTokens > 0 || completionTokens > 0) {
+      actualCost = calculateCostFromTokens(actualModelId, promptTokens, completionTokens);
+      log(`[STAT] 实际token消耗: 输入=${promptTokens}, 输出=${completionTokens}`);
+      log(`[MONEY] 费用换算: 实际消耗${actualCost}次（${modelConfig.name}）`);
+    } else {
+      actualCost = 1;
+      log(`[WARN] token消耗为0，默认消耗1次`);
+    }
+  } else {
+    // 其他未知失败，默认消耗1次（防御性处理）
+    actualCost = 1;
+    log(`[WARN] AI查询失败(未知类型)，默认消耗1次`);
+  }
 
-    // 结算：预锁定 - 实际消耗 = 退还次数
-    const settleResult = await settleToken(token, prelockCount, actualCost);
-    if (settleResult.success) {
-      remainingCount = settleResult.remainingCount;
-      const refund = prelockCount - actualCost;
-      log(`结算完成: 预锁定${prelockCount}次，实际消耗${actualCost}次，退还${Math.max(0, refund)}次，剩余${remainingCount}次`);
-    } else {
-      log(`[WARN] 结算失败: ${settleResult.message}`);
-    }
+  // 结算：预锁定 - 实际消耗 = 退还次数
+  const settleResult = await settleToken(token, prelockCount, actualCost);
+  if (settleResult.success) {
+    remainingCount = settleResult.remainingCount;
+    const refund = prelockCount - actualCost;
+    log(`结算完成: 预锁定${prelockCount}次，实际消耗${actualCost}次，退还${Math.max(0, refund)}次，剩余${remainingCount}次`);
+  } else {
+    log(`[WARN] 结算失败: ${settleResult.message}`);
   }
 
   log(`题目哈希: ${questionHash.substring(0, 16)}`);
 
   if (!answerData || answerData.code !== 200 || !answerData.data || !answerData.data.answer) {
     log("[X] AI 请求失败或无答案");
+    // 通讯故障：返回"AI通讯故障，请联系管理员检查"；质量问题：返回原msg
+    const isCommFailure = answerData?.failureType === 'communication';
     answerData = {
-      code: 404,
-      msg: "未在AI回答中解析到答案",
+      code: isCommFailure ? 500 : 404,
+      msg: isCommFailure ? "AI通讯故障，请联系管理员检查" : (answerData?.msg || "未在AI回答中解析到答案"),
       data: { answer: [], num: remainingCount }
     };
     return c.json(cleanAnswerData(answerData));
@@ -513,10 +533,10 @@ async function handleAIMode(c, params) {
   }
 
   if (!valid) {
-    log(`[X] AI答案校验失败: ${reason}`);
+    log(`[X] AI答案不合理: ${reason}`);
     answerData = {
       code: 422,
-      msg: `AI答案校验失败: ${reason}`,
+      msg: `AI答案不合理: ${reason}`,
       data: { answer: [], num: remainingCount }
     };
     return c.json(answerData, 422);
@@ -547,7 +567,7 @@ async function handleAIMode(c, params) {
   }
 
   // 添加消耗次数到返回数据（与正常模式、校验模式统一格式）
-  if (!FREE_MODE && answerData.tokenUsage) {
+  if (answerData.tokenUsage) {
     const { promptTokens, completionTokens } = answerData.tokenUsage;
     const actualCost = (promptTokens > 0 || completionTokens > 0)
       ? calculateCostFromTokens(actualModelId, promptTokens, completionTokens)

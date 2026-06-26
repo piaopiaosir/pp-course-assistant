@@ -1,6 +1,6 @@
 const { Hono } = require('hono');
 const http = require('http');
-const { db, getEnv, PORT, FREE_MODE, FREE_TOKEN_INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL, withTransaction } = require('./config');
+const { db, getEnv, PORT, FREE_TOKEN_INITIAL_COUNT, LATEST_VERSION, SPONSOR_URL, withTransaction } = require('./config');
 const { verifyUserToken, initOrGetToken, checkTokenStatus, decrementCount, lockToken, settleToken, releaseToken, recordUserId, getUserIdCreatedAt, getUserType, getUserValidTokens, checkUserIdExists, createTokenForNewUser, updateUserType, checkReferralStatus, getReferralStats, processReferral, verifyUserFid } = require('./auth');
 const { refreshAllTikuKeys, generateQuestionHash, getCachedAnswer } = require('./tiku');
 const { getClientIp } = require('./utils');
@@ -97,7 +97,12 @@ app.use('*', async (c, next) => {
     
     await next();
   } catch (error) {
-    console.error('[中间件错误]', error);
+    // 数据库连接超时等网络错误，降级放行（不阻塞用户）
+    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET' || error.code === 'PROTOCOL_CONNECTION_LOST') {
+      console.warn(`[中间件] 数据库不可达(${error.code})，降级放行: ${c.req.path}`);
+    } else {
+      console.error('[中间件错误]', error);
+    }
     await next();
   }
 });
@@ -751,8 +756,8 @@ app.get('/', async (c) => {
       console.log(`为新用户 ${userId} 生成Token: ${newToken}, IP: ${userIp}, fid: ${fid || '未知'}`);
       return c.json({
         code: 200,
-        msg: `欢迎新用户！已为您生成Token，赠送${FREE_MODE ? 999999 : FREE_TOKEN_INITIAL_COUNT}次查询额度`,
-        data: { valid: true, num: FREE_MODE ? 999999 : FREE_TOKEN_INITIAL_COUNT, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
+        msg: `欢迎新用户！已为您生成Token，赠送${FREE_TOKEN_INITIAL_COUNT}次查询额度`,
+        data: { valid: true, num: FREE_TOKEN_INITIAL_COUNT, isNew: true, newToken: newToken, sponsorUrl: SPONSOR_URL }
       });
     } else {
       const validTokens = await getUserValidTokens(userId);
@@ -819,8 +824,8 @@ app.get('/', async (c) => {
     const cardInfo = verifyResult.cardName ? `（${verifyResult.cardName}）` : '';
     return c.json({
       code: 200,
-      msg: isNew ? `Token验证成功，已初始化${FREE_MODE ? 999999 : record.remaining_count}次查询额度${cardInfo}` : 'Token验证成功',
-      data: { valid: true, num: FREE_MODE ? 999999 : record.remaining_count, isNew: isNew, cardName: verifyResult.cardName, sponsorUrl: SPONSOR_URL }
+      msg: isNew ? `Token验证成功，已初始化${record.remaining_count}次查询额度${cardInfo}` : 'Token验证成功',
+      data: { valid: true, num: record.remaining_count, isNew: isNew, cardName: verifyResult.cardName, sponsorUrl: SPONSOR_URL }
     });
   } else {
     const validTokens = await getUserValidTokens(userId);
@@ -853,12 +858,7 @@ app.get('/', async (c) => {
 // F-02去重：统一访问级别判断（替代分散的 limitedMode 条件判断）
 // 返回值: { level: 'FULL' | 'LIMITED', tokenRecord?, skipUserIdCheck?, checkResult? }
 // 若返回 deniedResponse 字段，则表示需要直接拒绝请求（如免费Token不属于当前用户）
-async function determineAccessLevel({ FREE_MODE, token, masterSecret, userId, workType, clientIp, log }) {
-  // 免费模式：完全访问
-  if (FREE_MODE) {
-    return { level: 'FULL' };
-  }
-
+async function determineAccessLevel({ token, masterSecret, userId, workType, clientIp, log }) {
   // 无Token：受限模式
   if (!token) {
     log("[WARN] 无Token，进入受限模式（仅查询缓存）");
@@ -939,10 +939,6 @@ app.post('/', async (c) => {
     log(`enableWebSearch: ${enableWebSearch}`);
     log(`fid: ${fid || '未提供'}`);
     
-    if (FREE_MODE) {
-      log("[STAR] 免费模式已开启，跳过Token验证和次数扣除");
-    }
-    
     const clientIp = getClientIp(c);
     
     log("=== 请求参数 ===");
@@ -950,7 +946,7 @@ app.post('/', async (c) => {
     log(`userId: ${userId}`);
     
     // F-02去重：使用统一访问级别判断函数
-    const accessLevel = await determineAccessLevel({ FREE_MODE, token, masterSecret, userId, workType, clientIp, log });
+    const accessLevel = await determineAccessLevel({ token, masterSecret, userId, workType, clientIp, log });
 
     // 处理直接拒绝的情况（如免费Token不属于当前用户）
     if (accessLevel.level === 'DENIED' && accessLevel.deniedResponse) {
@@ -1060,7 +1056,6 @@ app.post('/', async (c) => {
           model,
           tokenhubApiKey,
           log,
-          FREE_MODE,
           limitedMode,
           lockToken,
           settleToken,
@@ -1160,11 +1155,7 @@ const _ppLogCleanupTimer = setInterval(async () => {
     console.error('[PP请求日志] 清理失败:', e.message);
   }
 }, 24 * 60 * 60 * 1000);
-if (FREE_MODE) {
-  console.log(`[STAR] 免费模式: 已开启 (无需Token验证，不扣除次数)`);
-} else {
-  console.log(`[KEY] 免费模式: 未开启 (需要Token验证)`);
-}
+console.log(`[KEY] Token验证: 已开启 (需要Token验证)`);
 
 (async () => {
   try {

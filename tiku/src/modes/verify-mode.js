@@ -106,19 +106,20 @@ async function fetchVerifyFirstAI(questionData) {
     console.log("[ERROR] AI解析失败: 响应中未找到有效答案");
     console.log(`[STAT] 本次AI调用token总计: 输入=${usage?.prompt_tokens || 0}, 输出=${usage?.completion_tokens || 0}`);
     console.log("==========================");
-    
-    return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: usage?.prompt_tokens || 0, completionTokens: usage?.completion_tokens || 0 } };
-    
+
+    return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: usage?.prompt_tokens || 0, completionTokens: usage?.completion_tokens || 0 }, failureType: 'quality' };
+
   } catch (e) {
     console.error("[ERROR] AI查询失败:", e.message);
     console.log("[STAT] 本次AI调用token总计: 输入=0, 输出=0 (请求异常，无token数据)");
     console.log("==========================");
-    
-    return { 
-      code: 500, 
-      msg: `AI查询失败: ${e.message}`, 
+
+    return {
+      code: 500,
+      msg: `AI查询失败: ${e.message}`,
       data: null,
-      tokenUsage: { promptTokens: 0, completionTokens: 0 }
+      tokenUsage: { promptTokens: 0, completionTokens: 0 },
+      failureType: 'communication'
     };
   }
 }
@@ -232,6 +233,10 @@ async function fetchDeepSeekThinking(questionData) {
   const typeDesc = getTypeDescription(questionData.type);
   const { system: systemPrompt, user: basePrompt, imageUrls } = buildPrompt(questionData, true);
 
+  // 变量前置声明（避免 TDZ 错误：catch 块需要访问 token 统计变量）
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+
   try {
     // 根据模型是否支持视觉选择消息格式（D-07去重）
   const supportsVision = modelConfig?.supportsVision && imageUrls && imageUrls.length > 0;
@@ -243,9 +248,6 @@ async function fetchDeepSeekThinking(questionData) {
   ];
 
     const MAX_TOOL_ROUNDS = 2;
-
-    let totalPromptTokens = 0;
-    let totalCompletionTokens = 0;
 
     console.log("========= AI深度思考(工具调用模式) =========");
     console.log("[INFO] 题目:", questionData.question);
@@ -293,7 +295,7 @@ async function fetchDeepSeekThinking(questionData) {
         console.log("[X] AI返回无效响应");
         console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
         console.log("==========================");
-        return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
+        return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'communication' };
       }
 
       const choice = result.choices[0];
@@ -379,13 +381,13 @@ async function fetchDeepSeekThinking(questionData) {
     console.log("[X] AI深度思考：超过最大轮数仍未获得有效答案");
     console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("==========================");
-    return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
-    
+    return { code: 500, msg: "未在AI回答中解析到答案", data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'quality' };
+
   } catch (e) {
     console.error("[X] AI深度思考请求失败:", e.message);
     console.log(`[STAT] 本次AI调用token总计: 输入=${totalPromptTokens}, 输出=${totalCompletionTokens}`);
     console.log("==========================");
-    return { code: 500, msg: `AI深度思考失败: ${e.message}`, data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens } };
+    return { code: 500, msg: `AI深度思考失败: ${e.message}`, data: null, tokenUsage: { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens }, failureType: 'communication' };
   }
 }
 
@@ -401,7 +403,6 @@ async function fetchDeepSeekThinking(questionData) {
  * @param {boolean} params.checkOnly - 是否仅检测
  * @param {string} params.hunyuanApiKey - TokenHub API密钥
  * @param {Function} params.log - 日志函数
- * @param {boolean} params.FREE_MODE - 免费模式
  * @param {Function} params.lockToken - 预锁定次数函数
  * @param {Function} params.settleToken - 结算次数函数
  * @param {Function} params.releaseToken - 释放锁定函数
@@ -415,7 +416,6 @@ async function handleVerifyMode(c, params) {
     checkOnly,
     hunyuanApiKey,
     log,
-    FREE_MODE,
     lockToken,
     settleToken,
     releaseToken,
@@ -430,7 +430,7 @@ async function handleVerifyMode(c, params) {
   let aiResultThinking = null; // 用于收集 fetchDeepSeekThinking 的token
   let totalCost = 0;  // 总消耗次数
 
-  // 非免费模式：预锁定2次，确保余额充足后再查询
+  // 预锁定2次，确保余额充足后再查询
   // 扣次规则（每轮独立预锁定2次，结算多退少补）：
   //   已验证答案命中：结算0.8次（退1.2次）
   //   第一轮题库+AI一致：结算 1+aiCost 次
@@ -438,21 +438,18 @@ async function handleVerifyMode(c, params) {
   //   第二轮深度思考：预锁定2次，结算 1+aiCost1+aiCost2 次，返回最终 cost
   let prelocked = false;
   const lockCount = 2;
-  if (!FREE_MODE) {
-    const lockResult = await lockToken(token, lockCount);
-    if (!lockResult.success) {
-      return c.json({
-        code: 403,
-        msg: lockResult.message,
-        data: { num: 0, answer: [], sponsorUrl: SPONSOR_URL }
-      }, 403);
-    }
-    prelocked = true;
-    remainingCount = lockResult.remainingCount;
-    log(`预锁定${lockCount}次成功，锁定后余额: ${remainingCount}`);
-  } else {
-    log("免费模式: 不扣除次数");
+  const lockResult = await lockToken(token, lockCount);
+  if (!lockResult.success) {
+    log(`[X] 预锁定失败: ${lockResult.message}`);
+    return c.json({
+      code: 403,
+      msg: `余额不足，该模式至少需要${lockCount}次，当前剩余${lockResult.remainingCount || 0}次`,
+      data: { num: lockResult.remainingCount || 0, answer: [], sponsorUrl: SPONSOR_URL }
+    }, 403);
   }
+  prelocked = true;
+  remainingCount = lockResult.remainingCount;
+  log(`预锁定${lockCount}次成功，锁定后余额: ${remainingCount}`);
 
   // 第一步：查询已验证答案（is_correct=1）
   log("=== 第一步：查询已验证答案 ===");
@@ -483,7 +480,7 @@ async function handleVerifyMode(c, params) {
         // 不返回，继续走校验流程
       } else {
         // 已验证答案命中，结算0.8次（预锁定2次退1.2次）
-        if (!FREE_MODE && prelocked) {
+        if (prelocked) {
           const settleResult = await settleToken(token, lockCount, 0.8);
           if (settleResult.success) {
             remainingCount = settleResult.remainingCount;
@@ -665,7 +662,7 @@ async function handleVerifyMode(c, params) {
           answerData.msg = "答案校验一致(题库)";
           
           // 答案一致：结算 1+aiCost 次（预锁定2次，多退少补）
-          if (!FREE_MODE && prelocked) {
+          if (prelocked) {
             let aiPromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
             let aiCompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
             let aiCost = 0;
@@ -762,13 +759,24 @@ async function handleVerifyMode(c, params) {
         if (checkOnly) {
           log("=== 检测模式：返回202状态码，通知客户端启动思维模式 ===");
           // 第一轮结算：预锁定2次，实际消耗 step1Cost（多退少补）
+          // AI通讯故障不扣AI费用；AI质量问题扣AI费用50%；正常扣全额AI费用
           let step1Cost = 1;
-          if (!FREE_MODE && prelocked) {
+          if (prelocked) {
             let aiPromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
             let aiCompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
             let aiCost = 0;
+            const aiFailureType = aiResult?.failureType;
             if (aiPromptTokens > 0 || aiCompletionTokens > 0) {
-              aiCost = calculateCostFromTokens('deepseek-v4-pro', aiPromptTokens, aiCompletionTokens);
+              const fullAiCost = calculateCostFromTokens('deepseek-v4-pro', aiPromptTokens, aiCompletionTokens);
+              if (aiFailureType === 'communication') {
+                aiCost = 0;
+                log(`[WARN] 第一轮AI通讯故障，不扣AI费用（基础1次照常）`);
+              } else if (aiFailureType === 'quality') {
+                aiCost = fullAiCost * 0.5;
+                log(`[WARN] 第一轮AI回答质量问题，按50%扣AI费用: ${fullAiCost}*0.5=${aiCost}次`);
+              } else {
+                aiCost = fullAiCost;
+              }
             }
             step1Cost = 1 + aiCost;
             const settleResult = await settleToken(token, lockCount, step1Cost);
@@ -855,16 +863,33 @@ async function handleVerifyMode(c, params) {
             answerData = fallbackAnswer;
             answerData.msg = thinkingReason + "(回退答案)";
           } else {
-            answerData = { code: 404, msg: "深度思考失败且无可用答案", data: { answer: [], num: remainingCount } };
+            // 通讯故障返回"AI通讯故障，请联系管理员检查"；质量问题返回原msg
+            const thinkFailureType = aiResultThinking?.failureType;
+            if (thinkFailureType === 'communication') {
+              answerData = { code: 500, msg: "AI通讯故障，请联系管理员检查", data: { answer: [], num: remainingCount } };
+            } else {
+              answerData = { code: 404, msg: aiResultThinking?.msg || "深度思考失败且无可用答案", data: { answer: [], num: remainingCount } };
+            }
           }
         }
       }
     }
   } else {
     log("[X] 校验模式需要配置DEEPSEEK_API_KEY");
+    // Bug #2 修复：DEEPSEEK_API_KEY 未配置时预锁定需全额退还，避免用户被白扣 lockCount 次
+    if (prelocked) {
+      const settleResult = await settleToken(token, lockCount, 0);
+      if (settleResult.success) {
+        remainingCount = settleResult.remainingCount;
+        log(`[WARN] API Key 未配置，预锁定${lockCount}次已全额退还，剩余: ${remainingCount}`);
+      } else {
+        await releaseToken(token, lockCount);
+        log(`[WARN] 结算失败，已释放预锁定${lockCount}次`);
+      }
+    }
     return c.json({
       code: 500,
-      msg: "校验模式需要配置DEEPSEEK_API_KEY",
+      msg: "AI通讯故障，请联系管理员检查",
       data: { answer: [], num: remainingCount }
     }, 500);
   }
@@ -877,7 +902,7 @@ async function handleVerifyMode(c, params) {
   // ========== 结算预锁定次数 ==========
   // 根据 checkOnly 状态区分第一轮/第二轮结算逻辑
 
-  if (!FREE_MODE && prelocked) {
+  if (prelocked) {
     // 计算第二次AI深度思考的实际token消耗
     let step2PromptTokens = aiResultThinking?.tokenUsage?.promptTokens || 0;
     let step2CompletionTokens = aiResultThinking?.tokenUsage?.completionTokens || 0;
@@ -888,15 +913,36 @@ async function handleVerifyMode(c, params) {
 
     if (checkOnly === false) {
       // ===== 第二轮（深度思考）独立结算 =====
-      const step2Cost = Math.max(step2AiCost, 1); // 第二轮最低1次
-      // 第二轮自己锁定2次，自己结算 step2Cost
-      const settleResult = await settleToken(token, lockCount, step2Cost);
-      if (settleResult.success) {
-        remainingCount = settleResult.remainingCount;
-        log(`第二轮结算完成，预锁定${lockCount}次，实际消耗${step2Cost}次，剩余: ${remainingCount}`);
+      // AI通讯故障不扣费用；AI质量问题扣50%；正常按 max(aiCost, 1) 结算
+      const step2FailureType = aiResultThinking?.failureType;
+      let step2Cost;
+      if (step2FailureType === 'communication') {
+        step2Cost = 0;
+        log(`[WARN] 第二轮AI通讯故障，不扣第二轮费用`);
+      } else if (step2FailureType === 'quality') {
+        step2Cost = step2AiCost * 0.5;
+        log(`[WARN] 第二轮AI回答质量问题，按50%扣费: ${step2AiCost}*0.5=${step2Cost}次`);
       } else {
-        await releaseToken(token, lockCount);
-        log(`[WARN] 第二轮结算失败，已释放锁定`);
+        step2Cost = Math.max(step2AiCost, 1); // 成功时第二轮最低1次
+      }
+      // 第二轮重新锁定2次，再结算 step2Cost
+      const step2LockResult = await lockToken(token, lockCount);
+      if (step2LockResult.success) {
+        const settleResult = await settleToken(token, lockCount, step2Cost);
+        if (settleResult.success) {
+          remainingCount = settleResult.remainingCount;
+          log(`第二轮结算完成，预锁定${lockCount}次，实际消耗${step2Cost}次，剩余: ${remainingCount}`);
+        } else {
+          await releaseToken(token, lockCount);
+          log(`[WARN] 第二轮结算失败，已释放锁定`);
+        }
+      } else {
+        log(`[X] 第二轮预锁定失败: ${step2LockResult.message}`);
+        return c.json({
+          code: 403,
+          msg: `余额不足，深度思考至少需要${lockCount}次，当前剩余${step2LockResult.remainingCount || 0}次`,
+          data: { answer: [], num: step2LockResult.remainingCount || 0, sponsorUrl: SPONSOR_URL }
+        }, 403);
       }
       // 从本地数据库读取第一轮的 step1Cost，计算总 cost 返回给用户
       const step1Cost = taskId ? getStep1Cost(taskId) : 1;
@@ -904,12 +950,23 @@ async function handleVerifyMode(c, params) {
       log(`总消耗${totalCost}次（第一轮${step1Cost}+第二轮${step2Cost}）`);
     } else {
       // ===== 第一轮（一致场景）结算 =====
+      // 一致场景下AI必然成功（aiHasAnswer=true），此处防御性处理 failureType
       // 计算第一次AI的实际token消耗
       let step1PromptTokens = aiResult?.tokenUsage?.promptTokens || 0;
       let step1CompletionTokens = aiResult?.tokenUsage?.completionTokens || 0;
       let step1AiCost = 0;
+      const step1FailureType = aiResult?.failureType;
       if (step1PromptTokens > 0 || step1CompletionTokens > 0) {
-        step1AiCost = calculateCostFromTokens('deepseek-v4-pro', step1PromptTokens, step1CompletionTokens);
+        const fullAiCost = calculateCostFromTokens('deepseek-v4-pro', step1PromptTokens, step1CompletionTokens);
+        if (step1FailureType === 'communication') {
+          step1AiCost = 0;
+          log(`[WARN] 第一轮AI通讯故障，不扣AI费用（基础1次照常）`);
+        } else if (step1FailureType === 'quality') {
+          step1AiCost = fullAiCost * 0.5;
+          log(`[WARN] 第一轮AI回答质量问题，按50%扣AI费用: ${fullAiCost}*0.5=${step1AiCost}次`);
+        } else {
+          step1AiCost = fullAiCost;
+        }
       }
       totalCost = 1 + step1AiCost;
 
