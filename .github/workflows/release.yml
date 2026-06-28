@@ -22,7 +22,7 @@ jobs:
       - name: Extract script version
         id: script_ver
         run: |
-          VER=$(grep '// @version' '用户端.js' | head -1 | awk '{print $NF}')
+          VER=$(grep '// @version' 'script.user.js' | head -1 | awk '{print $NF}')
           echo "ver=$VER" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
@@ -49,6 +49,6 @@ jobs:
           name: ${{ steps.version.outputs.VERSION }}
           body_path: release_notes.txt
           files: |
-            用户端.js
+            script.user.js
           draft: false
           prerelease: false
