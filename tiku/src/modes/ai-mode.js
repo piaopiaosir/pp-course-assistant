@@ -32,8 +32,44 @@ const AI_PROVIDER_CONFIG = {
     apiUrl: 'https://api.deepseek.com/v1/chat/completions',
     errorMsg: "AI模式需要配置DEEPSEEK_API_KEY",
     logResult: true
+  },
+  codepup: {
+    keyEnv: 'CODEPUP_API_KEY',
+    apiUrl: 'https://api.codepup.cn/v1/chat/completions',
+    errorMsg: "AI模式需要配置CODEPUP_API_KEY",
+    logResult: true
   }
 };
+
+// 需要自动重试的提供商（API可能首次访问出错）
+const RETRY_PROVIDERS = new Set(['codepup']);
+const MAX_RETRY_COUNT = 3;
+
+/**
+ * 带重试的AI API调用（仅对配置的提供商重试）
+ */
+async function callAIApiWithRetry(params, providerName) {
+  const shouldRetry = RETRY_PROVIDERS.has(providerName);
+  let lastError = null;
+  const maxAttempts = shouldRetry ? MAX_RETRY_COUNT : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await callAIApi(params);
+      if (shouldRetry && attempt > 1) {
+        console.log(`[RETRY] ${providerName} 第${attempt}次重试成功`);
+      }
+      return result;
+    } catch (e) {
+      lastError = e;
+      if (shouldRetry && attempt < maxAttempts) {
+        console.log(`[RETRY] ${providerName} 第${attempt}次请求失败: ${e.message}，重试中(${attempt}/${maxAttempts})...`);
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // 递增延迟: 1s, 2s
+      }
+    }
+  }
+  throw lastError;
+}
 
 // ==================== AI模式专用AI调用 ====================
 
@@ -170,7 +206,7 @@ async function fetchAICustom(questionData, apiKey, modelConfig, customApiUrl = n
         }
       }
 
-      const { result } = await callAIApi({ apiUrl, apiKey, body: bodyForRound });
+      const { result } = await callAIApiWithRetry({ apiUrl, apiKey, body: bodyForRound }, providerName);
 
       // 累加token统计
       if (result.usage) {
@@ -427,6 +463,8 @@ async function handleAIMode(c, params) {
     log(`=== 查询 302.AI (${modelConfig.name}) ===`);
   } else if (modelConfig.provider === 'deepseek') {
     log("=== 查询 DeepSeek 官方 API ===");
+  } else if (modelConfig.provider === 'codepup') {
+    log(`=== 查询 CodePup (${modelConfig.name}) ===`);
   }
 
   const apiKey = getEnv(providerCfg.keyEnv, '');

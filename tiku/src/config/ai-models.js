@@ -130,22 +130,35 @@ const AI_MODELS = {
   'gpt-5.4-mini': {
     id: 'gpt-5.4-mini',
     apiModel: 'gpt-5.4-mini',
-    provider: '302ai',
+    provider: 'codepup',
     displayName: 'GPT-5.4-mini',
     temperature: 0.6,
+    reasoning_effort: 'xhigh',
     supportsVision: true,
-    cost: '高消耗',
+    cost: '超低消耗',
     statsColumn: 'gpt_54_mini_calls'
   },
-  'gpt-5.4-nano': {
-    id: 'gpt-5.4-nano',
-    apiModel: 'gpt-5.4-nano',
-    provider: '302ai',
-    displayName: 'GPT-5.4-nano',
+  'gpt-5.4': {
+    id: 'gpt-5.4',
+    apiModel: 'gpt-5.4',
+    provider: 'codepup',
+    displayName: 'GPT-5.4',
     temperature: 0.6,
+    reasoning_effort: 'xhigh',
+    supportsVision: true,
+    cost: '低消耗',
+    statsColumn: 'gpt_54_calls'
+  },
+  'gpt-5.5': {
+    id: 'gpt-5.5',
+    apiModel: 'gpt-5.5',
+    provider: 'codepup',
+    displayName: 'GPT-5.5',
+    temperature: 0.6,
+    reasoning_effort: 'xhigh',
     supportsVision: true,
     cost: '中消耗',
-    statsColumn: 'gpt_54_nano_calls'
+    statsColumn: 'gpt_55_calls'
   },
   'gemini-3.1-flash-lite': {
     id: 'gemini-3.1-flash-lite',
@@ -356,7 +369,7 @@ function getFullModelConfig() {
     'MiniMax': ['M3', 'M2.7', 'M2.5'],
     'GLM': ['5.2', '5.1', '5.0', '4.7'],
     'Kimi': ['K2.7-Code', 'K2.6', 'K2.5'],
-    'ChatGPT': ['5.4-Nano', '5.4-Mini'],
+    'ChatGPT': ['5.5', '5.4', '5.4-Mini'],
     'Gemini': ['3.5-Flash', '3.1-Flash']
   };
 
@@ -368,7 +381,7 @@ function getFullModelConfig() {
     'MiniMax': 'M3',
     'GLM': '5.2',
     'Kimi': 'K2.6',
-    'ChatGPT': '5.4-Nano',
+    'ChatGPT': '5.5',
     'Gemini': '3.5-Flash'
   };
 
@@ -413,7 +426,8 @@ function getFullModelConfig() {
       'K2.5': 'kimi-k2.5'
     },
     'ChatGPT': {
-      '5.4-Nano': 'gpt-5.4-nano',
+      '5.5': 'gpt-5.5',
+      '5.4': 'gpt-5.4',
       '5.4-Mini': 'gpt-5.4-mini'
     },
     'Gemini': {
@@ -453,8 +467,9 @@ const MODEL_PRICING = {
   'minimax-m2.7': { inputPerMillion: 2.10, outputPerMillion: 8.40 },
   'minimax-m3': { inputPerMillion: 4.20, outputPerMillion: 16.80 },
   'hy3-preview': { inputPerMillion: 1.20, outputPerMillion: 4.00 },
-  'gpt-5.4-mini': { inputPerMillion: 5.25, outputPerMillion: 31.50 },
-  'gpt-5.4-nano': { inputPerMillion: 1.40, outputPerMillion: 8.75 },
+  'gpt-5.4-mini': { inputPerMillion: 0.3, outputPerMillion: 1.8 },
+  'gpt-5.4': { inputPerMillion: 1.0, outputPerMillion: 6.0 },
+  'gpt-5.5': { inputPerMillion: 2.0, outputPerMillion: 12.0 },
   'gemini-3.1-flash-lite': { inputPerMillion: 1.75, outputPerMillion: 10.50 },
   'gemini-3.5-flash': { inputPerMillion: 10.50, outputPerMillion: 63.00 },
   'GLM-5': { inputPerMillion: 4.20, outputPerMillion: 18.20 },

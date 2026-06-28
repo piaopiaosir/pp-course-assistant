@@ -651,13 +651,23 @@ async function settleToken(token, lockCount, actualCost) {
           [extraCost, token, extraCost]
         );
         if (result.affectedRows === 0) {
-          // 余额不足以补扣，扣到0并拉黑
-          await conn.execute(
-            'UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?',
+          // 余额不足以补扣：不扣减，仅余额 < 1 时才拉黑
+          const [curRows] = await conn.execute(
+            'SELECT remaining_count FROM tokens WHERE token = ?',
             [token]
           );
-          console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 余额不足补扣${extraCost}次，已拉黑`);
-          return { success: true, remainingCount: 0 };
+          const curCount = curRows[0] ? parseFloat(Number(curRows[0].remaining_count).toFixed(1)) : 0;
+          if (curCount < 0.1) {
+            await conn.execute(
+              'UPDATE tokens SET remaining_count = 0, is_blacklisted = 1 WHERE token = ?',
+              [token]
+            );
+            console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 余额不足补扣且余额归零，已拉黑`);
+            return { success: false, message: `剩余次数不足（${curCount}次，需${extraCost}次），请赞助获取新token`, remainingCount: 0 };
+          }
+          // 余额 >= 1 但不足以补扣：不扣减，不拉黑
+          console.log(`[预锁定结算] Token ${token.substring(0, 8)}*** 余额不足补扣${extraCost}次（剩余${curCount}次，不拉黑）`);
+          return { success: false, message: `剩余次数不足（${curCount}次，需${extraCost}次），请赞助获取新token`, remainingCount: curCount };
         }
         // 补扣成功后检查是否归零，若是则拉黑（与 decrementCount 逻辑一致）
         const [afterRows] = await conn.execute(

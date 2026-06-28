@@ -38,7 +38,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
       'minimax-m2.7': 'minimax-m2.7',
       'minimax-m3': 'minimax-m3',
       'gpt-5.4-mini': 'gpt-5.4-mini',
-      'gpt-5.4-nano': 'gpt-5.4-nano',
+      'gpt-5.4': 'gpt-5.4',
+      'gpt-5.5': 'gpt-5.5',
       'gemini-3.1-flash-lite': 'gemini-3.1-flash-lite',
       'gemini-3.5-flash': 'gemini-3.5-flash',
       'glm-5': 'glm-5',
@@ -403,7 +404,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
     .badge-minimax-m2\\.7 { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
     .badge-minimax-m3 { background: rgba(234, 88, 12, 0.15); color: #ea580c; }
     .badge-gpt-5\\.4-mini { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-    .badge-gpt-5\\.4-nano { background: rgba(5, 150, 105, 0.15); color: #059669; }
+    .badge-gpt-5\\.4 { background: rgba(5, 150, 105, 0.15); color: #059669; }
+    .badge-gpt-5\\.5 { background: rgba(4, 120, 87, 0.15); color: #047857; }
     .badge-gemini-3\\.1 { background: rgba(8, 145, 178, 0.15); color: #0891b2; }
     .badge-gemini-3\\.5 { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
     .badge-glm-5 { background: rgba(124, 58, 237, 0.15); color: #7c3aed; }
@@ -1097,8 +1099,12 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
             <span class="detail-value" style="color: #10b981;">${globalStats.gpt_54_mini_calls || 0}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">GPT-5.4-nano</span>
-            <span class="detail-value" style="color: #059669;">${globalStats.gpt_54_nano_calls || 0}</span>
+            <span class="detail-label">GPT-5.4</span>
+            <span class="detail-value" style="color: #059669;">${globalStats.gpt_54_calls || 0}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">GPT-5.5</span>
+            <span class="detail-value" style="color: #047857;">${globalStats.gpt_55_calls || 0}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Gemini-3.1</span>
@@ -1387,7 +1393,7 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         minimax_m3: '#ea580c', hy3_preview: '#667eea', doubao_seed_21_turbo: '#14b8a6',
         doubao_seed_21_pro: '#0d9488', doubao_seed_20_code: '#2dd4bf', doubao_seed_20_mini: '#5eead4',
         doubao_seed_20_lite: '#99f6e4', doubao_seed_20_pro: '#14b8a6',
-        gpt_54_mini: '#10b981', gpt_54_nano: '#059669',
+        gpt_54_mini: '#10b981', gpt_54: '#059669', gpt_55: '#047857',
         gemini_31: '#0891b2', gemini_35: '#06b6d4', glm_52: '#a78bfa', glm_5: '#8b5cf6',
         glm_51: '#8b5cf6', glm_47: '#6366f1'
       };
@@ -1426,7 +1432,8 @@ function generateAdminHTML(userStats, tokenStats, cacheStats, recentCache, topUs
         { label: '豆包-Seed-2.0-Lite', value: globalStats.doubao_seed_20_lite_calls||0, color: colors.doubao_seed_20_lite },
         { label: '豆包-Seed-2.0-Pro', value: globalStats.doubao_seed_20_pro_calls||0, color: colors.doubao_seed_20_pro },
         { label: 'GPT-5.4-mini', value: globalStats.gpt_54_mini_calls||0, color: colors.gpt_54_mini },
-        { label: 'GPT-5.4-nano', value: globalStats.gpt_54_nano_calls||0, color: colors.gpt_54_nano },
+        { label: 'GPT-5.4', value: globalStats.gpt_54_calls||0, color: colors.gpt_54 },
+        { label: 'GPT-5.5', value: globalStats.gpt_55_calls||0, color: colors.gpt_55 },
         { label: 'Gemini-3.1', value: globalStats.gemini_31_calls||0, color: colors.gemini_31 },
         { label: 'Gemini-3.5', value: globalStats.gemini_35_calls||0, color: colors.gemini_35 },
         { label: 'GLM-5.2', value: globalStats.glm_52_calls||0, color: colors.glm_52 },
