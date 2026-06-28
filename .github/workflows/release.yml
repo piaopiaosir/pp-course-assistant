@@ -19,16 +19,13 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Extract script versions
-        id: script_versions
+      - name: Extract script version
+        id: script_ver
         run: |
-          MAIN_VER=$(grep '// @version' '用户端.js' | head -1 | awk '{print $NF}')
-          LITE_VER=$(grep '// @version' '用户端免更新.js' | head -1 | awk '{print $NF}')
-          echo "main_ver=$MAIN_VER" >> $GITHUB_OUTPUT
-          echo "lite_ver=$LITE_VER" >> $GITHUB_OUTPUT
+          VER=$(grep '// @version' '用户端.js' | head -1 | awk '{print $NF}')
+          echo "ver=$VER" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
-        id: notes
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$PREV_TAG" ]; then
@@ -38,10 +35,8 @@ jobs:
           fi
           {
             echo "## 版本信息"
-            echo "| 脚本 | 版本号 |"
-            echo "|------|--------|"
-            echo "| 用户端.js | ${{ steps.script_versions.outputs.main_ver }} |"
-            echo "| 用户端免更新.js | ${{ steps.script_versions.outputs.lite_ver }} |"
+            echo ""
+            echo "**用户端.js** → \`${{ steps.script_ver.outputs.ver }}\`"
             echo ""
             echo "## 更新日志"
             echo "$NOTES"
@@ -55,6 +50,5 @@ jobs:
           body_path: release_notes.txt
           files: |
             用户端.js
-            用户端免更新.js
           draft: false
           prerelease: false
