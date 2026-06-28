@@ -19,19 +19,33 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Extract script versions
+        id: script_versions
+        run: |
+          MAIN_VER=$(grep '// @version' '用户端.js' | head -1 | awk '{print $NF}')
+          LITE_VER=$(grep '// @version' '用户端免更新.js' | head -1 | awk '{print $NF}')
+          echo "main_ver=$MAIN_VER" >> $GITHUB_OUTPUT
+          echo "lite_ver=$LITE_VER" >> $GITHUB_OUTPUT
+
       - name: Generate release notes
         id: notes
         run: |
-          # 获取上一个 tag，如果没有则为空
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$PREV_TAG" ]; then
             NOTES=$(git log --pretty=format:"- %s" --reverse)
           else
             NOTES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --reverse)
           fi
-          # 写入文件避免多行字符串问题
-          echo "$NOTES" > release_notes.txt
-          echo "has_notes=true" >> $GITHUB_OUTPUT
+          {
+            echo "## 版本信息"
+            echo "| 脚本 | 版本号 |"
+            echo "|------|--------|"
+            echo "| 用户端.js | ${{ steps.script_versions.outputs.main_ver }} |"
+            echo "| 用户端免更新.js | ${{ steps.script_versions.outputs.lite_ver }} |"
+            echo ""
+            echo "## 更新日志"
+            echo "$NOTES"
+          } > release_notes.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -39,5 +53,8 @@ jobs:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: ${{ steps.version.outputs.VERSION }}
           body_path: release_notes.txt
+          files: |
+            用户端.js
+            用户端免更新.js
           draft: false
           prerelease: false
