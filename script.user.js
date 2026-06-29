@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.2.3
+// @version      3.2.4
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://wk.piao.one/assets/%E5%9B%BE%E5%B1%82%201-D6uQ9z8H.png
@@ -483,6 +483,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   let SPONSOR_URL = '';
 
   
+  let globalScriptDescription = null;
+
+  
   const getSponsorLink = (url, text) => {
     if (!url) return text || '';
     return `<a href="${url}" target="_blank" style="color:#667eea;text-decoration:underline;">${text || '点我赞助获取新token'}</a>`;
@@ -621,7 +624,27 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       }
     } catch (e) {}
   };
+
   
+  const fetchScriptDescription = async () => {
+    try {
+      const response = await new Promise((resolve, reject) => {
+        _GM_xmlhttpRequest({
+          method: 'GET',
+          url: `${CURRENT_SERVER}/script-description`,
+          timeout: 5000,
+          onload: (res) => resolve(res),
+          onerror: (err) => reject(err),
+          ontimeout: () => reject(new Error('timeout'))
+        });
+      });
+      const data = JSON.parse(response.responseText);
+      if (data.code === 200 && data.data) {
+        globalScriptDescription = data.data;
+      }
+    } catch (e) {}
+  };
+
   
   
   
@@ -632,7 +655,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE,
       fetchModelConfig(),
       fetchPollInterval(),
-      fetchSponsorUrl()
+      fetchSponsorUrl(),
+      fetchScriptDescription()
     ];
     await Promise.race([
       Promise.allSettled(preloadTasks),
@@ -4008,6 +4032,105 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     }
   });
   const AuthorWords = _sfc_main$4;
+
+  const _sfc_main_description = vue.defineComponent({
+    __name: "ScriptDescription",
+    setup() {
+      const desc = vue.ref(globalScriptDescription);
+      return (_ctx, _cache) => {
+        const d = desc.value;
+        if (!d) return vue.createCommentVNode("", true);
+        return vue.openBlock(), vue.createElementBlock("div", null, [
+          vue.createElementVNode("div", {
+            style: { "border": "1px solid #e5e7eb", "border-radius": "4px", "overflow": "hidden" }
+          }, [
+            vue.createElementVNode("div", {
+              style: { "background": "#f9fafb", "padding": "12px 16px", "border-bottom": "1px solid #e5e7eb" }
+            }, [
+              vue.createElementVNode("div", {
+                style: { "display": "flex", "align-items": "center", "gap": "8px", "margin-bottom": "4px" }
+              }, [
+                vue.createElementVNode("span", { style: { "font-weight": "500", "font-size": "14px", "color": "#111827" } }, "脚本说明")
+              ]),
+              vue.createElementVNode("div", { style: { "font-size": "12px", "color": "#9ca3af" } }, "答题模式与消耗规则说明")
+            ]),
+            vue.createElementVNode("div", {
+              style: { "padding": "16px", "background": "#ffffff", "font-size": "13px", "color": "#374151", "line-height": "1.8" }
+            }, [
+              vue.createElementVNode("p", { style: { "margin": "0 0 8px 0", "font-weight": "600", "color": "#16a34a" } }, "正常模式"),
+              vue.createElementVNode("p", { style: { "margin": "0 0 8px 0" } }, vue.toDisplayString(d.modes.normal.desc), 1),
+              vue.createElementVNode("p", { style: { "margin": "0 0 4px 0", "color": "#6b7280", "font-size": "12px" } }, "消耗：" + vue.toDisplayString(d.modes.normal.cost), 1),
+              d.modes.normal.details ? (vue.openBlock(true), vue.createElementBlock(vue.Fragment, { key: "normal-details" }, vue.renderList(d.modes.normal.details, (detail, i) => {
+                return vue.openBlock(), vue.createElementBlock("p", {
+                  key: i,
+                  style: { "margin": "0 0 4px 0", "color": "#6b7280", "font-size": "12px" }
+                }, "• " + vue.toDisplayString(detail), 1);
+              }), 128)) : vue.createCommentVNode("", true),
+
+              vue.createElementVNode("p", { style: { "margin": "12px 0 8px 0", "font-weight": "600", "color": "#92400e" } }, "校验模式"),
+              vue.createElementVNode("p", { style: { "margin": "0 0 8px 0" } }, vue.toDisplayString(d.modes.verify.desc), 1),
+              vue.createElementVNode("p", { style: { "margin": "0 0 4px 0", "color": "#6b7280", "font-size": "12px" } }, "消耗：" + vue.toDisplayString(d.modes.verify.cost), 1),
+              d.modes.verify.details ? (vue.openBlock(true), vue.createElementBlock(vue.Fragment, { key: 0 }, vue.renderList(d.modes.verify.details, (detail, i) => {
+                return vue.openBlock(), vue.createElementBlock("p", {
+                  key: i,
+                  style: { "margin": "0 0 4px 0", "color": "#6b7280", "font-size": "12px" }
+                }, "• " + vue.toDisplayString(detail), 1);
+              }), 128)) : vue.createCommentVNode("", true),
+              d.modes.verify.models ? (vue.openBlock(), vue.createElementBlock("p", {
+                key: 1,
+                style: { "margin": "0 0 12px 0", "color": "#6b7280", "font-size": "12px" }
+              }, "校验模型：" + vue.toDisplayString(d.modes.verify.models.join("、")), 1)) : vue.createCommentVNode("", true),
+
+              vue.createElementVNode("p", { style: { "margin": "0 0 8px 0", "font-weight": "600", "color": "#0052D9" } }, "AI模式"),
+              vue.createElementVNode("p", { style: { "margin": "0 0 8px 0" } }, vue.toDisplayString(d.modes.ai.desc), 1),
+              d.modes.ai.details ? (vue.openBlock(true), vue.createElementBlock(vue.Fragment, { key: 2 }, vue.renderList(d.modes.ai.details, (detail, i) => {
+                return vue.openBlock(), vue.createElementBlock("p", {
+                  key: i,
+                  style: { "margin": "0 0 4px 0", "color": "#6b7280", "font-size": "12px" }
+                }, "• " + vue.toDisplayString(detail), 1);
+              }), 128)) : vue.createCommentVNode("", true),
+
+              vue.createElementVNode("div", {
+                style: { "margin-top": "8px", "padding-top": "12px", "border-top": "1px solid #e5e7eb" }
+              }, [
+                vue.createElementVNode("p", { style: { "margin": "0 0 8px 0", "font-weight": "600", "color": "#111827" } }, "AI模型价格表（元/百万Tokens）"),
+                (vue.openBlock(true), vue.createElementBlock(vue.Fragment, null, vue.renderList(d.modelGroups, (group, gIdx) => {
+                  return vue.openBlock(), vue.createElementBlock("div", {
+                    key: gIdx,
+                    style: { "margin-bottom": gIdx < d.modelGroups.length - 1 ? "10px" : "0" }
+                  }, [
+                    vue.createElementVNode("p", {
+                      style: { "margin": "0 0 4px 0", "font-weight": "500", "color": "#0052D9", "font-size": "12px" }
+                    }, vue.toDisplayString(group.type), 1),
+                    (vue.openBlock(true), vue.createElementBlock(vue.Fragment, null, vue.renderList(group.models, (model, mIdx) => {
+                      return vue.openBlock(), vue.createElementBlock("p", {
+                        key: mIdx,
+                        style: { "margin": "0 0 2px 0", "color": "#6b7280", "font-size": "12px" }
+                      }, vue.toDisplayString(model.name) + "（" + vue.toDisplayString(model.cost) + "）输入¥" + vue.toDisplayString(model.inputPrice) + " / 输出¥" + vue.toDisplayString(model.outputPrice), 1);
+                    }), 128))
+                  ]);
+                }), 128)),
+                d.sponsor ? (vue.openBlock(), vue.createElementBlock("p", {
+                  key: 0,
+                  style: { "margin": "12px 0 0 0", "padding-top": "12px", "border-top": "1px solid #e5e7eb", "font-size": "12px", "color": "#6b7280", "text-align": "center" }
+                }, [
+                  vue.createTextVNode(vue.toDisplayString(d.sponsor.text.split(d.sponsor.linkText)[0])),
+                  vue.createElementVNode("a", {
+                    href: d.sponsor.link,
+                    target: "_blank",
+                    style: { "color": "#0052D9", "text-decoration": "underline", "font-weight": "500" }
+                  }, vue.toDisplayString(d.sponsor.linkText), 9, ["href"]),
+                  vue.createTextVNode(vue.toDisplayString(d.sponsor.text.split(d.sponsor.linkText)[1] || ""))
+                ])) : vue.createCommentVNode("", true)
+              ])
+            ])
+          ])
+        ]);
+      };
+    }
+  });
+  const ScriptDescription = _sfc_main_description;
+
   function isFunction(value) {
     return typeof value === "function";
   }
@@ -8418,7 +8541,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   
   
-  const showNoticeDialog = (title, message, noticeType) => {
+  const showNoticeDialog = (title, message, noticeType, password) => {
     const dialog = document.createElement('div');
     dialog.id = 'server-notice-dialog';
     dialog.innerHTML = `
@@ -8434,9 +8557,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
           <div style="color: #4b5563; font-size: 14px; line-height: 1.7; margin-bottom: 24px;">${message}</div>
 
+          ${password ? `
+          <div style="background: #f9fafb; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 13px; color: #9ca3af;">加群口令</span>
+            <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">${password}</span>
+          </div>
+          ` : ''}
+
           <div style="background: #fafafa; border-radius: 8px; padding: 14px 16px; margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 13px; color: #9ca3af;">一群（已满）</span>
+              <span style="font-size: 13px; color: #9ca3af;">一群</span>
               <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">152898956</span>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -8484,7 +8614,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
               return;
             }
-            showNoticeDialog(noticeTitle, noticeMessage, noticeType);
+            const noticePassword = result.data.password || '';
+            showNoticeDialog(noticeTitle, noticeMessage, noticeType, noticePassword);
           }
         } catch (e) {
         }
@@ -12138,30 +12269,35 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       emit("customEvent", isShow.value);
       const tabs = [
         {
-          label: "🏡主页信息",
+          label: "主页信息",
           id: "main-log",
           component: ScriptHome,
           props: { "log-list": logStore.logList, "server-config": CURRENT_SERVER_CONFIG }
         },
         {
-          label: "📝答题记录",
+          label: "答题记录",
           id: "question-record",
           component: QuestionTable,
           props: { "question-list": questionStore.questionList }
         },
         {
-          label: "⚙️脚本配置",
+          label: "脚本配置",
           id: "config-panel",
           component: ScriptSetting,
           props: { "global-config": configStore }
         },
         {
-          label: "💬作者的话",
+          label: "脚本说明",
+          id: "script-description",
+          component: ScriptDescription
+        },
+        {
+          label: "作者的话",
           id: "author-words",
           component: AuthorWords
         },
         ...(configStore.platformName === "zhs" ? [] : [{
-          label: "🎁推广奖励",
+          label: "推广奖励",
           id: "referral-panel",
           component: ReferralPanel
         }])
