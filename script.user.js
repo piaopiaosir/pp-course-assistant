@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.2.4
+// @version      3.2.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://wk.piao.one/assets/%E5%9B%BE%E5%B1%82%201-D6uQ9z8H.png
@@ -12,6 +12,7 @@
 // @match        *://*.nbdlib.cn/*
 // @match        *://*.hnsyu.net/*
 // @match        *://*.gdhkmooc.com/*
+// @match        *://*.sslibrary.com/*
 // @match        *://onlineexamh5new.zhihuishu.com/*
 // @require      https://lib.baomitu.com/vue/3.5.0/vue.global.prod.js
 // @require      https://lib.baomitu.com/vue-demi/0.14.7/index.iife.js
@@ -1037,6 +1038,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   },
                   {
                     name: "仅答题",
+                    value: false,
+                    type: "boolean",
+                    exclusiveGroup: "cx_mode"
+                  },
+                  {
+                    name: "复习模式",
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "cx_mode"
@@ -11357,6 +11364,46 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       logStore.addLog("阅读完成", "success");
       return Promise.resolve();
     };
+    
+    
+    const handleBookReader = async (iframeWindow, iframeDoc) => {
+      logStore.addLog("发现一个书籍阅读任务，正在完成", "warning");
+      try {
+        const src = iframeWindow.location?.href || '';
+        const timing = src ? parseInt(new URL(src).searchParams.get('timing') || '60') : 60;
+        const waitSec = (timing + 3);
+        logStore.addLog(`书籍阅读中，预计${waitSec * 3}秒...`, "primary");
+
+        const jumper = iframeDoc.querySelector('#pagejump');
+        if (jumper && iframeWindow.reader?.goPage) {
+          
+          await delay(waitSec);
+          jumper.value = '5';
+          jumper.dispatchEvent(new Event('change'));
+          logStore.addLog("已跳转正文页", "primary");
+          await delay(waitSec);
+          jumper.value = '7';
+          jumper.dispatchEvent(new Event('change'));
+          logStore.addLog("已跳转封底页", "primary");
+          await delay(waitSec);
+          
+          const pagers = Array.from(iframeDoc.querySelectorAll('.readerPager'));
+          const lastPager = pagers.filter(el => el.style.zIndex === '101')[0];
+          if (lastPager) lastPager.click();
+          logStore.addLog("书籍阅读完成", "success");
+        } else if (iframeWindow.readweb?.goto && typeof iframeWindow.epage !== 'undefined') {
+          
+          await delay(5);
+          iframeWindow.readweb.goto(iframeWindow.epage);
+          logStore.addLog("书籍阅读完成", "success");
+        } else {
+          logStore.addLog("无法识别书籍阅读器，请手动完成", "danger");
+        }
+      } catch (e) {
+        logStore.addLog(`书籍阅读出错: ${e.message}`, "danger");
+      }
+      return Promise.resolve();
+    };
     const awaitFrameReady = async (iframe) => {
       return new Promise((resolve) => {
         const afkEnabledFrame = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
@@ -11401,17 +11448,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       await awaitFrameReady(iframe);
       
       
-      let element = iframe.parentElement;
-      while (element) {
-        if (element.classList && element.classList.contains("ans-job-finished")) {
-          logStore.addLog("任务点已完成，跳过", "success");
-          return 'skip';
+      const reviewMode = configStore.platformParams.cx?.parts?.[2]?.params?.[5]?.value ?? false;
+      
+      
+      if (!reviewMode) {
+        let element = iframe.parentElement;
+        while (element) {
+          if (element.classList && element.classList.contains("ans-job-finished")) {
+            logStore.addLog("任务点已完成，跳过", "success");
+            return 'skip';
+          }
+          element = element.parentElement;
         }
-        element = element.parentElement;
       }
       
       
-      if (iframeSrc.includes("api/work")) {
+      if (!reviewMode && iframeSrc.includes("api/work")) {
         try {
           const pageContent = iframeDocument.documentElement.innerText || "";
           if (pageContent.includes("已完成") || pageContent.includes("待批阅")) return 'skip';
@@ -11419,12 +11471,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       }
       
       
-      const checkElement = iframe.closest(".ans-job-icon") || iframe.parentElement?.querySelector(".ans-job-icon");
-      if (checkElement) {
-        const ariaLabel = checkElement.getAttribute("aria-label") || "";
-        if (ariaLabel.includes("已完成")) {
-          logStore.addLog("任务点已完成，跳过", "success");
-          return 'skip';
+      if (!reviewMode) {
+        const checkElement = iframe.closest(".ans-job-icon") || iframe.parentElement?.querySelector(".ans-job-icon");
+        if (checkElement) {
+          const ariaLabel = checkElement.getAttribute("aria-label") || "";
+          if (ariaLabel.includes("已完成")) {
+            logStore.addLog("任务点已完成，跳过", "success");
+            return 'skip';
+          }
         }
       }
       
@@ -11457,6 +11511,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         }
         if (iframeSrc.includes("modules/innerbook")) {
           return 'ebook';
+        }
+        if (iframeSrc.includes("/readsvr/book/mooc") || iframeDocument.querySelector("#reader")) {
+          return 'bookreader';
         }
       }
       
@@ -11519,6 +11576,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
             return;
           }
           return handleEbook(iframeWindow);
+        
+        case 'bookreader':
+          if (onlyAnswer) {
+            if (!hasLoggedSkipTip) {
+              logStore.addLog("仅答题模式，跳过书籍阅读", "primary");
+              hasLoggedSkipTip = true;
+            }
+            return;
+          }
+          return handleBookReader(iframeWindow, iframeDocument);
         
         default:
           return;
@@ -11786,37 +11853,171 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   
   
-  
-  const useCxExamLogic = async () => {
-    var _a;
+  const answerExamPreview = async () => {
     const logStore = useLogStore();
-    const configStore = useConfigStore();
-    logStore.addLog(`进入新版考试页面，开始准备答题`, "primary");
-    
-    const previewBtns = _unsafeWindow.document.querySelectorAll('.completeBtn');
-    for (const btn of previewBtns) {
-      if (btn.textContent.trim() === '整卷预览') {
-        logStore.addLog(`检测到"整卷预览"按钮，正在点击`, "primary");
-        btn.click();
-        await new Promise(r => setTimeout(r, 2000));
-        break;
-      }
-    }
+    logStore.addLog(`进入考试整卷预览页面，开始准备答题`, "primary");
     logStore.addLog(`正在解析题目, 请等待5s`, "warning");
     await new CxQuestionHandler("ks").init();
-    if (configStore.platformParams.cx.parts[3].params[0].value) {
-      const currentQuestionNum = parseInt(((_a = _unsafeWindow.document.querySelector(".topicNumber_list .current")) == null ? void 0 : _a.innerText) || "0");
-      const totalQuestions = _unsafeWindow.document.querySelectorAll(".topicNumber_list li").length;
-      if (currentQuestionNum >= totalQuestions) {
-        logStore.addLog("当前已是最后一题，不再自动切换", "warning");
-        logStore.addLog("请手动检查答案后提交试卷", "primary");
-      } else {
-        logStore.addLog("自动切换已开启，正在前往下一题", "success");
+    logStore.addLog("答题完成，请自行检查后保存或提交", "primary");
+  };
+  
+  
+  
+  
+  
+  
+  
+  
+  const useCxExamLogic = async () => {
+    const logStore = useLogStore();
+    const configStore = useConfigStore();
+
+    
+    const inSequentialMode = _GM_getValue('pp_exam_sequential', false);
+
+    if (!inSequentialMode) {
+      
+      logStore.addLog(`进入新版考试页面，开始准备答题`, "primary");
+
+      
+      const markInfo = _unsafeWindow.document.querySelector('.mark_info');
+      const disallowPreview = markInfo?.textContent?.includes('不允许整卷预览');
+
+      if (!disallowPreview) {
+        
+        logStore.addLog(`允许整卷预览，即将跳转到整卷预览页面`, "primary");
         await delay(3);
-        _unsafeWindow.getTheNextQuestion(1);
+        _unsafeWindow.topreview();
+        
+        
+        await delay(5);
+        await answerExamPreview();
+        return;
       }
-    } else {
+
+      
+      logStore.addLog(`当前考试不允许整卷预览，进入逐题答题模式`, "warning");
+      logStore.addLog(`在考完前禁止手动切换题目，否则会导致重复答题！`, "warning");
+      _GM_setValue('pp_exam_sequential', true);
+    }
+
+    
+    
+    const autoSwitch = configStore.platformParams.cx.parts[3].params[0].value;
+
+    logStore.addLog(`正在解析题目, 请等待5s`, "warning");
+    await new CxQuestionHandler("ks").init();
+
+    const currentQuestionNum = parseInt(_unsafeWindow.document.querySelector(".topicNumber_list .current")?.innerText || "0");
+    const totalQuestions = _unsafeWindow.document.querySelectorAll(".topicNumber_list li").length;
+
+    if (currentQuestionNum >= totalQuestions) {
+      logStore.addLog("当前已是最后一题，答题完成", "warning");
+      logStore.addLog("请手动检查答案后提交试卷", "primary");
+      _GM_setValue('pp_exam_sequential', false);
+      return;
+    }
+
+    if (!autoSwitch) {
       logStore.addLog("已经关闭自动切换，在设置里可更改", "danger");
+      _GM_setValue('pp_exam_sequential', false);
+      return;
+    }
+
+    logStore.addLog(`第${currentQuestionNum}题已完成，正在前往下一题`, "success");
+    await delay(3);
+
+    
+    const nextBtn = _unsafeWindow.document.querySelector('.nextDiv a.jb_btn');
+    if (nextBtn) {
+      nextBtn.click();
+    } else if (typeof _unsafeWindow.getTheNextQuestion === 'function') {
+      _unsafeWindow.getTheNextQuestion(1);
+    } else {
+      logStore.addLog("未找到下一题按钮，请手动切换", "danger");
+      _GM_setValue('pp_exam_sequential', false);
+    }
+  };
+  
+  
+  
+  
+  const useCxExamPreviewLogic = answerExamPreview;
+  
+  
+  
+  
+  const useCxPlazaTipLogic = () => {
+    const logStore = useLogStore();
+    logStore.addLog("检测到积分课页面", "warning");
+    logStore.addLog("积分课请进入课程后，开启复习模式，并关闭自动切换", "warning");
+    logStore.addLog("课程完成后请手动切换章节，自动跳转可能出现乱跳", "warning");
+  };
+  
+  
+  
+  
+  
+  const useCxAutoReadLogic = async () => {
+    const logStore = useLogStore();
+    const configStore = useConfigStore();
+    const currentUrl = window.location.href;
+
+    
+    if (!currentUrl.includes('/ztnodedetailcontroller/visitnodedetail')) {
+      logStore.addLog(`进入课程目录，即将点击第一个章节开始阅读`, "primary");
+      await delay(2);
+      const firstChapter = document.querySelector('.course_section .chapterText');
+      if (firstChapter) {
+        firstChapter.click();
+      } else {
+        logStore.addLog("未找到章节列表，请手动点击章节", "danger");
+      }
+      return;
+    }
+
+    
+    logStore.addLog(`进入阅读页面，开始自动滚动阅读`, "primary");
+    logStore.addLog(`阅读任务次日才会统计阅读时长`, "warning");
+
+    
+    const scrollDuration = 63;
+    const step = (document.documentElement.scrollHeight - window.innerHeight) / 60;
+    let currentTop = 0;
+    let scrollCount = 0;
+
+    logStore.addLog(`预计${scrollDuration}秒后完成当前章节阅读`, "primary");
+
+    await new Promise((resolve) => {
+      const interval = setInterval(() => {
+        scrollCount++;
+        currentTop += step;
+        window.scrollTo({ behavior: 'smooth', top: currentTop });
+        if (scrollCount >= 60) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 1000);
+    });
+
+    
+    await delay(1);
+    const nextChapter = document.querySelector('.nodeItem.r i');
+    if (nextChapter) {
+      logStore.addLog(`当前章节阅读完成，正在进入下一章`, "success");
+      await delay(2);
+      nextChapter.click();
+    } else {
+      
+      const restartAfterFinish = configStore.platformParams.cx?.parts?.[2]?.params?.find(p => p.name === '无限阅读')?.value || false;
+      if (restartAfterFinish) {
+        logStore.addLog(`已是最后一章，即将从头重新阅读`, "primary");
+        await delay(3);
+        const firstChapter = document.querySelectorAll('.course_section .chapterText');
+        if (firstChapter.length) firstChapter[0].click();
+      } else {
+        logStore.addLog(`阅读任务已全部完成`, "success");
+      }
     }
   };
   
@@ -12240,11 +12441,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const urlLogicPairs = [
         { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },   
         { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },          
+        { keyword: "exam/preview", logic: useCxExamPreviewLogic },         
         { keyword: "/exam-ans/", logic: useCxExamLogic },                  
         { keyword: "/work/index", logic: useCxWorkLogic },                 
         { keyword: "/work/doTest", logic: useCxWorkLogic },                
         { keyword: "/work/calcAnswer", logic: useCxWorkLogic },            
         { keyword: "/knowledge/start", logic: useCxChapterLogic },         
+        { keyword: "/ztnodedetailcontroller/visitnodedetail", logic: useCxAutoReadLogic }, 
+        { keyword: "/course/", logic: useCxAutoReadLogic },                
+        { keyword: "/plaza", logic: useCxPlazaTipLogic },                  
         {
           keyword: "mycourse/stu?courseid",
           logic: () => {
@@ -12261,6 +12466,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
             isShow.value = true;
             return;
           }
+        }
+        
+        if (!url22.includes('/exam-ans/')) {
+          _GM_setValue('pp_exam_sequential', false);
         }
         isShow.value = false;
       };
