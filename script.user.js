@@ -12463,6 +12463,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const executeLogicByUrl = (url22) => {
         
         if (url22.includes('out_link.shtml')) {
+          try {
+            const burl = new URL(url22).searchParams.get('burl');
+            if (burl) {
+              window.location.replace(burl);
+              return;
+            }
+          } catch (e) {}
           isShow.value = false;
           return;
         }
