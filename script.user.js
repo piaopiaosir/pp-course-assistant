@@ -409,7 +409,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   if (window.self !== window.top) {
     const currentHref = window.location.href;
-    if (currentHref.includes("answerQuestion2")) {
+    if (currentHref.includes("answerQuestion2") || currentHref.includes("/exam/test")) {
 
     } else {
 
@@ -12461,6 +12461,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         { keyword: "answerQuestion2", logic: useStuActiveLogic }          
       ];
       const executeLogicByUrl = (url22) => {
+        
+        if (url22.includes('out_link.shtml')) {
+          isShow.value = false;
+          return;
+        }
         for (const { keyword, logic } of urlLogicPairs) {
           if (url22.includes(keyword)) {
             logic();
