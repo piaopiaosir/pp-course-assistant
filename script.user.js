@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.3.0
+// @version      3.3.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://free.boltp.com/2026/08/23/6a8a95ada6aef.webp
@@ -2268,7 +2268,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         const currentVersion = _GM_info?.script?.version || '1.1.2';
         _GM_xmlhttpRequest({
           method: "GET",
-          url: 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87%E8%B6%85%E6%98%9F%E5%AD%A6%E4%B9%A0%E9%80%9A%EF%BD%9C%E7%9F%A5%E5%88%B0%E6%99%BA%E6%85%A7%E6%A0%91--%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7CAI%E8%87%AA%E5%8A%A8%E7%AD%94%E9%A2%98%7C%E7%AD%94%E6%A1%88%E6%A0%A1%E9%AA%8C%7C%E9%A3%98%E9%A3%98%7C%E9%A3%98%E9%A3%98%E5%8F%8B%E6%83%85%E6%8F%90%E4%BE%9B%7C%E8%87%AA%E5%8A%A8%E8%B7%B3%E8%BD%AC%E4%BB%BB%E5%8A%A1%E7%82%B9%7C%E8%87%AA%E5%8A%A8%E7%AD%94%E9%A2%98%7C%E8%B6%85%E9%AB%98%E9%A2%98%E5%BA%93%E8%A6%86%E7%9B%96%E7%8E%87%7C%E9%80%90%E6%B8%90%E6%94%AF%E6%8C%81%E6%9B%B4%E5%A4%9A%E5%B9%B3%E5%8F%B0.meta.js?t=' + Date.now(),
+          url: 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.meta.js?t=' + Date.now(),
           timeout: 5000,
           onload: (response) => {
             try {
