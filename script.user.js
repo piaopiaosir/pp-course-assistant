@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.2.9
+// @version      3.3.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://free.boltp.com/2026/08/23/6a8a95ada6aef.webp
@@ -3786,27 +3786,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   "font-weight": "500"
                 }
               }, [
-                vue.createTextVNode("欢迎加入QQ群交流: "),
+                vue.createTextVNode("如遇到使用问题，可反馈"),
                 vue.createElementVNode("a", {
-                  href: "https://qun.qq.com/universal-share/share?ac=1&authKey=aXTc3%2B9CzLY17EtOYLTOLRrsBQ%2FO961BD7jXTm39dq%2BYq3aUqIUXDhiyRFST5Rlj&busi_data=eyJncm91cENvZGUiOiIxNTI4OTg5NTYiLCJ0b2tlbiI6IlFuRDNReWF6S2N6NlR3dkN5OWxYVzU2c3Qwazd5bWFsS3BEZ0Ezb2hvSEVBaVFuUDJGbmgzWGlranloSFRvay8iLCJ1aW4iOiIyNDEzMDc2OTY1In0%3D&data=4HWsNkbY-XgM7w33fUZT7doIplKseoS8daXEIsxdBr8UoWE5nC0dFWEywJ_AZFA0mdf562GNoaKCuz9rTPo9nw&svctype=4&tempid=h5_group_info",
+                  href: "https://scriptcat.org/zh-CN/script-show-page/5597/issue/create",
                   target: "_blank",
                   style: { "color": "#0052D9", "text-decoration": "underline" }
-                }, "一群152898956"),
-                vue.createTextVNode(" | "),
-                vue.createElementVNode("a", {
-                  href: "https://qm.qq.com/q/cea2QyHT9e",
-                  target: "_blank",
-                  style: { "color": "#0052D9", "text-decoration": "underline" }
-                }, "二群967021801")
+                }, "https://scriptcat.org/zh-CN/script-show-page/5597/issue/create"),
+                vue.createTextVNode(" 一旦核实，将基于次数奖励，最低100次！")
               ]),
-              vue.createElementVNode("p", {
-                style: {
-                  "margin": "8px 0",
-                  "font-size": "13px",
-                  "color": "#6b7280",
-                  "font-weight": "500"
-                }
-              }, "口令: 飘飘"),
               vue.createElementVNode("p", {
                 style: {
                   "margin": "16px 0",
@@ -8548,7 +8535,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   
   
-  const showNoticeDialog = (title, message, noticeType, password) => {
+  const showNoticeDialog = (title, message, noticeType) => {
     const dialog = document.createElement('div');
     dialog.id = 'server-notice-dialog';
     dialog.innerHTML = `
@@ -8564,35 +8551,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
           <div style="color: #4b5563; font-size: 14px; line-height: 1.7; margin-bottom: 24px;">${message}</div>
 
-          ${password ? `
-          <div style="background: #f9fafb; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 13px; color: #9ca3af;">加群口令</span>
-            <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">${password}</span>
-          </div>
-          ` : ''}
-
-          <div style="background: #fafafa; border-radius: 8px; padding: 14px 16px; margin-bottom: 28px; display: flex; flex-direction: column; gap: 10px;">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 13px; color: #9ca3af;">一群</span>
-              <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">152898956</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 13px; color: #9ca3af;">二群</span>
-              <span style="font-size: 15px; font-weight: 600; color: #111827; font-family: 'SF Mono', Consolas, monospace;">967021801</span>
-            </div>
-          </div>
-
           <div style="display: flex; gap: 10px;">
             <button id="notice-close-btn" style="flex: 1; background: #111827; color: #fff; border: none; padding: 11px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s;">我知道了</button>
-            <button id="notice-qq-btn" style="flex: 1; background: transparent; color: #374151; border: 1px solid #e5e7eb; padding: 11px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s;">加入QQ群</button>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(dialog);
-    document.getElementById('notice-qq-btn').onclick = () => {
-      window.open('https://qm.qq.com/q/cea2QyHT9e', '_blank');
-    };
     document.getElementById('notice-close-btn').onclick = () => {
       _GM_setValue('closed_notice_type', noticeType);
       dialog.remove();
@@ -8621,8 +8586,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
               return;
             }
-            const noticePassword = result.data.password || '';
-            showNoticeDialog(noticeTitle, noticeMessage, noticeType, noticePassword);
+            showNoticeDialog(noticeTitle, noticeMessage, noticeType);
           }
         } catch (e) {
         }
