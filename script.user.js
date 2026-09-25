@@ -2,10 +2,10 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.3.2
+// @version      3.4.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
-// @icon         https://free.boltp.com/2026/08/23/6a8a95ada6aef.webp
+// @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
 // @match        *://*.edu.cn/*
@@ -908,6 +908,35 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
             name: `网课小助手-飘飘友情提供 v${scriptInfo.version}`,
             parts: [
               {
+                name: "模式设置",
+                params: [
+                  {
+                    name: "正常模式",
+                    value: true,
+                    type: "boolean",
+                    exclusiveGroup: "cx_mode"
+                  },
+                  {
+                    name: "仅视频",
+                    value: false,
+                    type: "boolean",
+                    exclusiveGroup: "cx_mode"
+                  },
+                  {
+                    name: "仅答题",
+                    value: false,
+                    type: "boolean",
+                    exclusiveGroup: "cx_mode"
+                  },
+                  {
+                    name: "复习模式",
+                    value: false,
+                    type: "boolean",
+                    exclusiveGroup: "cx_mode"
+                  }
+                ]
+              },
+              {
                 name: "视频设置",
                 params: [
                   {
@@ -929,12 +958,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     dependsOn: { param: "模拟播放", value: true }
                   },
                   {
-                    name: "直接上报",
-                    value: false,
-                    type: "boolean",
-                    dependsOn: { param: "模拟播放", value: true }
-                  },
-                  {
                     name: "视频答题",
                     value: true,
                     type: "boolean",
@@ -942,6 +965,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   },
                   {
                     name: "自动倍速",
+                    value: false,
+                    type: "boolean"
+                  },
+                  {
+                    name: "激活挂机",
                     value: false,
                     type: "boolean"
                   },
@@ -1023,30 +1051,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     name: "自动切换",
                     value: true,
                     type: "boolean"
-                  },
-                  {
-                    name: "正常模式",
-                    value: true,
-                    type: "boolean",
-                    exclusiveGroup: "cx_mode"
-                  },
-                  {
-                    name: "仅视频",
-                    value: false,
-                    type: "boolean",
-                    exclusiveGroup: "cx_mode"
-                  },
-                  {
-                    name: "仅答题",
-                    value: false,
-                    type: "boolean",
-                    exclusiveGroup: "cx_mode"
-                  },
-                  {
-                    name: "复习模式",
-                    value: false,
-                    type: "boolean",
-                    exclusiveGroup: "cx_mode"
                   }
                 ]
               },
@@ -1056,16 +1060,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   {
                     name: "自动切换",
                     value: true,
-                    type: "boolean"
-                  }
-                ]
-              },
-              {
-                name: "其他设置",
-                params: [
-                  {
-                    name: "激活挂机",
-                    value: false,
                     type: "boolean"
                   }
                 ]
@@ -1172,6 +1166,68 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
             if (globalConfig.platformParams && globalConfig.platformParams.cx) {
               globalConfig.platformParams.cx.name = `网课小助手-飘飘友情提供 v${scriptInfo.version}`;
             }
+            
+            const migrateCxParts = () => {
+              const parts = globalConfig.platformParams?.cx?.parts;
+              if (!Array.isArray(parts)) return;
+              const videoPart = parts.find(p => p.name === "视频设置");
+              
+              // 移除已下线的「直接上报」
+              if (videoPart?.params) {
+                const legacyDirectIdx = videoPart.params.findIndex(p => p.name === "直接上报");
+                if (legacyDirectIdx >= 0) {
+                  videoPart.params.splice(legacyDirectIdx, 1);
+                }
+              }
+              
+              // 「其他设置」内的激活挂机并入「视频设置」（自动倍速右侧）
+              const miscIdx = parts.findIndex(p => p.name === "其他设置");
+              let afkParam = null;
+              if (miscIdx >= 0) {
+                afkParam = (parts[miscIdx].params || []).find(p => p.name === "激活挂机") || null;
+                parts.splice(miscIdx, 1);
+              }
+              if (videoPart?.params && !videoPart.params.some(p => p.name === "激活挂机")) {
+                const param = afkParam || { name: "激活挂机", value: false, type: "boolean" };
+                const autoIdx = videoPart.params.findIndex(p => p.name === "自动倍速");
+                if (autoIdx >= 0) {
+                  videoPart.params.splice(autoIdx + 1, 0, param);
+                } else {
+                  videoPart.params.push(param);
+                }
+              }
+              
+              // 模式按钮独立为「模式设置」并保持置顶；「章节/作业/测验设置」还原到「答题参数」之后
+              const modeParamNames = ["正常模式", "仅视频", "仅答题", "复习模式"];
+              let modePart = parts.find(p => p.name === "模式设置");
+              if (!modePart) {
+                modePart = { name: "模式设置", params: [] };
+                parts.unshift(modePart);
+              }
+              const chapterPart = parts.find(p => p.name === "章节/作业/测验设置");
+              if (chapterPart && chapterPart.params) {
+                modeParamNames.forEach((pn) => {
+                  const pi = chapterPart.params.findIndex(p => p.name === pn);
+                  if (pi < 0) return;
+                  const moved = chapterPart.params.splice(pi, 1)[0];
+                  if (!modePart.params.some(p => p.name === pn)) {
+                    modePart.params.push(moved);
+                  }
+                });
+              }
+              modePart.params.sort((a, b) => modeParamNames.indexOf(a.name) - modeParamNames.indexOf(b.name));
+              const chapterIdx = parts.findIndex(p => p.name === "章节/作业/测验设置");
+              if (chapterIdx >= 0) {
+                const chapterMoved = parts.splice(chapterIdx, 1)[0];
+                const answerIdx = parts.findIndex(p => p.name === "答题参数");
+                parts.splice(answerIdx >= 0 ? answerIdx + 1 : parts.length, 0, chapterMoved);
+              }
+              const modeIdx = parts.findIndex(p => p.name === "模式设置");
+              if (modeIdx > 0) {
+                parts.unshift(parts.splice(modeIdx, 1)[0]);
+              }
+            };
+            migrateCxParts();
             
             
             
@@ -2947,7 +3003,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                       return vue.openBlock(), vue.createElementBlock(vue.Fragment, {
                         key: index2
                       }, [
-                        (item.name === "视频设置" && (index2 === 2 || index2 === 5)) || (item.name === "章节/作业/测验设置" && index2 === 2) ? (vue.openBlock(), vue.createElementBlock("div", {
+                        (item.name === "视频设置" && (param.name === "规避检测" || param.name === "播放倍速")) || (item.name === "模式设置" && param.name === "正常模式") ? (vue.openBlock(), vue.createElementBlock("div", {
                           key: "br-" + index2,
                           style: { "width": "100%", "height": "0" }
                         })) : vue.createCommentVNode("", true),
@@ -3179,19 +3235,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                         }
                       }, "ℹ️ 普通播放倍速受播放器限制，使用播放器允许的最大值")) : vue.createCommentVNode("", true),
                       
-                      item.params.some(p => p.name === "直接上报" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
-                        key: 2,
-                        style: {
-                          "font-size": "11px",
-                          "color": "#f44336",
-                          "margin-bottom": "6px",
-                          "padding": "8px",
-                          "background": "rgba(244, 67, 54, 0.1)",
-                          "border-radius": "6px",
-                          "line-height": "1.5",
-                          "font-weight": "600"
-                        }
-                      }, "⚠️ 此功能可能引发封号，注意风险！")) : vue.createCommentVNode("", true)
                     ])) : vue.createCommentVNode("", true),
                     
                     item.params.some(p => p.name === "答案校验" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
@@ -8601,6 +8644,19 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
   
   
   
+  // 按「分类名 + 参数名」读取超星平台配置，避免分类/参数增删导致索引错位
+  const readCxParamValue = (partName, paramName, fallback = false) => {
+    try {
+      const parts = useConfigStore().platformParams?.cx?.parts || [];
+      const part = parts.find(p => p.name === partName);
+      const param = (part?.params || []).find(p => p.name === paramName);
+      const val = param ? param.value : undefined;
+      return val === undefined || val === null ? fallback : val;
+    } catch (e) {
+      return fallback;
+    }
+  };
+
   const fetchAnswerData = async (question) => {
     var _a;
     const _self = _unsafeWindow;
@@ -9645,6 +9701,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     };
     const configStore = useConfigStore();
+
+    // 视频设置参数统一按名称读取，避免参数增删导致索引错位
+    const cxVideoParam = (name) => {
+      const parts = configStore.platformParams?.cx?.parts || [];
+      const part = parts.find(p => p.name === "视频设置");
+      return (part?.params || []).find(p => p.name === name) || {};
+    };
+    const cxVideoParamValue = (name, fallback = false) => {
+      const val = cxVideoParam(name).value;
+      return val === undefined || val === null ? fallback : val;
+    };
+
     let _justClickedNext = false;
     let _currentIframe = null; 
     let _urlBackupTimer = null; 
@@ -9653,7 +9721,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     
     
     const monitorIframes = () => {
-      const afkEnabledMonitor = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+      const afkEnabledMonitor = readCxParamValue("视频设置", "激活挂机", false);
       
       if (_urlBackupTimer) {
         clearTimeout(_urlBackupTimer);
@@ -9712,7 +9780,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     };
     const watchUrlChanges = () => {
       let currentUrl = window.location.href;
-      const afkEnabled = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+      const afkEnabled = readCxParamValue("视频设置", "激活挂机", false);
       
       const checkUrlChange = () => {
         if (currentUrl !== window.location.href) {
@@ -9770,7 +9838,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const thisTaskId = ++_globalTaskId;
       hasLoggedSkipTip = false;
       
-      const afkEnabledWatch = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+      const afkEnabledWatch = readCxParamValue("视频设置", "激活挂机", false);
       if (afkEnabledWatch) {
         await new Promise(resolve => {
           BackgroundWorker.start('watch_iframe_delay', () => { BackgroundWorker.stop('watch_iframe_delay'); resolve(); }, 3000);
@@ -9800,7 +9868,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         _currentWatchSubscription = rxjs.from(classified).pipe(concatMap(({ iframe, type }) => executeFrame(iframe, type))).subscribe({
           complete: async () => {
             if (thisTaskId === _globalTaskId) {
-              const autoSwitch = configStore.platformParams.cx.parts[2].params[1].value;
+              const autoSwitch = readCxParamValue("章节/作业/测验设置", "自动切换", true);
               logStore.addLog(`本页任务点已全部完成，${autoSwitch ? "正前往下一章节" : "自动切换已关闭"}`, "success");
               if (autoSwitch) {
                 
@@ -9960,7 +10028,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       window._blockPlayScroll = updateOverlayPositions;
       window.addEventListener('scroll', updateOverlayPositions, true);
       window.addEventListener('resize', updateOverlayPositions);
-      const afkEnabledOverlay = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+      const afkEnabledOverlay = readCxParamValue("视频设置", "激活挂机", false);
       if (afkEnabledOverlay) {
         BackgroundWorker.start('overlay_refresh', createOverlay, 1000);
         window._blockPlayInterval = 'overlay_refresh';
@@ -10279,6 +10347,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           let rt = '0.9';
           let iframeSrc = iframe.src || '';
           let videoName = mediaType === 'video' ? '视频' : '音频';
+          // 复习模式：已完成的任务点也重新完整刷一遍
+          const reviewMode = readCxParamValue("模式设置", "复习模式", false);
 
           
           try {
@@ -10530,7 +10600,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               
               for (const attachment of pageData.attachments) {
                 
-                if (attachment.isPassed === true) continue;
+                if (attachment.isPassed === true && !reviewMode) continue;
                 if (completedSimulatedIds.has(attachment.property?.objectid)) continue;
                 
 
@@ -10563,7 +10633,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               if (!objectId) {
                 for (const attachment of pageData.attachments) {
 
-                  if (attachment.isPassed === true) continue;
+                  if (attachment.isPassed === true && !reviewMode) continue;
                   if (completedSimulatedIds.has(attachment.property?.objectid)) continue;
 
                   const moduleType = attachment.property?.module || '';
@@ -10692,8 +10762,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           }
           
           
-          const autoMaxRate = configStore.platformParams.cx.parts[0].params[5].value || false;
-          let playbackRate = configStore.platformParams.cx.parts[0].params[6].value || 1;
+          const autoMaxRate = cxVideoParamValue("自动倍速", false);
+          let playbackRate = cxVideoParamValue("播放倍速", 1);
           const maxRate = getMaxPlaybackRate(iframeDocument, false);
           const speedDisabled = maxRate === 1;
           
@@ -10701,7 +10771,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           window.__maxPlaybackRate = maxRate;
           
           
-          const playbackRateParam = configStore.platformParams.cx.parts[0].params[6];
+          const playbackRateParam = cxVideoParam("播放倍速");
           playbackRateParam.max = autoMaxRate ? maxRate : 3;
           
           if (speedDisabled) {
@@ -10720,7 +10790,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           logStore.addLog(`播放倍速: ${playbackRate}x`, "primary");
           
           
-          const directComplete = configStore.platformParams.cx.parts[0].params[3].value || false;
           
           const host = window.location.host;
           const protocol = window.location.protocol;
@@ -10730,7 +10799,199 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           document.cookie = 'videojs_id=' + videojs_id + ';path=/';
 
           
-          const evasionEnabled = configStore.platformParams.cx.parts[0].params[1].value || false;
+          const evasionEnabled = cxVideoParamValue("规避检测", false);
+
+          // ===== 视频内题目（接口模式）：不依赖播放器，模拟模式下也能作答 =====
+          const parseVideoCpi = () => {
+            const m = window.location.href.match(/[?&]cpi=(\d+)/);
+            if (m) return m[1];
+            const om = String(otherInfo || '').match(/cpi_(\d+)/);
+            if (om) return om[1];
+            const rm = String(reportUrl || '').match(/\/a\/(\d+)/);
+            if (rm) return rm[1];
+            return uid;
+          };
+
+          let videoMid = '';
+          let videoCourseId = '';
+          try {
+            videoCourseId = pageData?.defaults?.courseid || pageData?.defaults?.courseId
+              || pageData?.courseid || getTaskParams()?.courseId || '';
+            const quizAttachments = pageData?.attachments || [];
+            const quizHit = quizAttachments.find(a => a?.property?.objectid === objectId);
+            videoMid = (quizHit && quizHit.property && quizHit.property.mid) || '';
+          } catch (e) {}
+
+          const videoQuizRequest = (url) => new Promise((resolveQuiz, rejectQuiz) => {
+            try {
+              _GM_xmlhttpRequest({
+                method: "get",
+                url: url,
+                headers: {
+                  'Host': host,
+                  'Referer': iframeSrc,
+                  'Sec-Fetch-Site': 'same-origin',
+                  'User-Agent': navigator.userAgent
+                },
+                timeout: 10000,
+                onload: function(res) {
+                  try {
+                    if (res.status === 200) {
+                      resolveQuiz(JSON.parse(res.responseText));
+                    } else {
+                      rejectQuiz(new Error('HTTP ' + res.status));
+                    }
+                  } catch (e) {
+                    rejectQuiz(e);
+                  }
+                },
+                onerror: function() { rejectQuiz(new Error('request error')); },
+                ontimeout: function() { rejectQuiz(new Error('timeout')); }
+              });
+            } catch (e) {
+              rejectQuiz(e);
+            }
+          });
+
+          const flattenVideoQuestions = (res) => {
+            const out = [];
+            const seen = new WeakSet();
+            const walk = (node, depth) => {
+              if (!node || depth > 6) return;
+              if (Array.isArray(node)) {
+                node.forEach(n => walk(n, depth + 1));
+                return;
+              }
+              if (typeof node !== 'object') return;
+              if (seen.has(node)) return;
+              const hasOptions = Array.isArray(node.options) && node.options.length > 0;
+              const resourceId = node.resourceId || node.eventid || node.eventId;
+              if (hasOptions && (resourceId || node.description || node.title)) {
+                seen.add(node);
+                out.push(node);
+                return;
+              }
+              if (Array.isArray(node.datas)) {
+                node.datas.forEach(d => walk(d, depth + 1));
+                return;
+              }
+              Object.keys(node).forEach(k => {
+                if (k !== 'options') walk(node[k], depth + 1);
+              });
+            };
+            walk(res, 0);
+            return out;
+          };
+
+          const initVideoQuestions = async (mid, cpi) => {
+            const dc = Date.now();
+            const midEnc = encodeURIComponent(mid);
+            const query = `mid=${midEnc}&cpi=${cpi}&classid=${classId}` +
+              (videoCourseId ? `&courseid=${videoCourseId}` : '') + `&_dc=${dc}`;
+            const candidates = [];
+            const seen = {};
+            const pushCandidate = (url) => {
+              if (!url || seen[url]) return;
+              seen[url] = true;
+              candidates.push(url);
+            };
+            pushCandidate(`${protocol}//${host}/mooc-ans/richvideo/initdatawithviewerV2?${query}`);
+            // 页面数据里若带 initdataUrl，优先用它的 V2/原始变体（与 404.js 一致）
+            const initdataUrl = pageData?.defaults?.initdataUrl || pageData?.initdataUrl;
+            if (initdataUrl) {
+              const baseInit = String(initdataUrl).startsWith('http')
+                ? String(initdataUrl) : `${protocol}//${host}${initdataUrl}`;
+              const v2FromInit = baseInit.replace(/initdatawithviewer$/i, 'initdatawithviewerV2');
+              if (v2FromInit !== baseInit) pushCandidate(v2FromInit + '?' + query);
+              pushCandidate(baseInit + '?start=undefined&mid=' + midEnc + '&_dc=' + dc);
+              pushCandidate(baseInit + '?mid=' + midEnc + '&cpi=' + cpi + '&classid=' + classId + '&_dc=' + dc);
+            }
+            pushCandidate(`${protocol}//${host}/richvideo/initdatawithviewer?start=undefined&mid=${midEnc}&_dc=${dc}`);
+            pushCandidate(`${protocol}//${host}/ananas/initdatawithviewer?mid=${midEnc}&cpi=${cpi}&classid=${classId}&_dc=${dc}`);
+            for (let i = 0; i < candidates.length; i++) {
+              try {
+                const res = await videoQuizRequest(candidates[i]);
+                const list = flattenVideoQuestions(res);
+                if (list.length) return list;
+              } catch (e) {}
+            }
+            return [];
+          };
+
+          const pickVideoQuestionAnswer = (q) => {
+            const options = q.options || [];
+            const right = options.filter(o => o && (o.isRight === true || o.isRight === 1 ||
+              o.isRight === '1' || o.isRight === 'true'));
+            if (right.length) {
+              return right.map(o => String(o.name || o.content || '').trim()).filter(Boolean).join('');
+            }
+            const fromField = q.rightAnswer || q.answer || q.correctAnswer ||
+              q.rightOption || q.standardAnswer;
+            if (fromField) {
+              return String(fromField).replace(/[^A-Ga-g]/g, '').toUpperCase();
+            }
+            return '';
+          };
+
+          const submitVideoAnswer = (resourceId, memberinfo, answer) => {
+            const url = `${protocol}//${host}/question/quiz-validation?classid=${classId}` +
+              `&cpi=${parseVideoCpi()}&objectid=${objectId}&_dc=${Date.now()}` +
+              `&eventid=${resourceId}&memberinfo=${memberinfo}&answerContent=${encodeURIComponent(answer)}`;
+            return videoQuizRequest(url);
+          };
+
+          const handleVideoQuestionsByApi = async () => {
+            // 模拟模式固定开启视频答题（该开关仅在「正常播放」模式下可用，不再读取）
+            if (mediaType !== 'video') return;
+            if (!videoMid) {
+              logStore.addLog('视频内题目：缺少 mid，已跳过', "warning");
+              return;
+            }
+            let questionList = [];
+            try {
+              questionList = await initVideoQuestions(videoMid, parseVideoCpi());
+            } catch (e) {
+              logStore.addLog(`视频内题目拉取失败：${e.message}`, "warning");
+              return;
+            }
+            if (!questionList.length) {
+              logStore.addLog('视频内无题目', "primary");
+              return;
+            }
+            logStore.addLog(`解析到 ${questionList.length} 道视频题，开始作答`, "primary");
+            for (const q of questionList) {
+              const resourceId = q.resourceId || q.eventid || q.eventId;
+              const options = q.options || [];
+              if (!resourceId || !options.length) continue;
+              const memberinfo = q.memberinfo || q.memberInfo || '';
+              const description = String(q.description || q.title || '视频内题目')
+                .replace(/<[^>]+>/g, '').slice(0, 40);
+              const answers = [];
+              const addAnswer = (v) => {
+                const ans = String(v || '').trim();
+                if (ans && !answers.includes(ans)) answers.push(ans);
+              };
+              addAnswer(pickVideoQuestionAnswer(q));
+              options.forEach(o => addAnswer(o.name || o.content));
+              let answered = false;
+              for (const ans of answers) {
+                try {
+                  const res1 = await submitVideoAnswer(resourceId, memberinfo, ans);
+                  if (res1 && res1.status) {
+                    answered = true;
+                    const ansLabel = res1.isRight ? '正确答案' : '尝试答案';
+                    logStore.addLog(`[视频内题目] ${description} → ${ansLabel}：${ans}`, "success");
+                    break;
+                  }
+                } catch (e) {}
+              }
+              if (!answered) {
+                logStore.addLog(`[视频内题目] ${description} 提交未通过（已尝试全部选项）`, "warning");
+              }
+              await delay(1);
+            }
+            logStore.addLog('视频内题目处理完毕', "success");
+          };
 
           const reportProgress = async (currentTime, isComplete) => {
             return new Promise((resolveReport) => {
@@ -10741,7 +11002,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                 return resolveReport(false);
               }
 
-              const currentIsdrag = isComplete ? '4' : (currentTime > 0 ? '0' : '3');
+              // 完成门槛：课程自身的完成条件（rt，如 90%）或完整时长；rt 试探失败后 targetDuration 会退回 duration
+              const isFullDuration = duration > 0 && currentTime >= targetDuration;
+              const currentIsdrag = (isComplete && isFullDuration) ? '4' : (currentTime > 0 ? '0' : '3');
+              if (isComplete && !isFullDuration) {
+                logStore.addLog(`已播放${Math.round(currentTime)}/${Math.round(duration)}秒，未达完成条件，本次按进度上报`, "warning");
+              }
               const baseUrl = reportUrl.startsWith('http') ? reportUrl : `${protocol}//${host}${reportUrl}`;
               const reportsUrl = `${baseUrl}/${dtoken}?clazzId=${classId}&playingTime=${currentTime}&duration=${duration}&clipTime=0_${duration}&objectId=${objectId}&otherInfo=${otherInfo}&jobid=${jobId}&userid=${uid}&isdrag=${currentIsdrag}&view=pc&enc=${enc}&rt=${rt}&dtype=${mediaType === 'video' ? 'Video' : 'Audio'}&_t=${Date.now()}`;
 
@@ -10788,38 +11054,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
           
           const rtValue = parseFloat(rt) || 1.0;
-          let targetDuration = Math.ceil(duration * rtValue);
+          // 复习模式不提前完成，固定按完整时长播放
+          let targetDuration = reviewMode ? duration : Math.ceil(duration * rtValue);
           let rtAttempted = false; 
-
-          if (directComplete) {
-            logStore.addLog(`⚠️ 直接上报中...`, "warning");
-            progressStore.update({
-              taskName: videoName,
-              percent: 100,
-              currentTime: targetDuration,
-              totalTime: duration,
-              type: mediaType === 'video' ? '视频' : '音频',
-              detail: '直接上报',
-              isPlaying: true,
-              speedDisabled: speedDisabled
-            });
-            
-            const isComplete = await reportProgress(targetDuration, true);
-            if (isComplete) {
-              completedSimulatedIds.add(objectId);
-              logStore.addLog(`🎬 ${mediaType}直接上报`, "success");
-              progressStore.update({
-                percent: 100,
-                currentTime: duration,
-                detail: '已完成',
-                isPlaying: false
-              });
-              return safeResolve();
-            } else {
-              logStore.addLog(`直接上报失败，回退到模拟播放`, "danger");
-              
-            }
+          if (reviewMode) {
+            logStore.addLog('复习模式：完整重刷，从 0 秒播放至 100%', "primary");
           }
+
           
           
           if (window._currentMediaInterval) {
@@ -10842,18 +11083,91 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           
           let playTime = 0;
           let playsTime = 0;
+          let lastTickMs = 0;
           let isFirst = true;
-          let nextReportTime = 0;
           let isdrag = '3';
           let completeRetryCount = 0;
-          const maxCompleteRetries = 10;
-          const reportInterval = 50;
+          const maxCompleteRetries = 3;
+          const reportIntervalSec = 50;     // 上报周期按挂钟秒计，不随倍速变密
+          const rtReportMinGapMs = 5000;    // rt 包距上次上报的最小间隔，避免连包
+          const completeRetryGapMs = 4000;  // 完成上报重试间隔
+          let lastReportWallMs = 0;         // 上一次上报的挂钟时间
+          let nextCompleteRetryWallMs = 0;  // 下一次允许重试完成的挂钟时间
           let isReporting = false;
           let lastLoggedPercent = 0;
 
-          const afkEnabled = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+          const afkEnabled = readCxParamValue("视频设置", "激活挂机", false);
           const simulateLoopId = 'simulate_' + Date.now();
           let loopInterval = null;
+
+          // 模拟播放成功收尾（统一入口，避免多处重复）
+          const finishSimulateSuccess = (detailText) => {
+            if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
+            window._simulateActive = false;
+            completedSimulatedIds.add(objectId);
+            logStore.addLog(`🎬 ${mediaType}模拟播放完成`, "success");
+            progressStore.update({
+              percent: 100,
+              currentTime: duration,
+              detail: detailText || '播放完成',
+              isPlaying: false
+            });
+            try {
+              const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
+              if (mediaElement) {
+                mediaElement.dispatchEvent(new Event('ended', { bubbles: true }));
+              }
+            } catch (e) {
+              logStore.addLog(`触发ended事件失败: ${e.message}`, "warning");
+            }
+            window._currentMediaInterval = null;
+            safeResolve();
+          };
+
+          // 兜底查询：完成上报被服务端回绝时，直接查任务点真实状态 /ananas/status
+          const verifyTaskPassedByStatus = async () => {
+            let fid = '';
+            try {
+              fid = _unsafeWindow.FID || getFid() || '';
+            } catch (e) {
+              fid = '';
+            }
+            const statusUrl = `${protocol}//${host}/ananas/status/${objectId}?k=${fid}&_uid=${uid}&flag=normal&_dc=${Date.now()}`;
+            return new Promise((resolveStatus) => {
+              try {
+                _GM_xmlhttpRequest({
+                  method: "get",
+                  url: statusUrl,
+                  headers: {
+                    'Host': host,
+                    'Referer': iframeSrc,
+                    'Sec-Fetch-Site': 'same-origin'
+                  },
+                  onload: function(res) {
+                    try {
+                      const info = JSON.parse(res.responseText);
+                      if (info && info.isPassed) {
+                        logStore.addLog(`✅ 兜底查询确认任务已通过`, "success");
+                        resolveStatus(true);
+                      } else {
+                        logStore.addLog(`❌ 兜底查询确认仍未通过（可能受学时或防刷限制）`, "danger");
+                        resolveStatus(false);
+                      }
+                    } catch (e) {
+                      logStore.addLog(`⚠️ 兜底查询解析失败，按未通过处理`, "warning");
+                      resolveStatus(false);
+                    }
+                  },
+                  onerror: function() {
+                    logStore.addLog(`⚠️ 兜底查询请求失败，按未通过处理`, "warning");
+                    resolveStatus(false);
+                  }
+                });
+              } catch (e) {
+                resolveStatus(false);
+              }
+            });
+          };
 
           const loopCallback = async () => {
             if (isReporting) return;
@@ -10884,7 +11198,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               return;
             }
 
-            const autoMaxRateNow = configStore.platformParams.cx.parts[0].params[5].value || false;
+            const autoMaxRateNow = cxVideoParamValue("自动倍速", false);
             let playbackRateNow = autoMaxRateNow ? maxRate : Math.min(playbackRateParam.value || playbackRate, 3);
             let effectiveRate = playbackRateNow;
 
@@ -10893,7 +11207,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               simulateUserBehavior();
             }
 
-            playsTime += effectiveRate;
+            // 按挂钟增量累加：tick 迟到/被节流时按真实流逝时间补齐，避免进度漂移
+            const nowMs = Date.now();
+            const elapsedSec = lastTickMs > 0 ? Math.max(0, (nowMs - lastTickMs) / 1000) : 1;
+            lastTickMs = nowMs;
+            playsTime += effectiveRate * elapsedSec;
             playTime = Math.ceil(playsTime);
 
             playTime = compensateDuration(playTime, duration, playbackRateNow);
@@ -10915,10 +11233,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
             let shouldReport = false;
             if (playTime >= duration) {
-              shouldReport = true;
+              // 完成包：首次立即发，失败后按固定间隔重试（不再 1 秒一次连发）
+              shouldReport = completeRetryCount === 0 || nowMs >= nextCompleteRetryWallMs;
             } else if (isFirst) {
               shouldReport = true;
-            } else if (nextReportTime > 0 && playTime >= nextReportTime) {
+            } else if (!rtAttempted && targetDuration > 0 && targetDuration < duration
+              && playTime >= targetDuration && nowMs - lastReportWallMs >= rtReportMinGapMs) {
+              // rt 阈值每 tick 都要判定，否则短时长视频会跳过该点、拖到 100% 才触发
+              shouldReport = true;
+            } else if (lastReportWallMs > 0 && nowMs - lastReportWallMs >= reportIntervalSec * 1000) {
               shouldReport = true;
             }
 
@@ -10936,76 +11259,50 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
               } else if (playTime > 0) {
                 isdrag = '0';
               }
-              nextReportTime = Math.min(playTime + reportInterval, duration);
+              lastReportWallMs = nowMs;
 
               const percent = Math.round(playTime / duration * 100);
-              if (percent >= lastLoggedPercent + 20 || percent === 100) {
+              const rtBoundaryHit = !rtAttempted && targetDuration > 0 && targetDuration < duration
+                && playTime > 0 && playTime < duration && playTime >= targetDuration;
+              if (!rtBoundaryHit && (percent >= lastLoggedPercent + 20 || percent === 100)) {
                 logStore.addLog(`📤 上报进度: ${percent}%（${Math.round(playTime)}/${Math.round(duration)}s）`, "info");
                 lastLoggedPercent = percent;
               }
 
               
-              if (!rtAttempted && playTime >= targetDuration) {
+              if (rtBoundaryHit) {
                 rtAttempted = true;
-                logStore.addLog(`📊 已播放至${rtValue * 100}%，尝试完成上报`, "info");
+                logStore.addLog(`📊 已播放至${percent}%（${Math.round(playTime)}/${Math.round(duration)}s），尝试完成上报`, "info");
                 const isComplete = await reportProgress(playTime, true);
                 isReporting = false;
                 if (isComplete) {
-                  if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
-                  window._simulateActive = false;
-                  completedSimulatedIds.add(objectId);
-                  logStore.addLog(`🎬 ${mediaType}模拟播放完成`, "success");
-                  progressStore.update({
-                    percent: 100,
-                    currentTime: duration,
-                    detail: '播放完成',
-                    isPlaying: false
-                  });
-                  try {
-                    const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
-                    if (mediaElement) {
-                      mediaElement.dispatchEvent(new Event('ended', { bubbles: true }));
-                      logStore.addLog(`已触发${mediaType} ended事件，页面UI将自动更新`, "success");
-                    }
-                  } catch (e) {
-                    logStore.addLog(`触发ended事件失败: ${e.message}`, "warning");
-                  }
-                  window._currentMediaInterval = null;
-                  safeResolve();
+                  finishSimulateSuccess();
                   return;
                 } else {
-                  logStore.addLog(`⚠️ rt比例完成上报未通过，继续播放至100%`, "warning");
+                  logStore.addLog(`已播放至${percent}%仍未通过，继续播放至100%`, "warning");
                   targetDuration = duration;
                 }
               } else {
                 const isComplete = await reportProgress(playTime, isdrag === '4');
                 isReporting = false;
 
-                if (isComplete) {
-                  if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
-                  window._simulateActive = false;
-                  completedSimulatedIds.add(objectId);
-                  logStore.addLog(`🎬 ${mediaType}模拟播放完成`, "success");
-                  progressStore.update({
-                    percent: 100,
-                    currentTime: duration,
-                    detail: '播放完成',
-                    isPlaying: false
-                  });
-                  try {
-                    const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
-                    if (mediaElement) {
-                      mediaElement.dispatchEvent(new Event('ended', { bubbles: true }));
-                      logStore.addLog(`已触发${mediaType} ended事件，页面UI将自动更新`, "success");
-                    }
-                  } catch (e) {
-                    logStore.addLog(`触发ended事件失败: ${e.message}`, "warning");
-                  }
-                  window._currentMediaInterval = null;
-                  safeResolve();
+                if (isComplete && !reviewMode) {
+                  finishSimulateSuccess();
                 } else if (isdrag === '4') {
+                  if (reviewMode) {
+                    logStore.addLog('复习模式：已完整播放至 100%，按复习结束处理', "success");
+                    finishSimulateSuccess('复习模式已完成');
+                    return;
+                  }
                   completeRetryCount++;
                   if (completeRetryCount >= maxCompleteRetries) {
+                    isReporting = true;
+                    logStore.addLog(`完成上报重试${maxCompleteRetries}次仍未通过，正在查询任务点真实状态…`, "warning");
+                    const statusPassed = await verifyTaskPassedByStatus();
+                    if (statusPassed) {
+                      finishSimulateSuccess('兜底确认通过');
+                      return;
+                    }
                     if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
                     window._simulateActive = false;
                     logStore.addLog(`完成上报重试${maxCompleteRetries}次仍未通过，请检查视频是否需要其他操作`, "danger");
@@ -11018,29 +11315,42 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     window._currentMediaInterval = null;
                     safeResolve();
                   } else {
-                    logStore.addLog(`完成上报未通过，重试中(${completeRetryCount}/${maxCompleteRetries})...`, "warning");
+                    nextCompleteRetryWallMs = nowMs + completeRetryGapMs;
+                    logStore.addLog(`完成上报未通过，${Math.round(completeRetryGapMs / 1000)}秒后重试(${completeRetryCount}/${maxCompleteRetries})...`, "warning");
                   }
                 }
               }
             }
           };
 
+          // 进入模拟播放状态（遮罩与横幅在答题阶段即生效，占住 _simulateActive 防止被误判停止）
+          window._simulateActive = true;
+          showOverlayAndBanner();
+
+          // 启动计时前先处理视频内题目（接口模式，不依赖播放器）
+          await handleVideoQuestionsByApi();
+
+          if (!window._simulateActive) {
+            logStore.addLog('答题期间模拟播放已被停止，结束处理', "warning");
+            clearOverlayAndBanner();
+            releaseLock();
+            safeResolve();
+            return;
+          }
+
           if (afkEnabled) {
             window._simulateLoopId = simulateLoopId;
-            window._simulateActive = true;
-            showOverlayAndBanner();
             BackgroundWorker.start(simulateLoopId, loopCallback, 1000);
             logStore.addLog(`🖥️ 挂机模式已启用，使用后台Worker计时`, "success");
           } else {
             loopInterval = setInterval(loopCallback, 1000);
             window._currentMediaInterval = loopInterval;
-            window._simulateActive = true;
-            showOverlayAndBanner();
           }
 
         } catch (e) {
           window._currentMediaInterval = null;
           window._simulateActive = false;
+          clearOverlayAndBanner();
           logStore.addLog(`模拟播放出错: ${e.message}`, "danger");
           logStore.addLog(`回退到普通播放模式`, "warning");
           safeResolve(await playMediaDirectly(mediaType, iframeDocument));
@@ -11059,14 +11369,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       return new Promise((resolve) => {
         logStore.addLog(`正在尝试播放${mediaType}，请稍等5s`, "primary");
         
-        const autoMaxRate = configStore.platformParams.cx.parts[0].params[5].value || false;
-        const playbackRateParam = configStore.platformParams.cx.parts[0].params[6];
+        const autoMaxRate = cxVideoParamValue("自动倍速", false);
+        const playbackRateParam = cxVideoParam("播放倍速");
         let playbackRate = playbackRateParam.value || 1;
         const maxRate = getMaxPlaybackRate(iframeDocument);
         
         
         let videoQuizStopped = false;
-        const videoQuizEnabled = configStore.platformParams.cx.parts[0].params[4]?.value || false;
+        const videoQuizEnabled = cxVideoParamValue("视频答题", false);
         if (videoQuizEnabled) {
           const loop = async () => {
             if (videoQuizStopped) return;
@@ -11103,7 +11413,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         
         
         
-        const simulatePlayEnabled = configStore.platformParams.cx.parts[0].params[0].value || false;
+        const simulatePlayEnabled = cxVideoParamValue("模拟播放", false);
         if (!simulatePlayEnabled) {
           
           playbackRateParam.max = maxRate;
@@ -11126,7 +11436,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           }
         }
         let isExecuted = false;
-        const afkEnabledPlay = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+        const afkEnabledPlay = readCxParamValue("视频设置", "激活挂机", false);
         const playLoopId = 'play_media_' + Date.now();
         const healthCheckId = 'play_health_' + Date.now();
         const playLoopCallback = async () => {
@@ -11225,7 +11535,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     
     const handleMediaContent = async (mediaType, iframeDocument, iframe) => {
       
-      const useSimulatePlay = configStore.platformParams.cx?.parts?.[0]?.params?.[0]?.value || false;
+      const useSimulatePlay = cxVideoParamValue("模拟播放", false);
       
       if (useSimulatePlay) {
         return simulateVideoPlay(iframe, iframeDocument, mediaType);
@@ -11249,7 +11559,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
         }
         iframeWindow.alert = () => {
         };
-        if (configStore.platformParams.cx?.parts?.[2]?.params?.[0]?.value) {
+        if (readCxParamValue("章节/作业/测验设置", "自动提交", false)) {
           logStore.addLog("自动提交已开启，尝试提交", "primary");
           
           const answerParamsPart = configStore.platformParams.cx.parts.find(p => p.name === "答题参数");
@@ -11370,7 +11680,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     };
     const awaitFrameReady = async (iframe) => {
       return new Promise((resolve) => {
-        const afkEnabledFrame = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+        const afkEnabledFrame = readCxParamValue("视频设置", "激活挂机", false);
         const frameReadyId = 'frame_ready_' + Date.now();
         const checkReady = async () => {
           var _a;
@@ -11412,7 +11722,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       await awaitFrameReady(iframe);
       
       
-      const reviewMode = configStore.platformParams.cx?.parts?.[2]?.params?.[5]?.value ?? false;
+      const reviewMode = readCxParamValue("模式设置", "复习模式", false);
       
       
       if (!reviewMode) {
@@ -11490,8 +11800,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       const iframeDocument = iframe.contentDocument;
       const iframeWindow = iframe.contentWindow;
       
-      const onlyVideo = configStore.platformParams.cx?.parts?.[2]?.params?.[3]?.value ?? false;
-      const onlyAnswer = configStore.platformParams.cx?.parts?.[2]?.params?.[4]?.value ?? false;
+      const onlyVideo = readCxParamValue("模式设置", "仅视频", false);
+      const onlyAnswer = readCxParamValue("模式设置", "仅答题", false);
       
       switch (frameType) {
         case 'assignment':
@@ -11560,7 +11870,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     watchUrlChanges();
     
     
-    const afkEnabledGlobal = configStore.platformParams.cx?.parts?.[4]?.params?.[0]?.value || false;
+    const afkEnabledGlobal = readCxParamValue("视频设置", "激活挂机", false);
     if (afkEnabledGlobal) {
       FakeMediaPlayer.start();
       logStore.addLog('🖥️ 全局挂机模式已启用', 'success');
@@ -11784,7 +12094,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       logStore.addLog(`共跳过${skippedCount}道已答题目`, "primary");
     }
     logStore.addLog("随堂练习答题完成", "success");
-    const autoSubmit = configStore.platformParams.cx.parts[2]?.params.find(p => p.name === "自动提交")?.value;
+    const autoSubmit = readCxParamValue("章节/作业/测验设置", "自动提交", false);
     if (autoSubmit) {
       logStore.addLog("自动提交已开启，3秒后提交...", "warning");
       await delay(3);
@@ -11867,7 +12177,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
 
     
     
-    const autoSwitch = configStore.platformParams.cx.parts[3].params[0].value;
+    const autoSwitch = readCxParamValue("考试设置", "自动切换", true);
 
     logStore.addLog(`正在解析题目, 请等待5s`, "warning");
     await new CxQuestionHandler("ks").init();
@@ -11973,7 +12283,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       nextChapter.click();
     } else {
       
-      const restartAfterFinish = configStore.platformParams.cx?.parts?.[2]?.params?.find(p => p.name === '无限阅读')?.value || false;
+      const restartAfterFinish = readCxParamValue("章节/作业/测验设置", "无限阅读", false);
       if (restartAfterFinish) {
         logStore.addLog(`已是最后一章，即将从头重新阅读`, "primary");
         await delay(3);
