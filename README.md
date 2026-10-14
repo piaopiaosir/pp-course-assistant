@@ -9,7 +9,7 @@
 ***
 
 ### **【永久免费题库】【挑战全网最全题库】**
-【AI自动答题】【ChatGPT Gemini Deepseek Qwen MiniMax HunYuan GLM全模型接入】【拥有题库 AI双重校验】【手机平板支持】
+【AI自动答题】【Claude ChatGPT Gemini Deepseek Qwen MiniMax HunYuan GLM全模型接入】【拥有题库 AI双重校验】【手机平板支持】
 目前已经支持的平台：【**超星学习通**「功能基本完成」】【**知到智慧树**「目前只支持答题」】。
 |AI自动答题|答案校验|飘飘|飘飘友情提供|自动跳转任务点|自动答题|超高题库覆盖率|逐渐支持更多平台|
 
