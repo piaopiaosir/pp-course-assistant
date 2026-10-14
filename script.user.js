@@ -2,9 +2,9 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.4.2
+// @version      3.4.3
 // @author       PIAOPIAO
-// @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
+// @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
@@ -17,11 +17,10 @@
 // @require      https://lib.baomitu.com/vue/3.5.0/vue.global.prod.js
 // @require      https://lib.baomitu.com/vue-demi/0.14.7/index.iife.js
 // @require      data:application/javascript,window.Vue%3DVue%3B
-// @require      https://lib.baomitu.com/element-plus/2.7.2/index.full.min.js
+// @require      https://lib.baomitu.com/element-plus/2.8.2/index.full.min.js
 // @require      https://lib.baomitu.com/pinia/2.3.1/pinia.iife.min.js
 // @require      https://lib.baomitu.com/rxjs/7.8.2/rxjs.umd.min.js
 // @require      https://lib.baomitu.com/blueimp-md5/2.19.0/js/md5.min.js
-// @resource     ElementPlus       https://lib.baomitu.com/element-plus/2.7.2/index.css
 // @resource     ElementPlusStyle  https://lib.baomitu.com/element-plus/2.8.2/index.min.css
 // @resource     ttf               https://www.forestpolice.org/ttf/2.0/table.json
 // @connect      *
@@ -399,7 +398,11 @@ const LAYOUT_CSS = `
 }
 `;
 
-if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){var s=document.createElement("style");s.textContent=LAYOUT_CSS;document.head.append(s);})();}
+const LAYOUT_CSS_GLOBAL = `
+.high-z-index-select { z-index: 200000 !important; }
+`;
+
+if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(function(){var s=document.createElement("style");s.textContent=LAYOUT_CSS_GLOBAL;document.head.append(s);})();}
 
 (function (vue, pinia, rxjs, md5, ElementPlus) {
   'use strict';
@@ -3697,7 +3700,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                     vue.createElementVNode("p", { style: { "margin": "0" } }, "📌 规则说明："),
                     vue.createElementVNode("p", { style: { "margin": "5px 0 0 0" } }, "• 仅限新用户（注册24小时内）填写"),
                     vue.createElementVNode("p", { style: { "margin": "3px 0 0 0" } }, "• 每人只能填写一次推荐人"),
-                    vue.createElementVNode("p", { style: { "margin": "3px 0 0 0", "color": "#f44336" } }, "• 推荐人必须是付费用户（免费Token无法被推荐）"),
+                    vue.createElementVNode("p", { style: { "margin": "3px 0 0 0", "color": "#f44336" } }, "• 推荐人必须是赞助过的用户（免费Token无法被推荐）"),
                     vue.createElementVNode("p", { style: { "margin": "3px 0 0 0" } }, 
                       rewardResult.value.refereeReward > 0 
                         ? `✅ 推荐人获得${rewardResult.value.referrerReward}次，您获得${rewardResult.value.refereeReward}次`
@@ -4027,7 +4030,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                   }, "使用查询"),
                   vue.createElementVNode("div", {
                     style: { "font-size": "12px", "color": "#9ca3af", "margin-top": "2px" }
-                  }, "输入 Token 查询扣费流水，仅统计付费 Token")
+                  }, "输入 Token 查询扣费流水，仅赞助 Token")
                 ])
               ]),
               vue.createElementVNode("div", {
@@ -8945,16 +8948,37 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     const bytes = new Uint8Array(buf);
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
     const fontObj = new Font_1(buf);
+    const encryptedEls = doc.querySelectorAll(".font-cxsecret");
+    if (!encryptedEls.length) return;
     const ttfTable = JSON.parse(_GM_getResourceText("ttf"));
     const charMap = {};
-    for (let codePoint = 19968; codePoint <= 40870; codePoint++) {
+    const pendingPoints = [];
+    const seenPoints = new Set();
+    for (let i = 0; i < encryptedEls.length; i++) {
+      const html = encryptedEls[i].innerHTML;
+      for (let j = 0; j < html.length; j++) {
+        const cp = html.charCodeAt(j);
+        if (cp >= 19968 && cp <= 40870 && !seenPoints.has(cp)) {
+          seenPoints.add(cp);
+          pendingPoints.push(cp);
+        }
+      }
+    }
+    pendingPoints.sort((a, b) => a - b);
+    while (pendingPoints.length) {
+      const codePoint = pendingPoints.shift();
       const glyphId = fontObj.codeToGlyph(codePoint);
       if (!glyphId) continue;
       const pathData = fontObj.glyphToPath(glyphId);
       const signature = md5(JSON.stringify(pathData)).slice(24);
       charMap[codePoint] = ttfTable[signature];
+      const decodedPoint = String.fromCharCode(charMap[codePoint]).charCodeAt(0);
+      if (decodedPoint > codePoint && decodedPoint >= 19968 && decodedPoint <= 40870 && !seenPoints.has(decodedPoint)) {
+        seenPoints.add(decodedPoint);
+        pendingPoints.push(decodedPoint);
+        pendingPoints.sort((a, b) => a - b);
+      }
     }
-    const encryptedEls = doc.querySelectorAll(".font-cxsecret");
     for (let i = 0; i < encryptedEls.length; i++) {
       const el = encryptedEls[i];
       let text = el.innerHTML;
@@ -13733,12 +13757,42 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
       };
     }
   });
-  const cssLoader = (e) => {
-    const t = GM_getResourceText(e);
-    return GM_addStyle(t), t;
-  };
-  cssLoader("ElementPlus");
   const layoutCss = LAYOUT_CSS;
+  const epCss = _GM_getResourceText("ElementPlusStyle") || "";
+  const _PP_STYLE_SHEETS = (() => {
+    try {
+      if (typeof CSSStyleSheet === "function" && typeof document.adoptedStyleSheets !== "undefined") {
+        const epSheet = new CSSStyleSheet();
+        epSheet.replaceSync(epCss);
+        const layoutSheet = new CSSStyleSheet();
+        layoutSheet.replaceSync(layoutCss);
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, epSheet];
+        return { epSheet, layoutSheet };
+      }
+    } catch (e) {}
+    if (typeof GM_addStyle === "function") {
+      GM_addStyle(epCss);
+    } else {
+      const styleFallback = document.createElement("style");
+      styleFallback.textContent = epCss;
+      document.head.append(styleFallback);
+    }
+    return null;
+  })();
+  const _ppInjectShadowStyles = (shadow) => {
+    if (_PP_STYLE_SHEETS) {
+      try {
+        shadow.adoptedStyleSheets = [_PP_STYLE_SHEETS.epSheet, _PP_STYLE_SHEETS.layoutSheet];
+        return;
+      } catch (e) {}
+    }
+    const styleEl = document.createElement("style");
+    styleEl.textContent = epCss;
+    shadow.appendChild(styleEl);
+    const styleEl2 = document.createElement("style");
+    styleEl2.textContent = layoutCss;
+    shadow.appendChild(styleEl2);
+  };
   
   
   
@@ -13804,26 +13858,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           const shadow = shadow_root.attachShadow({ mode: "open" });
           shadow.appendChild(app2);
           
-          const scriptHandler = _GM_info?.scriptHandler || '';
-          const isScriptCat = scriptHandler === 'ScriptCat' || scriptHandler.includes('ScriptCat');
-          
-          
-          const eleStyle = _GM_getResourceText("ElementPlusStyle") || "";
-          
-          if (isScriptCat) {
-            const sheet = new CSSStyleSheet();
-            const sheet1 = new CSSStyleSheet();
-            sheet.replace(eleStyle);
-            sheet1.replace(layoutCss);
-            shadow.adoptedStyleSheets = [sheet, sheet1];
-          } else {
-            const styleEl = document.createElement("style");
-            styleEl.textContent = eleStyle;
-            shadow.appendChild(styleEl);
-            const styleEl2 = document.createElement("style");
-            styleEl2.textContent = layoutCss;
-            shadow.appendChild(styleEl2);
-          }
+          _ppInjectShadowStyles(shadow);
           
           return app2;
         })()
