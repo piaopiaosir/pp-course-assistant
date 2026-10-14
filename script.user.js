@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.4.1
+// @version      3.4.2
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -2991,7 +2991,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
                           _: 2
                         }, 1032, ["label"]);
                       }), 128))
-                    ])
+                    ]),
+                    
+                    
+                    item.params.some(p => p.name === "联网搜索" && p.value) && item.params.some(p => p.name === "AI模式" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
+                      key: 4,
+                      style: {
+                        "width": "100%",
+                        "font-size": "11px",
+                        "color": "#ff9800",
+                        "margin-top": "8px",
+                        "padding": "8px",
+                        "background": "rgba(255, 152, 0, 0.1)",
+                        "border-radius": "6px",
+                        "line-height": "1.5"
+                      }
+                    }, "⚠️ 已开启联网搜索：可大幅提高答题正确率【此功能会大量增加 Token 消耗】【此功能会增加答题次数消耗】")) : vue.createCommentVNode("", true)
                   ]) : vue.createElementVNode("div", {
                     style: {
                       "display": "flex",
@@ -3777,6 +3792,521 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
     }
   });
   const ReferralPanel =  _export_sfc(_sfc_main_referral, [["__scopeId", "data-v-referral-panel"]]);
+  
+  const TOKEN_USAGE_MODE_OPTIONS = [
+    { label: "全部模式", value: "" },
+    { label: "正常模式", value: "正常模式" },
+    { label: "校验模式", value: "校验模式" },
+    { label: "AI模式", value: "AI模式" }
+  ];
+  
+  const _sfc_main_token_usage =  vue.defineComponent({
+    __name: "TokenUsagePanel",
+    setup(__props) {
+      const configStore = useConfigStore();
+      
+      const getConfigToken = () => {
+        const apis = configStore.queryApis || [];
+        const raw = apis[0] && apis[0].token ? String(apis[0].token).trim() : "";
+        return /^\d{16}$/.test(raw) ? raw : "";
+      };
+      
+      const loading = vue.ref(false);
+      const errorMsg = vue.ref("");
+      const records = vue.ref([]);
+      const total = vue.ref(0);
+      const page = vue.ref(1);
+      const pageSize = vue.ref(50);
+      const modeFilter = vue.ref("");
+      const tokenInput = vue.ref(getConfigToken());
+      const queried = vue.ref(false);
+      const lastUpdated = vue.ref("");
+      
+      const isTokenValid = (value) => /^\d{16}$/.test(String(value || "").trim());
+      
+      const pad2 = (n) => n < 10 ? "0" + n : "" + n;
+      const formatTime = (ts) => {
+        const num = Number(ts);
+        if (!num) return "-";
+        const d = new Date(num * 1000);
+        if (isNaN(d.getTime())) return "-";
+        return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+      };
+      const formatNumber = (value) => (Number(value) || 0).toLocaleString("zh-CN");
+      const formatDate = (ts) => {
+        const num = Number(ts);
+        if (!num) return "-";
+        const d = new Date(num * 1000);
+        if (isNaN(d.getTime())) return "-";
+        return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+      };
+      const formatClock = (ts) => {
+        const num = Number(ts);
+        if (!num) return "";
+        const d = new Date(num * 1000);
+        if (isNaN(d.getTime())) return "";
+        return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+      };
+      // 剩余次数展示：无记录时显示占位符，余额越低颜色越警示
+      const remainingText = (value) => (value === null || value === undefined) ? "—" : formatNumber(value);
+      const remainingColor = (value) => {
+        const num = Number(value);
+        if (value === null || value === undefined || !Number.isFinite(num)) return "#c0c4cc";
+        if (num <= 5) return "#d92d20";
+        if (num <= 20) return "#d97706";
+        return "#111827";
+      };
+      const maskedInput = vue.computed(() => {
+        const raw = String(tokenInput.value || "").trim();
+        return /^\d{16}$/.test(raw) ? raw.substring(0, 4) + "****" + raw.substring(12) : "";
+      });
+      
+      // 胶囊样式：自绘（尺寸完全可控，避免 el-tag 固定 padding + flex 居中把文字裁掉）
+      const CHIP_BASE_STYLE = {
+        "display": "inline-block",
+        "box-sizing": "border-box",
+        "max-width": "100%",
+        "overflow": "hidden",
+        "text-overflow": "ellipsis",
+        "white-space": "nowrap",
+        "font-size": "12px",
+        "line-height": "18px",
+        "padding": "1px 5px",
+        "border-radius": "4px"
+      };
+      const SOURCE_CHIP_STYLES = {
+        "缓存": { "background": "#f4f4f5", "border": "1px solid #e9e9eb", "color": "#909399" },
+        "题库": { "background": "#f0f9eb", "border": "1px solid #e1f3d8", "color": "#67c23a" },
+        "ai补充": { "background": "#fdf6ec", "border": "1px solid #faecd8", "color": "#e6a23c" },
+        "默认": { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" }
+      };
+      const MODE_CHIP_STYLES = {
+        "正常模式": { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" },
+        "校验模式": { "background": "#fdf6ec", "border": "1px solid #faecd8", "color": "#e6a23c" },
+        "AI模式": { "background": "#f0f9eb", "border": "1px solid #e1f3d8", "color": "#67c23a" },
+        "默认": { "background": "#f4f4f5", "border": "1px solid #e9e9eb", "color": "#909399" }
+      };
+      const sourceChipStyle = (source) => Object.assign({}, CHIP_BASE_STYLE, SOURCE_CHIP_STYLES[source] || SOURCE_CHIP_STYLES["默认"]);
+      const modeChipStyle = (mode) => Object.assign({}, CHIP_BASE_STYLE, MODE_CHIP_STYLES[mode] || MODE_CHIP_STYLES["默认"]);
+      const modelsText = (models) => {
+        if (!Array.isArray(models) || models.length === 0) return "无模型明细";
+        return models.map((m) => (m.name || "未知模型") + "（输入" + (m.promptTokens || 0) + " / 输出" + (m.completionTokens || 0) + "）").join("；");
+      };
+      const detailText = (row) => {
+        if (Array.isArray(row.models) && row.models.length > 0) return modelsText(row.models);
+        return "无模型明细";
+      };
+      
+      const fetchRecords = (targetPage) => {
+        const token = String(tokenInput.value || "").trim();
+        if (!isTokenValid(token)) {
+          loading.value = false;
+          records.value = [];
+          total.value = 0;
+          queried.value = false;
+          errorMsg.value = "请输入正确的16位数字Token";
+          return;
+        }
+        const usePage = Math.max(1, parseInt(targetPage, 10) || 1);
+        loading.value = true;
+        errorMsg.value = "";
+        let url = getRandomServer() + "/usage-records?token=" + encodeURIComponent(token) + "&page=" + usePage + "&size=" + pageSize.value;
+        if (modeFilter.value) url += "&mode=" + encodeURIComponent(modeFilter.value);
+        _GM_xmlhttpRequest({
+          method: "GET",
+          url,
+          timeout: 10000,
+          onload: (response) => {
+            loading.value = false;
+            queried.value = true;
+            let res = null;
+            try {
+              res = JSON.parse(response.responseText);
+            } catch (e) {
+              res = null;
+            }
+            if (!res || res.code !== 200 || !res.data) {
+              errorMsg.value = res && res.msg ? res.msg : "查询失败，请稍后重试";
+              records.value = [];
+              total.value = 0;
+              return;
+            }
+            const data = res.data;
+            records.value = Array.isArray(data.records) ? data.records : [];
+            total.value = Number(data.total) || 0;
+            page.value = Number(data.page) || usePage;
+            pageSize.value = Number(data.pageSize) || pageSize.value;
+            lastUpdated.value = formatTime(Math.floor(Date.now() / 1000));
+          },
+          onerror: () => {
+            loading.value = false;
+            errorMsg.value = "网络异常，无法连接服务器";
+          },
+          ontimeout: () => {
+            loading.value = false;
+            errorMsg.value = "查询超时，请稍后重试";
+          }
+        });
+      };
+      
+      const handleQuery = () => {
+        page.value = 1;
+        fetchRecords(1);
+      };
+      const handleModeChange = (value) => {
+        modeFilter.value = value || "";
+        if (isTokenValid(tokenInput.value)) {
+          page.value = 1;
+          fetchRecords(1);
+        }
+      };
+      const handlePageChange = (value) => {
+        page.value = Number(value) || 1;
+        fetchRecords(page.value);
+      };
+
+      const handleKeyup = (event) => {
+        if (event && event.key === "Enter") handleQuery();
+      };
+      
+      vue.onMounted(() => {
+        if (isTokenValid(tokenInput.value)) fetchRecords(1);
+      });
+      
+      return (_ctx, _cache) => {
+        const _component_el_table_column = vue.resolveComponent("el-table-column");
+        const _component_el_table = vue.resolveComponent("el-table");
+        const _component_el_pagination = vue.resolveComponent("el-pagination");
+        const _component_el_button = vue.resolveComponent("el-button");
+        const _component_el_tooltip = vue.resolveComponent("el-tooltip");
+        const _component_el_input = vue.resolveComponent("el-input");
+        const _component_el_radio_group = vue.resolveComponent("el-radio-group");
+        const _component_el_radio_button = vue.resolveComponent("el-radio-button");
+        const _directive_loading = vue.resolveDirective("loading");
+        
+        return vue.createElementVNode("div", null, [
+          
+          vue.createElementVNode("div", {
+            style: {
+              "margin-bottom": "12px",
+              "padding": "14px 16px",
+              "background": "linear-gradient(135deg, #ffffff 0%, #f7faff 100%)",
+              "border-radius": "10px",
+              "border": "1px solid #e8eefc",
+              "box-shadow": "0 1px 2px rgba(16, 24, 40, 0.04)"
+            }
+          }, [
+            vue.createElementVNode("div", {
+              style: {
+                "display": "flex",
+                "align-items": "center",
+                "justify-content": "space-between",
+                "gap": "12px",
+                "flex-wrap": "wrap"
+              }
+            }, [
+              vue.createElementVNode("div", {
+                style: { "display": "flex", "align-items": "center", "gap": "10px" }
+              }, [
+                vue.createElementVNode("span", {
+                  style: {
+                    "display": "inline-flex",
+                    "align-items": "center",
+                    "justify-content": "center",
+                    "width": "34px",
+                    "height": "34px",
+                    "border-radius": "10px",
+                    "background": "linear-gradient(135deg, #eef4ff 0%, #dfeaff 100%)",
+                    "border": "1px solid #dbe7ff",
+                    "font-size": "16px"
+                  }
+                }, "🔍"),
+                vue.createElementVNode("div", null, [
+                  vue.createElementVNode("div", {
+                    style: { "font-size": "15px", "font-weight": "600", "color": "#111827", "line-height": "20px" }
+                  }, "使用查询"),
+                  vue.createElementVNode("div", {
+                    style: { "font-size": "12px", "color": "#9ca3af", "margin-top": "2px" }
+                  }, "输入 Token 查询扣费流水，仅统计付费 Token")
+                ])
+              ]),
+              vue.createElementVNode("div", {
+                style: { "display": "flex", "align-items": "center", "gap": "8px", "flex-wrap": "wrap" }
+              }, [
+                vue.createVNode(_component_el_input, {
+                  modelValue: tokenInput.value,
+                  "onUpdate:modelValue": _cache[0] || (_cache[0] = ($event) => {
+                    tokenInput.value = $event;
+                    errorMsg.value = "";
+                  }),
+                  placeholder: "请输入16位数字Token",
+                  clearable: true,
+                  style: { "width": "210px" },
+                  onKeyup: handleKeyup
+                }),
+                vue.createVNode(_component_el_button, {
+                  type: "primary",
+                  loading: loading.value,
+                  onClick: handleQuery,
+                  style: { "border-radius": "8px", "padding": "0 18px" }
+                }, {
+                  default: vue.withCtx(() => [
+                    vue.createTextVNode("查询")
+                  ]),
+                  _: 1
+                }, 8, ["loading", "onClick"])
+              ])
+            ]),
+            vue.createElementVNode("div", {
+              style: {
+                "margin-top": "10px",
+                "display": "flex",
+                "align-items": "center",
+                "gap": "10px",
+                "flex-wrap": "wrap",
+                "font-size": "12px",
+                "color": "#9ca3af"
+              }
+            }, [
+              maskedInput.value ? vue.createElementVNode("span", {
+                key: "token-chip",
+                style: {
+                  "display": "inline-flex",
+                  "align-items": "center",
+                  "padding": "2px 8px",
+                  "border-radius": "999px",
+                  "background": "#eff6ff",
+                  "border": "1px solid #dbeafe",
+                  "color": "#1d4ed8",
+                  "font-family": "monospace",
+                  "font-size": "11px"
+                }
+              }, "当前 " + maskedInput.value) : vue.createCommentVNode("", true),
+              vue.createElementVNode("span", null, lastUpdated.value ? "更新于 " + lastUpdated.value : "尚未查询")
+            ])
+          ]),
+          
+          vue.createElementVNode("div", {
+            style: {
+              "display": "flex",
+              "align-items": "center",
+              "justify-content": "space-between",
+              "gap": "10px",
+              "margin-bottom": "10px",
+              "flex-wrap": "wrap"
+            }
+          }, [
+            vue.createVNode(_component_el_radio_group, {
+              modelValue: modeFilter.value,
+              "onUpdate:modelValue": handleModeChange,
+              size: "small",
+              style: { "--el-color-primary": "#0052D9" }
+            }, {
+              default: vue.withCtx(() => vue.renderList(TOKEN_USAGE_MODE_OPTIONS, (option) => {
+                return vue.createVNode(_component_el_radio_button, {
+                  key: option.value || "all",
+                  value: option.value
+                }, {
+                  default: vue.withCtx(() => [
+                    vue.createTextVNode(vue.toDisplayString(option.label), 1)
+                  ]),
+                  _: 2
+                }, 1032, ["value"]);
+              })),
+              _: 1
+            }, 8, ["modelValue"]),
+            vue.createElementVNode("span", {
+              style: { "font-size": "12px", "color": "#9ca3af" }
+            }, queried.value ? "共 " + formatNumber(total.value) + " 条记录" : "", 1)
+          ]),
+          
+          errorMsg.value ? vue.createElementVNode("div", {
+            key: 0,
+            style: {
+              "margin-bottom": "10px",
+              "padding": "10px 12px",
+              "border-radius": "8px",
+              "border": "1px solid #fde68a",
+              "background": "#fffbeb",
+              "font-size": "12px",
+              "color": "#92400e",
+              "display": "flex",
+              "align-items": "center",
+              "gap": "6px"
+            }
+          }, "⚠️ " + vue.toDisplayString(errorMsg.value), 1) : vue.createCommentVNode("", true),
+          
+          vue.withDirectives(vue.createElementVNode("div", {
+            "element-loading-text": "查询中...",
+            "element-loading-background": "rgba(255, 255, 255, 0.7)",
+            style: {
+              "border": "1px solid #eef0f4",
+              "border-radius": "10px",
+              "overflow": "hidden",
+              "background": "#ffffff",
+              "box-shadow": "0 1px 2px rgba(16, 24, 40, 0.04)"
+            }
+          }, [
+            vue.createVNode(_component_el_table, {
+              stripe: "",
+              "max-height": "330",
+              "empty-text": queried.value ? "暂无使用记录" : "请输入Token后点击查询",
+              data: records.value,
+              "header-cell-style": {
+                "background": "#f9fafb",
+                "color": "#6b7280",
+                "font-size": "12px",
+                "font-weight": "600",
+                "padding": "8px 0"
+              },
+              "cell-style": { "padding": "9px 0" },
+              style: { "width": "100%", "font-size": "12px" }
+            }, {
+              default: vue.withCtx(() => [
+                vue.createVNode(_component_el_table_column, { label: "时间", width: "96" }, {
+                  default: vue.withCtx((scope) => [
+                    vue.createElementVNode("div", null, [
+                      vue.createElementVNode("div", {
+                        style: { "font-size": "12px", "color": "#111827", "font-weight": "500", "white-space": "nowrap" }
+                      }, vue.toDisplayString(formatDate(scope.row.createdAt)), 1),
+                      vue.createElementVNode("div", {
+                        style: { "font-size": "11px", "color": "#9ca3af", "margin-top": "2px", "white-space": "nowrap" }
+                      }, vue.toDisplayString(formatClock(scope.row.createdAt)), 1)
+                    ])
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "模式", width: "90" }, {
+                  default: vue.withCtx((scope) => [
+                    vue.createElementVNode("span", {
+                      style: modeChipStyle(scope.row.mode)
+                    }, vue.toDisplayString(scope.row.mode || "-"), 1)
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "来源", "min-width": "120" }, {
+                  default: vue.withCtx((scope) => [
+                    vue.createVNode(_component_el_tooltip, {
+                      effect: "dark",
+                      placement: "top",
+                      "show-after": 150,
+                      popperClass: "high-z-index-select",
+                      content: scope.row.source || "-"
+                    }, {
+                      default: vue.withCtx(() => [
+                        vue.createElementVNode("span", {
+                          style: sourceChipStyle(scope.row.source)
+                        }, vue.toDisplayString(scope.row.source || "-"), 1)
+                      ]),
+                      _: 2
+                    }, 1032, ["content"])
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "消耗", width: "58", align: "center" }, {
+                  header: vue.withCtx(() => [
+                    vue.createElementVNode("span", { style: { "white-space": "nowrap" } }, "消耗")
+                  ]),
+                  default: vue.withCtx((scope) => [
+                    vue.createElementVNode("span", {
+                      style: { "font-size": "12px", "color": "#2e7d32", "font-weight": "600" }
+                    }, vue.toDisplayString(formatNumber(scope.row.cost)), 1)
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "剩余次数", width: "70", align: "center" }, {
+                  header: vue.withCtx(() => [
+                    vue.createElementVNode("div", { style: { "line-height": "16px" } }, [
+                      vue.createElementVNode("div", null, "剩余"),
+                      vue.createElementVNode("div", null, "次数")
+                    ])
+                  ]),
+                  default: vue.withCtx((scope) => [
+                    vue.createElementVNode("span", {
+                      style: {
+                        "font-size": "12px",
+                        "font-weight": "600",
+                        "color": remainingColor(scope.row.remainingCount)
+                      }
+                    }, vue.toDisplayString(remainingText(scope.row.remainingCount)), 1)
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "输入Token", width: "72", align: "center" }, {
+                  default: vue.withCtx((scope) => [
+                    vue.createElementVNode("span", {
+                      style: { "font-size": "12px", "color": "#374151" }
+                    }, vue.toDisplayString(formatNumber(scope.row.promptTokens)), 1)
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "输出Token", width: "72", align: "center" }, {
+                  default: vue.withCtx((scope) => [
+                    vue.createElementVNode("span", {
+                      style: { "font-size": "12px", "color": "#374151" }
+                    }, vue.toDisplayString(formatNumber(scope.row.completionTokens)), 1)
+                  ]),
+                  _: 2
+                }),
+                vue.createVNode(_component_el_table_column, { label: "明细", width: "56", align: "center" }, {
+                  header: vue.withCtx(() => [
+                    vue.createElementVNode("span", { style: { "white-space": "nowrap" } }, "明细")
+                  ]),
+                  default: vue.withCtx((scope) => [
+                    vue.createVNode(_component_el_tooltip, {
+                      effect: "dark",
+                      placement: "top",
+                      "show-after": 100,
+                      popperClass: "high-z-index-select",
+                      content: detailText(scope.row)
+                    }, {
+                      default: vue.withCtx(() => [
+                        vue.createElementVNode("span", {
+                          style: { "font-size": "12px", "color": "#0052D9", "cursor": "pointer", "font-weight": "500", "white-space": "nowrap" }
+                        }, "查看")
+                      ]),
+                      _: 2
+                    }, 1032, ["content"])
+                  ]),
+                  _: 2
+                })
+              ]),
+              _: 1
+            }, 8, ["data", "empty-text"]),
+            vue.createElementVNode("div", {
+              style: {
+                "display": "flex",
+                "align-items": "center",
+                "justify-content": "space-between",
+                "gap": "10px",
+                "padding": "10px 12px",
+                "border-top": "1px solid #f1f3f7",
+                "background": "#ffffff",
+                "flex-wrap": "wrap"
+              }
+            }, [
+              vue.createElementVNode("span", {
+                style: { "font-size": "12px", "color": "#9ca3af" }
+              }, "第 " + page.value + " / " + Math.max(1, Math.ceil(total.value / pageSize.value)) + " 页", 1),
+              vue.createVNode(_component_el_pagination, {
+                "current-page": page.value,
+                "onUpdate:currentPage": handlePageChange,
+                "page-size": pageSize.value,
+                layout: "prev, pager, next",
+                total: total.value,
+                background: true,
+                small: true,
+                "hide-on-single-page": false
+              }, null, 8, ["current-page", "page-size", "total"])
+            ])
+          ], 512), [[_directive_loading, loading.value]]),
+        ]);
+      };
+    }
+  });
+  const TokenUsagePanel = _sfc_main_token_usage;
+  
+  
   
   
 
@@ -12796,7 +13326,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS);}else{(function(){va
           label: "推广奖励",
           id: "referral-panel",
           component: ReferralPanel
-        }])
+        }]),
+        {
+          label: "使用查询",
+          id: "token-usage",
+          component: TokenUsagePanel
+        }
       ];
       const activeTab = vue.ref("main-log");
       const switchTab = (tabId) => {
