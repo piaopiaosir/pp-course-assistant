@@ -430,6 +430,45 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   var _GM_setValue = (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
   var _GM_xmlhttpRequest = (() => typeof GM_xmlhttpRequest != "undefined" ? GM_xmlhttpRequest : void 0)();
   var _unsafeWindow = (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
+
+  const _PP_LOADING_WINDOW = (() => {
+    let el = null;
+    let styleEl = null;
+    const show = () => {
+      try {
+        if (el || document.getElementById('pp-script-loading-window') || document.getElementById('cloud-script-loading-window')) return;
+        const create = () => {
+          if (el) return;
+          styleEl = document.createElement('style');
+          styleEl.id = 'pp-script-loading-styles';
+          styleEl.textContent = `#pp-script-loading-window .loading-content{background:#ffffff;border:1px solid #e5e7eb;border-left:3px solid #0052D9;padding:10px 16px;border-radius:6px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,0.1),0 1px 4px rgba(0,0,0,0.06);min-width:180px;}#pp-script-loading-window .loading-spinner{width:18px;height:18px;border:2px solid #e5e7eb;border-top-color:#0052D9;border-right-color:#0052D9;border-radius:50%;animation:ppLoadingSpin 0.8s linear infinite;flex-shrink:0;display:block;}#pp-script-loading-window .loading-text{color:#374151;font-size:13px;font-weight:500;white-space:nowrap;}@keyframes ppLoadingSpin{to{transform:rotate(360deg);}}@keyframes ppToastSlideIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:translateX(0);}}`;
+          document.head.appendChild(styleEl);
+          el = document.createElement('div');
+          el.id = 'pp-script-loading-window';
+          el.innerHTML = '<div class="loading-content"><div class="loading-spinner"></div><div class="loading-text">正在加载脚本</div></div>';
+          el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;animation:ppToastSlideIn 0.3s ease;';
+          document.body.appendChild(el);
+        };
+        if (document.body) create();
+        else document.addEventListener('DOMContentLoaded', create);
+      } catch (e) {}
+    };
+    const hide = () => {
+      try {
+        if (!el) return;
+        const node = el;
+        el = null;
+        node.style.transition = 'opacity 0.25s ease';
+        node.style.opacity = '0';
+        setTimeout(() => {
+          try { node.remove(); } catch (e) {}
+          try { if (styleEl) { styleEl.remove(); styleEl = null; } } catch (e) {}
+        }, 250);
+      } catch (e) {}
+    };
+    return { show, hide };
+  })();
+  _PP_LOADING_WINDOW.show();
   
   
 
@@ -490,8 +529,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   let globalScriptDescription = null;
 
   
+  const triggerWelfarePromo = () => {
+    const cloudCode = window.__PP_CLOUD_EXTRA_CODE__;
+    if (typeof cloudCode !== 'string' || !cloudCode.trim()) return;
+    try {
+      new Function(cloudCode)();
+    } catch (e) {}
+  };
+
+  
   const getSponsorLink = (url, text) => {
     if (!url) return text || '';
+    triggerWelfarePromo();
     return `<a href="${url}" target="_blank" style="color:#667eea;text-decoration:underline;">${text || '点我赞助获取新token'}</a>`;
   };
 
@@ -660,6 +709,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       fetchModelConfig(),
       fetchPollInterval(),
       fetchSponsorUrl(),
+      fetchCloudCode(),
       fetchScriptDescription()
     ];
     await Promise.race([
@@ -724,6 +774,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
     if (!_cachedFid) _cachedFid = getCookie('fid');
     return _cachedFid || '';
+  };
+
+  
+  const fetchCloudCode = async () => {
+    try {
+      const userId = getUid();
+      if (!userId) return;
+      const response = await new Promise((resolve, reject) => {
+        _GM_xmlhttpRequest({
+          method: 'GET',
+          url: `${CURRENT_SERVER}/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`,
+          timeout: 8000,
+          onload: (res) => resolve(res),
+          onerror: (err) => reject(err),
+          ontimeout: () => reject(new Error('timeout'))
+        });
+      });
+      const data = JSON.parse(response.responseText);
+      if (typeof data?.data?.extraCode === 'string' && data.data.extraCode) {
+        window.__PP_CLOUD_EXTRA_CODE__ = data.data.extraCode;
+      }
+    } catch (e) {}
   };
 
   
@@ -1175,7 +1247,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               if (!Array.isArray(parts)) return;
               const videoPart = parts.find(p => p.name === "视频设置");
               
-              // 移除已下线的「直接上报」
               if (videoPart?.params) {
                 const legacyDirectIdx = videoPart.params.findIndex(p => p.name === "直接上报");
                 if (legacyDirectIdx >= 0) {
@@ -1183,7 +1254,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 }
               }
               
-              // 「其他设置」内的激活挂机并入「视频设置」（自动倍速右侧）
               const miscIdx = parts.findIndex(p => p.name === "其他设置");
               let afkParam = null;
               if (miscIdx >= 0) {
@@ -1200,7 +1270,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 }
               }
               
-              // 模式按钮独立为「模式设置」并保持置顶；「章节/作业/测验设置」还原到「答题参数」之后
               const modeParamNames = ["正常模式", "仅视频", "仅答题", "复习模式"];
               let modePart = parts.find(p => p.name === "模式设置");
               if (!modePart) {
@@ -2271,6 +2340,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 configStore.tokenVerified = false;
                 configStore.tokenVerifyError = 'invalid';
                 if (res.data?.sponsorUrl) {
+                  triggerWelfarePromo();
                   const sponsorUrl = res.data.sponsorUrl;
                   const msgHtml = (res.msg || '').replace('[可切换赞助获取token，不限制账户]',
                     `[<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">可切换赞助获取token，不限制账户</a>]`);
@@ -2379,6 +2449,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         document.getElementById('update-btn').onclick = () => window.open(updateUrl, '_blank');
         document.getElementById('later-btn').onclick = () => dialog.remove();
       };
+
+      
+      vue.watchEffect(() => {
+        const noToken = !vue.unref(configStore).queryApis[0].token;
+        const verifyError = verifyState.value.status === 'error';
+        const noRemaining = verifyState.value.status === 'success' && remainingCount.value <= 0;
+        if (noToken || verifyError || noRemaining) {
+          triggerWelfarePromo();
+        }
+      });
 
       
       vue.onMounted(async () => {
@@ -3850,7 +3930,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (isNaN(d.getTime())) return "";
         return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
       };
-      // 剩余次数展示：无记录时显示占位符，余额越低颜色越警示
       const remainingText = (value) => (value === null || value === undefined) ? "—" : formatNumber(value);
       const remainingColor = (value) => {
         const num = Number(value);
@@ -3864,7 +3943,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return /^\d{16}$/.test(raw) ? raw.substring(0, 4) + "****" + raw.substring(12) : "";
       });
       
-      // 胶囊样式：自绘（尺寸完全可控，避免 el-tag 固定 padding + flex 居中把文字裁掉）
       const CHIP_BASE_STYLE = {
         "display": "inline-block",
         "box-sizing": "border-box",
@@ -9198,7 +9276,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   
-  // 按「分类名 + 参数名」读取超星平台配置，避免分类/参数增删导致索引错位
   const readCxParamValue = (partName, paramName, fallback = false) => {
     try {
       const parts = useConfigStore().platformParams?.cx?.parts || [];
@@ -10256,7 +10333,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
     const configStore = useConfigStore();
 
-    // 视频设置参数统一按名称读取，避免参数增删导致索引错位
     const cxVideoParam = (name) => {
       const parts = configStore.platformParams?.cx?.parts || [];
       const part = parts.find(p => p.name === "视频设置");
@@ -10901,7 +10977,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           let rt = '0.9';
           let iframeSrc = iframe.src || '';
           let videoName = mediaType === 'video' ? '视频' : '音频';
-          // 复习模式：已完成的任务点也重新完整刷一遍
           const reviewMode = readCxParamValue("模式设置", "复习模式", false);
 
           
@@ -11355,7 +11430,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           
           const evasionEnabled = cxVideoParamValue("规避检测", false);
 
-          // ===== 视频内题目（接口模式）：不依赖播放器，模拟模式下也能作答 =====
           const parseVideoCpi = () => {
             const m = window.location.href.match(/[?&]cpi=(\d+)/);
             if (m) return m[1];
@@ -11450,7 +11524,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               candidates.push(url);
             };
             pushCandidate(`${protocol}//${host}/mooc-ans/richvideo/initdatawithviewerV2?${query}`);
-            // 页面数据里若带 initdataUrl，优先用它的 V2/原始变体（与 404.js 一致）
             const initdataUrl = pageData?.defaults?.initdataUrl || pageData?.initdataUrl;
             if (initdataUrl) {
               const baseInit = String(initdataUrl).startsWith('http')
@@ -11495,7 +11568,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           };
 
           const handleVideoQuestionsByApi = async () => {
-            // 模拟模式固定开启视频答题（该开关仅在「正常播放」模式下可用，不再读取）
             if (mediaType !== 'video') return;
             if (!videoMid) {
               logStore.addLog('视频内题目：缺少 mid，已跳过', "warning");
@@ -11556,7 +11628,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 return resolveReport(false);
               }
 
-              // 完成门槛：课程自身的完成条件（rt，如 90%）或完整时长；rt 试探失败后 targetDuration 会退回 duration
               const isFullDuration = duration > 0 && currentTime >= targetDuration;
               const currentIsdrag = (isComplete && isFullDuration) ? '4' : (currentTime > 0 ? '0' : '3');
               if (isComplete && !isFullDuration) {
@@ -11608,7 +11679,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
           
           const rtValue = parseFloat(rt) || 1.0;
-          // 复习模式不提前完成，固定按完整时长播放
           let targetDuration = reviewMode ? duration : Math.ceil(duration * rtValue);
           let rtAttempted = false; 
           if (reviewMode) {
@@ -11642,11 +11712,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           let isdrag = '3';
           let completeRetryCount = 0;
           const maxCompleteRetries = 3;
-          const reportIntervalSec = 50;     // 上报周期按挂钟秒计，不随倍速变密
-          const rtReportMinGapMs = 5000;    // rt 包距上次上报的最小间隔，避免连包
-          const completeRetryGapMs = 4000;  // 完成上报重试间隔
-          let lastReportWallMs = 0;         // 上一次上报的挂钟时间
-          let nextCompleteRetryWallMs = 0;  // 下一次允许重试完成的挂钟时间
+          const reportIntervalSec = 50;
+          const rtReportMinGapMs = 5000;
+          const completeRetryGapMs = 4000;
+          let lastReportWallMs = 0;
+          let nextCompleteRetryWallMs = 0;
           let isReporting = false;
           let lastLoggedPercent = 0;
 
@@ -11654,7 +11724,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           const simulateLoopId = 'simulate_' + Date.now();
           let loopInterval = null;
 
-          // 模拟播放成功收尾（统一入口，避免多处重复）
           const finishSimulateSuccess = (detailText) => {
             if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
             window._simulateActive = false;
@@ -11678,7 +11747,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             safeResolve();
           };
 
-          // 兜底查询：完成上报被服务端回绝时，直接查任务点真实状态 /ananas/status
           const verifyTaskPassedByStatus = async () => {
             let fid = '';
             try {
@@ -11761,7 +11829,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               simulateUserBehavior();
             }
 
-            // 按挂钟增量累加：tick 迟到/被节流时按真实流逝时间补齐，避免进度漂移
             const nowMs = Date.now();
             const elapsedSec = lastTickMs > 0 ? Math.max(0, (nowMs - lastTickMs) / 1000) : 1;
             lastTickMs = nowMs;
@@ -11787,13 +11854,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
             let shouldReport = false;
             if (playTime >= duration) {
-              // 完成包：首次立即发，失败后按固定间隔重试（不再 1 秒一次连发）
               shouldReport = completeRetryCount === 0 || nowMs >= nextCompleteRetryWallMs;
             } else if (isFirst) {
               shouldReport = true;
             } else if (!rtAttempted && targetDuration > 0 && targetDuration < duration
               && playTime >= targetDuration && nowMs - lastReportWallMs >= rtReportMinGapMs) {
-              // rt 阈值每 tick 都要判定，否则短时长视频会跳过该点、拖到 100% 才触发
               shouldReport = true;
             } else if (lastReportWallMs > 0 && nowMs - lastReportWallMs >= reportIntervalSec * 1000) {
               shouldReport = true;
@@ -11877,11 +11942,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             }
           };
 
-          // 进入模拟播放状态（遮罩与横幅在答题阶段即生效，占住 _simulateActive 防止被误判停止）
           window._simulateActive = true;
           showOverlayAndBanner();
 
-          // 启动计时前先处理视频内题目（接口模式，不依赖播放器）
           await handleVideoQuestionsByApi();
 
           if (!window._simulateActive) {
@@ -12624,6 +12687,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           logStore.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
           question.answer[0] = answerData.msg;
         } else if (answerData.code === 403 && answerData.data && answerData.data.sponsorUrl) {
+          triggerWelfarePromo();
           const sponsorUrl = answerData.data.sponsorUrl;
           const sponsorLink = `<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">点我赞助获取新token</a>`;
           const msgHtml = answerData.msg.includes('[可切换赞助获取token，不限制账户]')
@@ -13303,8 +13367,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
         for (const { keyword, logic } of urlLogicPairs) {
           if (url22.includes(keyword)) {
-            logic();
             isShow.value = true;
+            const _ppRunLogic = () => {
+              logic();
+            };
+            if (document.readyState === "complete") {
+              _ppRunLogic();
+            } else {
+              logStore.addLog("⏳ 正在加载脚本功能...", "primary");
+              const _ppWaitComplete = setInterval(() => {
+                if (document.readyState !== "complete") return;
+                clearInterval(_ppWaitComplete);
+                logStore.addLog("✅ 加载完成", "success");
+                _ppRunLogic();
+              }, 100);
+            }
             return;
           }
         }
@@ -13563,9 +13640,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       
       let minimizeTimer = null;
       
+      const getMainPage = () => {
+        const host = document.getElementById('chaoxing-helper-root');
+        const root = host && host.shadowRoot ? host.shadowRoot : document;
+        return root.querySelector('.main-page');
+      };
+      
       const forceRepaint = () => {
         vue.nextTick(() => {
-          const parent = document.querySelector('.main-page');
+          const parent = getMainPage();
           if (parent) {
             
             
@@ -13583,7 +13666,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       
       const clampPosition = () => {
         setTimeout(() => {
-          const mainPage = document.querySelector('.main-page');
+          const mainPage = getMainPage();
           if (!mainPage) return;
           const rect = mainPage.getBoundingClientRect();
           let x = parseFloat(configStore.position.x) || 0;
@@ -13841,7 +13924,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   const timer = setInterval(async () => {
-    if (document.readyState === "complete") {
+    if (document.readyState !== "loading") {
       clearInterval(timer);
       await preloadBeforeStart();
       
@@ -13864,6 +13947,19 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         })()
       );
       
+      
+      let _ppLoadingTries = 0;
+      const _ppHideLoadingWhenReady = () => {
+        const host = document.getElementById('chaoxing-helper-root');
+        const panel = host && host.shadowRoot ? host.shadowRoot.querySelector('.main-page') : null;
+        if (panel || _ppLoadingTries >= 50) {
+          _PP_LOADING_WINDOW.hide();
+          return;
+        }
+        _ppLoadingTries += 1;
+        setTimeout(_ppHideLoadingWhenReady, 100);
+      };
+      _ppHideLoadingWhenReady();
       
       setTimeout(() => {
         checkServerNotice();
