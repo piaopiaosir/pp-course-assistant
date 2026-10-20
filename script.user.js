@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.4.5
+// @version      3.4.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -4688,6 +4688,42 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   
+  // ==================== 学习通人脸识别 / 防作弊 ====================
+  const CX_FACE_SELECTORS = ["#fcqrimg", ".chapterVideoFaceMaskDiv", ".faceRecognition", ".face-verify"];
+  const CX_FACE_TEXT_RE = /(请完成人脸识别|人脸识别验证|请进行人脸识别|请先完成人脸)/;
+
+  const detectCxFacePrompt = () => {
+    const doc = (typeof _unsafeWindow !== "undefined" && _unsafeWindow.document) || document;
+    if (!doc || !doc.body) return false;
+    for (const sel of CX_FACE_SELECTORS) {
+      const el = doc.querySelector(sel);
+      if (el && el.offsetHeight > 0) return true;
+    }
+    // 文案兜底只在弹层类容器里判断，避免页面说明文字误判
+    const layers = doc.querySelectorAll('[class*="face"],[class*="Face"],.maskDiv,.popDiv');
+    for (const layer of layers) {
+      if (layer.offsetHeight > 0 && CX_FACE_TEXT_RE.test(layer.innerText || "")) return true;
+    }
+    return false;
+  };
+
+  /**
+   * 检测到人脸识别弹窗就等待用户完成（最多 120 秒），避免"页面被遮罩、脚本却在点选项"
+   * @returns {Promise<boolean>} 是否等待过
+   */
+  const waitForCxFaceRecognition = async (timeoutMs = 120000, pollMs = 2000) => {
+    if (!detectCxFacePrompt()) return false;
+    try {
+      useLogStore().addLog("检测到人脸识别，请先完成验证，脚本将等待（最多120秒）", "danger");
+    } catch (e) {}
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      if (!detectCxFacePrompt()) return true;
+    }
+    return true;
+  };
+
   class QuestionProcessor {
     constructor() {
       __publicField(this, "_document", document);           
@@ -4781,6 +4817,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         ["单选题", "0"], ["A1型题", "0"], ["A1A2型题", "0"],
         ["多选题", "1"], ["X型题", "1"],
         ["填空题", "2"], ["听力填空", "2"], ["听力对话填空", "2"], ["完形填空", "2"], ["短文填空", "2"], ["选词填空", "2"],
+        ["填表题", "2"], ["阅读填空", "2"], ["阅读题", "2"], ["阅读理解", "2"],
         ["判断题", "3"],
         ["简答题", "4"], ["名词解释", "5"],
         ["论述题", "6"], ["计算题", "7"],
@@ -5315,19 +5352,100 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   
-  const pickBestOption = (answer, options, threshold = 50) => {
-    let bestMatch = null;
-    for (const key in options) {
-      const similarity = computeMatch(answer, key);
-      if (similarity === 100) {
-        return { key, similarity: 100 };
-      }
-      if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
-        bestMatch = { key, similarity };
+
+
+  /** 多空答案分隔符：与 OCS 对齐，刻意不含英文逗号，避免切坏英文句子 */
+  const ANSWER_SEPARATORS = ["===", "#", "---", "###", "|", ";", "；"];
+
+  /** 全角转半角 + 去标签 + 去中英标点 + 去空白 + 小写，用于宽松比较 */
+  const normalizeAnsText = (input) => {
+    let s = String(input == null ? "" : input);
+    s = s.replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
+    s = s.replace(/<[^>]*>/g, " ");
+    return s
+      .replace(/[，。！？；：""''、（）【】〈〉《》,.\-!?;:'"()\[\]<>]/g, "")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+  };
+
+  /** 去掉选项前的 "A." "B、" "C)" 标号；只认标点，避免把 "I think" 误剥成 "think" */
+  const stripOptionPrefix = (input) => String(input == null ? "" : input)
+    .trim()
+    .replace(/^[A-Ha-h]\s*[.、．，,)）:：\]】]\s*/, "")
+    .trim();
+
+  /** "A" / "AB" / "A,C" 这类选项字母答案：<=8 位、只含严格递增且不重复的大写字母 */
+  const isPlainLetterAnswer = (input) => {
+    const t = String(input == null ? "" : input).trim().replace(/[,，.。．、 #/\\|]/g, "").toUpperCase();
+    if (!/^[A-Z]{1,8}$/.test(t)) return false;
+    for (let i = 1; i < t.length; i++) {
+      if (t.charCodeAt(i) <= t.charCodeAt(i - 1)) return false;
+    }
+    return true;
+  };
+
+  /** 把一条答案拆成多个空 / 多个选项（支持 JSON 数组与 ANSWER_SEPARATORS） */
+  const splitAnswerText = (answer) => {
+    if (answer == null) return [];
+    if (Array.isArray(answer)) return answer.map((a) => String(a).trim()).filter(Boolean);
+    const raw = String(answer).trim();
+    if (!raw) return [];
+    if (raw.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map((a) => String(a).trim()).filter(Boolean);
+      } catch (e) {}
+    }
+    for (const sep of ANSWER_SEPARATORS) {
+      if (raw.includes(sep)) {
+        return raw.split(sep).map((p) => p.trim()).filter(Boolean);
       }
     }
-    return bestMatch;
+    return [raw];
   };
+
+  /** 取题目的有序选项表 [{ text, el }]，兼容老的纯对象结构 */
+  const getOptionList = (question) => {
+    if (!question) return [];
+    if (Array.isArray(question.optionsList) && question.optionsList.length) return question.optionsList;
+    const list = [];
+    const src = question.options;
+    if (Array.isArray(src)) {
+      src.forEach((o) => list.push(typeof o === "string" ? { text: o, el: null } : { text: o.text || "", el: o.el || null }));
+    } else if (src && typeof src === "object") {
+      for (const key in src) list.push({ text: key, el: src[key] });
+    }
+    return list;
+  };
+
+  /**
+   * 把一条答案落到选项下标上：原文相等 -> 去标号/归一化相等
+   * （字母答案与相似度由服务端负责：答案在返回前已对齐成选项原文）
+   * @returns {number} 命中下标，-1 未命中
+   */
+  const matchOptionIndex = (optionList, answer) => {
+    if (!optionList || optionList.length === 0 || answer == null) return -1;
+    const raw = String(answer).trim();
+    if (!raw) return -1;
+
+    for (let i = 0; i < optionList.length; i++) {
+      if (String(optionList[i].text).trim() === raw) return i;
+    }
+
+    const strippedAnswer = stripOptionPrefix(raw);
+    const normAnswer = normalizeAnsText(strippedAnswer);
+    for (let i = 0; i < optionList.length; i++) {
+      const optText = stripOptionPrefix(optionList[i].text);
+      if (optText === strippedAnswer) return i;
+      const normOpt = normalizeAnsText(optText);
+      if (normAnswer && normOpt && normOpt === normAnswer) return i;
+    }
+
+    // 服务端返回前已把答案对齐成选项原文（alignAnswersToOptions），
+    // 字母答案与相似度兜底都不再需要：字母在服务端就会被 422 拦掉。
+    return -1;
+  };
+
   
   
   
@@ -5339,6 +5457,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       __publicField(this, "type");              
       
       __publicField(this, "init", async () => {
+        await waitForCxFaceRecognition();
         this.questions = [];
         this.parseHtml();
         if (this.questions.length) {
@@ -5418,229 +5537,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       });
       
       __publicField(this, "fillQuestion", async (question) => {
-        var _a, _b;
         if (!this._window)
           return;
-        
+
         try {
-          if (question.type === "0" || question.type === "1") {
-            const configStore = useConfigStore();
-            const useSimilarity = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数")?.params.find(p => p.name === "相似匹配")?.value || false;
-            
-            
-            const correctKeys = new Set();
-            for (const answer of question.answer) {
-              const cleanAnswer = this.stripTags(answer);
-              let matched = false;
-              for (const key in question.options) {
-                if (key === cleanAnswer) {
-                  correctKeys.add(key);
-                  matched = true;
-                  break;
-                }
-              }
-              if (!matched && useSimilarity) {
-                const bestMatch = pickBestOption(cleanAnswer, question.options);
-                if (bestMatch) {
-                  correctKeys.add(bestMatch.key);
-                }
-              }
-            }
-            
-            
-            if (question.type === "1") {
-              for (const key in question.options) {
-                const optionElement = question.options[key];
-                const isChecked = this.isOptionSelected(optionElement);
-                if (isChecked && !correctKeys.has(key)) {
-                  this.addLog(`取消错误选项: ${key}`, "warning");
-                  optionElement.setAttribute("data-filling", "true");
-                  optionElement.click();
-                  await new Promise(resolve => setTimeout(resolve, 200));
-                  optionElement.removeAttribute("data-filling");
-                }
-              }
-              
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-            
-            
-            const selectedKeys = new Set();
-            for (const answer of question.answer) {
-              const cleanAnswer = this.stripTags(answer);
-              let matched = false;
-              for (const key in question.options) {
-                if (key === cleanAnswer && !selectedKeys.has(key)) {
-                  matched = true;
-                  selectedKeys.add(key);
-                  const optionElement = question.options[key];
-                  if (this.isOptionSelected(optionElement)) continue;
-                  optionElement.setAttribute("data-filling", "true");
-                  optionElement.click();
-                  await new Promise(resolve => setTimeout(resolve, 200));
-                  optionElement.removeAttribute("data-filling");
-                  break;
-                }
-              }
-              if (!matched && useSimilarity) {
-                const bestMatch = pickBestOption(cleanAnswer, question.options);
-                if (bestMatch && !selectedKeys.has(bestMatch.key)) {
-                  selectedKeys.add(bestMatch.key);
-                  const optionElement = question.options[bestMatch.key];
-                  if (!this.isOptionSelected(optionElement)) {
-                    optionElement.setAttribute("data-filling", "true");
-                    optionElement.click();
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    optionElement.removeAttribute("data-filling");
-                  }
-                }
-              }
-            }
-        } else if (question.type === "2") {
-          const textareaElements = question.element.querySelectorAll("textarea");
-          if (textareaElements.length === 0)
-            return;
-          const answers = question.answer;
-          for (let i = 0; i < textareaElements.length; i++) {
-            const textareaElement = textareaElements[i];
-            const answerText = answers[i] || "";
-            try {
-              
-              const blankItemDiv = textareaElement.closest(".blankItemDiv");
-              const inpDiv = blankItemDiv?.querySelector(".InpDIV");
-              if (inpDiv) {
-                inpDiv.click();
-                await new Promise(resolve => setTimeout(resolve, 300));
-              }
-              const ueditor = this._window.UE.getEditor(textareaElement.id || textareaElement.name);
-              if (ueditor && typeof ueditor.setContent === "function") {
-                
-                if (ueditor.body === null) {
-                  await new Promise((resolve) => {
-                    ueditor.addListener("ready", () => resolve());
-                    setTimeout(resolve, 2000);
-                  });
-                }
-                ueditor.setContent(answerText);
-                ueditor.fireEvent("contentChange");
-              } else {
-                
-                textareaElement.value = answerText;
-                textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
-                textareaElement.dispatchEvent(new Event("change", { bubbles: true }));
-              }
-            } catch (e) {
-              textareaElement.value = answerText;
-              textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
-              textareaElement.dispatchEvent(new Event("change", { bubbles: true }));
-            }
-          }
-        } else if (question.type === "3") {
-          let answer = "false";
-          if (REGEX.JUDGE_FALSE.test(question.answer[0])) {
-            answer = "false";
-          } else if (REGEX.JUDGE_TRUE.test(question.answer[0])) {
-            answer = "true";
-          }
-          const trueOrFalse = {
-            "true": "对",
-            "false": "错"
-          };
-          for (const key in question.options) {
-            if (["zj", "zy"].includes(this.type)) {
-              const ariaLabel = question.options[key].getAttribute("aria-label");
-              const optionText = key;
-              
-              let isMatch = false;
-              if (answer === "true") {
-                isMatch = (ariaLabel && (ariaLabel.includes("正噩选择") || ariaLabel.includes("对选择"))) || 
-                          REGEX.JUDGE_TRUE.test(optionText);
-              } else if (answer === "false") {
-                isMatch = (ariaLabel && (ariaLabel.includes("错璪选择") || ariaLabel.includes("错选择"))) || 
-                          REGEX.JUDGE_FALSE.test(optionText);
-              }
-              if (isMatch) {
-                
-                let alreadySelected = false;
-                
-                if (question.options[key].getAttribute("aria-checked") === "true") {
-                  alreadySelected = true;
-                }
-                
-                if (!alreadySelected && (question.options[key].classList.contains("cur") || question.options[key].classList.contains("selected"))) {
-                  alreadySelected = true;
-                }
-                
-                if (!alreadySelected) {
-                  const spanEl = question.options[key].querySelector("span.num_option") || question.options[key].querySelector("span[data]");
-                  if (spanEl && (spanEl.classList.contains("cur") || spanEl.classList.contains("selected"))) {
-                    alreadySelected = true;
-                  }
-                }
-                
-                if (!alreadySelected && (question.options[key].querySelector(".onChecked") || question.options[key].querySelector(".check_answer"))) {
-                  alreadySelected = true;
-                }
-                if (alreadySelected) continue;
-                
-                const optionElement = question.options[key];
-                optionElement.setAttribute("data-filling", "true");
-                (_b = optionElement.click());
-                setTimeout(() => optionElement.removeAttribute("data-filling"), 200);
-                break;
-              }
-            } else if (["ks"].includes(this.type)) {
-              const optionElement = question.options[key].querySelector(`span[data='${answer}']`);
-              if (!optionElement)
-                continue;
-              if (optionElement.classList.contains("check_answer"))
-                continue;
-              const parentOption = optionElement.closest(".answerBg");
-              if (parentOption == null ? void 0 : parentOption.querySelector(".check_answer"))
-                continue;
-              
-              optionElement.setAttribute("data-filling", "true");
-              optionElement.click();
-              setTimeout(() => optionElement.removeAttribute("data-filling"), 200);
-              break;
-            }
-          }
-        } else if (question.type === "11") {
-          
-          const selectElements = question.element.querySelectorAll("select.dept_select");
-          if (selectElements.length === 0) return;
-          
-          this.addLog(`连线题答案: ${JSON.stringify(question.answer)}`, "primary");
-          
-          for (let i = 0; i < selectElements.length && i < question.answer.length; i++) {
-            const select = selectElements[i];
-            const answerValue = question.answer[i];
-            
-            if (!answerValue) continue;
-            if (select.value === answerValue) continue;
-            
-            
-            select.value = answerValue;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-            
-            
-            const chosenContainer = select.nextElementSibling;
-            if (chosenContainer && chosenContainer.classList.contains("chosen-container")) {
-              const chosenSingle = chosenContainer.querySelector(".chosen-single span");
-              if (chosenSingle) chosenSingle.textContent = answerValue;
-              chosenSingle?.classList?.remove("chosen-default");
-              const chosenResults = chosenContainer.querySelectorAll(".chosen-results li");
-              chosenResults.forEach(li => {
-                li.classList.remove("result-selected");
-                if (li.textContent.trim() === answerValue) {
-                  li.classList.add("result-selected");
-                }
-              });
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        } else if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7") {
+          // 0/1/2/3/11/13 走统一作答；4/5/6/7 在这里直接写文本
+          if (await this.fillQuestionV2(question)) return;
+          if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7") {
           
           const textareaElement = question.element.querySelector("textarea");
           if (!textareaElement) return;
@@ -5667,60 +5570,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             textareaElement.value = answerText;
             textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
           }
-        } else if (question.type === "13") {
-          
-          const sortSelects = question.element.querySelectorAll(".sortQuesSelect .dept_select");
-          if (sortSelects.length === 0) return;
-          
-          
-          let answers = question.answer;
-          if (typeof question.answer === 'string') {
-            if (question.answer.startsWith('[')) {
-              try {
-                answers = JSON.parse(question.answer);
-              } catch (e) {
-                answers = question.answer.split(/[,，]/).map(a => a.trim()).filter(a => a);
-              }
-            } else {
-              answers = question.answer.split(/[,，]/).map(a => a.trim()).filter(a => a);
-            }
-          }
-          
-          
-          sortSelects.forEach((select, index) => {
-            if (index >= answers.length) return;
-            const answerValue = answers[index].toUpperCase();
-            
-            
-            select.value = answerValue;
-            
-            
-            const chosenContainer = select.nextElementSibling;
-            if (chosenContainer && chosenContainer.classList.contains("chosen-container")) {
-              const chosenSingle = chosenContainer.querySelector(".chosen-single span");
-              if (chosenSingle) {
-                chosenSingle.textContent = answerValue;
-              }
-              
-              
-              select.dispatchEvent(new Event("change", { bubbles: true }));
-              
-              
-              const chosenResults = chosenContainer.querySelectorAll(".chosen-results li");
-              chosenResults.forEach(li => {
-                li.classList.remove("result-selected");
-                if (li.textContent.trim() === answerValue) {
-                  li.classList.add("result-selected");
-                }
-              });
-            }
-          });
-          
-          
-          const answerInput = question.element.querySelector('input[name^="answer"]');
-          if (answerInput) {
-            answerInput.value = answers.join("");
-          }
+          // 作业/考试的简答同样需要点“保存”才落库
+          const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
+          if (saveBtn) saveBtn.click();
         }
         } catch (error) {
           this.addLog(`答题过程发生错误：${error.message}`, "danger");
@@ -5750,16 +5602,461 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       }
       return false;
     }
+    /**
+     * 返回 true 表示已处理（含"匹配不到就跳过"，绝不瞎猜），false 表示交给旧逻辑
+     */
+    async fillQuestionV2(question) {
+      let type = String(question.type);
+      if (!["0", "1", "2", "3", "11", "13"].includes(type)) {
+        // 未知题型兜底：有选项按单选、没选项按填空，宁可猜一次也别整题不答
+        if (type === "999" || !type || type === "undefined" || type === "null") {
+          type = getOptionList(question).length > 0 ? "0" : "2";
+        } else {
+          return false;
+        }
+      }
+
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const configStore = useConfigStore();
+      const answerParams = configStore.platformParams[configStore.platformName]?.parts.find((p) => p.name === "答题参数")?.params || [];
+      const useSimilarity = answerParams.find((p) => p.name === "相似匹配")?.value !== false;
+      const thresholdRaw = Number(answerParams.find((p) => p.name === "正确阈值")?.value);
+      const threshold = Math.min(99, Math.max(50, Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 85));
+
+      const optionList = getOptionList(question);
+      const rawAnswers = Array.isArray(question.answer) ? question.answer.slice() : splitAnswerText(question.answer);
+      const flatAnswers = [];
+      for (const a of rawAnswers) {
+        const parts = splitAnswerText(a);
+        if (parts.length > 1) {
+          parts.forEach((p) => flatAnswers.push(p));
+        } else {
+          const one = String(a == null ? "" : a).trim();
+          if (one) flatAnswers.push(one);
+        }
+      }
+      if (flatAnswers.length === 0) {
+        return true;
+      }
+
+      const clickOption = async (el) => {
+        if (!el) return;
+        el.setAttribute("data-filling", "true");
+        el.click();
+        await sleep(200);
+        el.removeAttribute("data-filling");
+      };
+
+      // ---------- 单选 / 多选 ----------
+      if (type === "0" || type === "1") {
+        const targetIndices = [];
+        for (const ans of flatAnswers) {
+          const clean = this.stripTags(ans);
+          if (!clean) continue;
+          // 服务端已把每个答案对齐成一条选项原文，多选也是逐条返回，无需再拆字母
+          const idx = matchOptionIndex(optionList, clean);
+          if (idx >= 0 && !targetIndices.includes(idx)) targetIndices.push(idx);
+        }
+
+        if (targetIndices.length === 0) {
+          return true;
+        }
+
+        if (type === "1") {
+          for (let i = 0; i < optionList.length; i++) {
+            const el = optionList[i].el;
+            if (!el || targetIndices.includes(i)) continue;
+            if (this.isOptionSelected(el)) {
+              await clickOption(el);
+            }
+          }
+          await sleep(300);
+        }
+
+        for (const idx of targetIndices) {
+          const el = optionList[idx].el;
+          if (!el) continue;
+          if (this.isOptionSelected(el)) continue;
+          await clickOption(el);
+        }
+        return true;
+      }
+
+      // ---------- 判断 ----------
+      if (type === "3") {
+        const rawAnswer = String(flatAnswers[0] || "").trim();
+        let truth = null;
+        if (REGEX.JUDGE_FALSE.test(rawAnswer)) truth = false;
+        else if (REGEX.JUDGE_TRUE.test(rawAnswer)) truth = true;
+
+        // 答案本身就是选项文本时直接点
+        if (truth === null && rawAnswer) {
+          const idx = matchOptionIndex(optionList, rawAnswer);
+          const el = idx >= 0 ? optionList[idx].el : null;
+          if (el) {
+            if (!this.isOptionSelected(el)) await clickOption(el);
+            return true;
+          }
+        }
+
+        if (truth === null) {
+          return true;
+        }
+
+        let target = null;
+        for (const opt of optionList) {
+          const el = opt.el;
+          if (!el) continue;
+          if (["zj", "zy"].includes(this.type)) {
+            const aria = el.getAttribute("aria-label") || "";
+            const text = opt.text || "";
+            if (truth) {
+              if ((aria && (aria.includes("正确") || aria.includes("对"))) || REGEX.JUDGE_TRUE.test(text)) {
+                target = el;
+                break;
+              }
+            } else if ((aria && aria.includes("错")) || REGEX.JUDGE_FALSE.test(text)) {
+              target = el;
+              break;
+            }
+          } else {
+            const span = el.querySelector(`span[data='${truth ? "true" : "false"}']`);
+            if (span) {
+              target = span;
+              break;
+            }
+          }
+        }
+
+        if (!target) {
+          return true;
+        }
+        if (target.classList && target.classList.contains("check_answer")) return true;
+        await clickOption(target);
+        return true;
+      }
+
+      // ---------- 填空（含完形/选词/多空） ----------
+      if (type === "2") {
+        const wordSpans = Array.from(question.element.querySelectorAll("span.saveSingleSelect[data]"));
+        const selectBoxes = Array.from(question.element.querySelectorAll("select.dept_select"));
+        const textareaElements = question.element.querySelectorAll("textarea");
+
+        // 模型偶尔把多个空合并成一条（"北京，上海"）：按空位数再拆一次，
+        // 只有拆出来的段数正好等于空位数才采用，避免拆坏的答案。
+        let blankAnswers = flatAnswers;
+        const blankCount = Math.max(wordSpans.length, selectBoxes.length, textareaElements.length);
+        if (blankAnswers.length === 1 && blankCount > 1) {
+          const parts = String(blankAnswers[0])
+            .split(/[、,，;；|]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (parts.length === blankCount) blankAnswers = parts;
+        }
+
+        // 1) 选词/完形：点 span.saveSingleSelect[data]
+        if (wordSpans.length > 0) {
+          const used = new Set();
+          let filled = 0;
+          // 兜底：万一模型仍返回字母，先映射成选项原文再找词块
+          const optionTexts = optionList.map((o) => o.text);
+          const resolveWord = (raw) => {
+            const clean = this.stripTags(String(raw == null ? "" : raw));
+            if (!clean) return "";
+            if (optionTexts.length > 0 && isPlainLetterAnswer(clean)) {
+              const idx = clean.replace(/[,，.。．、 #/\\|]/g, "").toUpperCase().charCodeAt(0) - 65;
+              if (idx >= 0 && idx < optionTexts.length) return optionTexts[idx];
+            }
+            return clean;
+          };
+          for (const ans of blankAnswers) {
+            const clean = resolveWord(ans);
+            if (!clean) continue;
+            let pick = -1;
+            for (let i = 0; i < wordSpans.length; i++) {
+              if (used.has(i)) continue;
+              if (normalizeAnsText(wordSpans[i].getAttribute("data") || "") === normalizeAnsText(clean)) {
+                pick = i;
+                break;
+              }
+            }
+            if (pick < 0 && useSimilarity) {
+              let bestScore = threshold;
+              for (let i = 0; i < wordSpans.length; i++) {
+                if (used.has(i)) continue;
+                const score = computeMatch(normalizeAnsText(clean), normalizeAnsText(wordSpans[i].getAttribute("data") || ""));
+                if (score > bestScore) {
+                  bestScore = score;
+                  pick = i;
+                }
+              }
+            }
+            if (pick >= 0) {
+              used.add(pick);
+              wordSpans[pick].click();
+              filled += 1;
+              await sleep(150);
+            }
+          }
+          if (filled > 0) {
+            return true;
+          }
+        }
+
+        // 2) 下拉型
+        if (selectBoxes.length > 0) {
+          const count = Math.min(selectBoxes.length, blankAnswers.length);
+          for (let i = 0; i < count; i++) {
+            const select = selectBoxes[i];
+            const value = String(blankAnswers[i] || "").trim();
+            if (!value) continue;
+            const options = Array.from(select.options || []);
+            let matchedValue = "";
+            for (const opt of options) {
+              if (opt.value === value || normalizeAnsText(opt.text) === normalizeAnsText(value)) {
+                matchedValue = opt.value;
+                break;
+              }
+            }
+            if (!matchedValue && useSimilarity) {
+              let bestScore = threshold;
+              for (const opt of options) {
+                const score = computeMatch(normalizeAnsText(value), normalizeAnsText(opt.text));
+                if (score > bestScore) {
+                  bestScore = score;
+                  matchedValue = opt.value;
+                }
+              }
+            }
+            if (!matchedValue) continue;
+            select.value = matchedValue;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            await sleep(200);
+          }
+          return true;
+        }
+
+        // 3) 文本框 / UE 富文本
+        if (textareaElements.length === 0) {
+          return true;
+        }
+        for (let i = 0; i < textareaElements.length; i++) {
+          const textareaElement = textareaElements[i];
+          // 单输入框但答案有多个空时，合并写入（否则第二空会丢）
+          const answerText =
+            textareaElements.length === 1
+              ? blankAnswers.join("，")
+              : blankAnswers.length === 1
+                ? blankAnswers[0]
+                : (blankAnswers[i] == null ? "" : blankAnswers[i]);
+          try {
+            const blankItemDiv = textareaElement.closest(".blankItemDiv");
+            const inpDiv = blankItemDiv ? blankItemDiv.querySelector(".InpDIV") : null;
+            if (inpDiv) {
+              inpDiv.click();
+              await sleep(300);
+            }
+            const UE = this._window && this._window.UE;
+            const ueditor = UE && typeof UE.getEditor === "function" ? UE.getEditor(textareaElement.id || textareaElement.name) : null;
+            if (ueditor && typeof ueditor.setContent === "function") {
+              if (ueditor.body === null) {
+                await new Promise((resolve) => {
+                  ueditor.addListener("ready", () => resolve());
+                  setTimeout(resolve, 2000);
+                });
+              }
+              ueditor.setContent(answerText);
+              ueditor.fireEvent("contentChange");
+            } else {
+              textareaElement.value = answerText;
+              textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
+              textareaElement.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+          } catch (e) {
+            textareaElement.value = answerText;
+            textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }
+        // 作业/考试的填空需要点“保存”才会落库（章节测验没有该按钮，查询不到即跳过）
+        const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
+        if (saveBtn) {
+          saveBtn.click();
+          await sleep(300);
+        }
+        return true;
+      }
+
+      // ---------- 连线（每个左侧项一个下拉） ----------
+      if (type === "11") {
+        const selects = Array.from(question.element.querySelectorAll("select.dept_select"));
+        if (selects.length === 0) {
+          // 作业/考试的连线是「点选项连接」型：.line_answer 里的 selectBox + li[data]
+          const boxes = Array.from(
+            question.element.querySelectorAll(".line_answer_ct .selectBox, .line_answer .selectBox"),
+          );
+          if (boxes.length === 0) return false;
+          const flat = [];
+          for (const a of rawAnswers) splitAnswerText(a).forEach((p) => flat.push(p));
+          let clicked = 0;
+          for (let i = 0; i < boxes.length && i < flat.length; i++) {
+            const value = String(flat[i] || "").trim();
+            if (!value) continue;
+            const letter = isPlainLetterAnswer(value) ? value.toUpperCase().charAt(0) : "";
+            if (!letter) continue;
+            const anchor =
+              boxes[i].querySelector(`li[data="${letter}"] a`) || boxes[i].querySelector(`li[data='${letter}'] a`);
+            if (!anchor) continue;
+            anchor.click();
+            clicked += 1;
+            await sleep(150);
+          }
+          const hidden = question.element.querySelector('.line_answer input[name^="answer"]');
+          if (hidden && flat.length > 0) hidden.value = flat.join("");
+          return clicked > 0;
+        }
+        const flat = [];
+        for (const a of rawAnswers) splitAnswerText(a).forEach((p) => flat.push(p));
+        if (flat.length === 0) {
+          return true;
+        }
+        let filled = 0;
+        for (let i = 0; i < selects.length && i < flat.length; i++) {
+          const select = selects[i];
+          const value = String(flat[i] || "").trim();
+          if (!value) continue;
+          const options = Array.from(select.options || []);
+          let target = "";
+          if (isPlainLetterAnswer(value)) {
+            const letter = value.replace(/[,，.。．、 #/\\|]/g, "").toUpperCase().charAt(0);
+            const byValue = options.find((o) => String(o.value).toUpperCase() === letter);
+            const byIndex = options[letter.charCodeAt(0) - 65];
+            target = byValue ? byValue.value : byIndex ? byIndex.value : "";
+          }
+          if (!target) {
+            const norm = normalizeAnsText(value);
+            const hit = options.find((o) => normalizeAnsText(o.text) === norm);
+            if (hit) target = hit.value;
+          }
+          if (!target && useSimilarity) {
+            let bestScore = threshold;
+            for (const o of options) {
+              const score = computeMatch(normalizeAnsText(value), normalizeAnsText(o.text));
+              if (score > bestScore) {
+                bestScore = score;
+                target = o.value;
+              }
+            }
+          }
+          if (!target) continue;
+          select.value = target;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          this.syncChosenSelect(select, target);
+          filled += 1;
+          await sleep(200);
+        }
+        return true;
+      }
+
+      // ---------- 排序 ----------
+      if (type === "13") {
+        const sortSelects = Array.from(question.element.querySelectorAll(".sortQuesSelect .dept_select"));
+        if (sortSelects.length === 0) return false;
+        const seq = [];
+        for (const a of rawAnswers) {
+          const parts = splitAnswerText(a);
+          const list = parts.length > 1 ? parts : [String(a == null ? "" : a).trim()];
+          for (const item of list) {
+            if (!item) continue;
+            if (isPlainLetterAnswer(item)) {
+              item.replace(/[,，.。．、 #/\\|]/g, "").toUpperCase().split("").forEach((ch) => seq.push(ch));
+            } else if (/^[A-Za-z]{2,8}$/.test(item)) {
+              item.toUpperCase().split("").forEach((ch) => seq.push(ch));
+            } else {
+              const idx = matchOptionIndex(optionList, item);
+              if (idx >= 0 && idx < 26) seq.push(String.fromCharCode(65 + idx));
+            }
+          }
+        }
+        if (seq.length === 0) {
+          return true;
+        }
+        let filled = 0;
+        for (let i = 0; i < sortSelects.length && i < seq.length; i++) {
+          const select = sortSelects[i];
+          const letter = seq[i];
+          if (!letter) continue;
+          const options = Array.from(select.options || []);
+          const byValue = options.find((o) => String(o.value).toUpperCase() === letter);
+          select.value = byValue ? byValue.value : letter;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          this.syncChosenSelect(select, select.value);
+          filled += 1;
+        }
+        const answerInput = question.element.querySelector('input[name^="answer"]');
+        if (answerInput) answerInput.value = seq.join("");
+        return true;
+      }
+
+      return false;
+    }
+    /** 同步 chosen 下拉的显示文本（原代码在 11/13 分支里各写了一遍） */
+    syncChosenSelect(select, value) {
+      try {
+        const container = select.nextElementSibling;
+        if (!container || !container.classList || !container.classList.contains("chosen-container")) return;
+        const single = container.querySelector(".chosen-single span");
+        const options = Array.from(select.options || []);
+        const opt = options.find((o) => o.value === value);
+        const text = opt ? opt.text : value;
+        if (single) {
+          single.textContent = text;
+          if (single.classList) single.classList.remove("chosen-default");
+        }
+        container.querySelectorAll(".chosen-results li").forEach((li) => {
+          li.classList.remove("result-selected");
+          if (li.textContent.trim() === text) li.classList.add("result-selected");
+        });
+      } catch (e) {}
+    }
+    /** 题型解析：题型文字映射 → 题干括号里的题型 → 隐藏 input 的数字码 → 999 */
+    resolveQuestionType(typeText, titleText, questionElement) {
+      const textType = this.typeMap.get(String(typeText || "").replace(/[\[\]【】]/g, "").trim());
+      if (textType) return textType;
+
+      const bracket = String(titleText || "").match(/[\[\【](.+?)[\]\】]/);
+      if (bracket) {
+        const titleType = this.typeMap.get(bracket[1].trim());
+        if (titleType) return titleType;
+      }
+
+      // 兜底：章节/作业/考试页都有隐藏 input 存题型数字码（比文本切片可靠）
+      const input = questionElement
+        ? questionElement.querySelector('input[id^="answertype"], input[name^="type"]')
+        : null;
+      const code = input ? String(input.value || "").trim() : "";
+      if (["0", "1", "2", "3", "4", "5", "6", "7", "11", "13"].includes(code)) return code;
+      if (code === "14" || code === "15") return "2"; // 填表 / 阅读类统一走填空逻辑
+      return "999";
+    }
     extractOptions(optionElements, optionSelector) {
       const optionsObject = {};
       const optionTexts = [];
+      const optionsList = [];
       optionElements.forEach((optionElement) => {
         var _a;
         const optionTextContent = this.stripTags(((_a = optionElement.querySelector(optionSelector)) == null ? void 0 : _a.innerHTML) || "");
-        optionsObject[optionTextContent] = optionElement;
+        optionsList.push({ text: optionTextContent, el: optionElement });
         optionTexts.push(optionTextContent);
+        // 重复文本不再互相覆盖，而是加后缀保证每个选项都能被点到
+        let key = optionTextContent;
+        let suffix = 2;
+        while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
+          key = optionTextContent + "#" + suffix;
+          suffix += 1;
+        }
+        optionsObject[key] = optionElement;
       });
-      return [optionsObject, optionTexts];
+      return [optionsObject, optionTexts, optionsList];
     }
     addQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
@@ -5769,6 +6066,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         let optionElements;
         let optionsObject = {};
         let optionTexts = [];
+        let optionsList = [];
         if (["zy", "ks"].includes(this.type)) {
           const h3Element = questionElement.querySelector("h3");
           const colorShallowElement = questionElement.querySelector(".colorShallow");
@@ -5780,11 +6078,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
           
           
-          const fullText = h3Element ? h3Element.textContent : "";
-          const typeText = colorShallowElement ? colorShallowElement.textContent : "";
-          questionTitle = fullText.replace(typeText, "").replace(/^\d+\.\s*/, "").replace(/_+/g, "").trim();
+          // 走 innerHTML + stripTags，保留题干里的 <img>，避免题图丢失
+          const fullText = h3Element ? this.stripTags(h3Element.innerHTML) : "";
+          const typeText = colorShallowElement ? this.stripTags(colorShallowElement.innerHTML) : "";
+          // 下划线是填空的占位符，保留成 ____，否则 AI 看不到"有几个空"
+          questionTitle = fullText.replace(typeText, "").replace(/^\d+\.\s*/, "").replace(/_{2,}/g, "____").trim();
           optionElements = questionElement.querySelectorAll(SELECTORS.CX_OPTION_ZY_KS);
-          [optionsObject, optionTexts] = this.extractOptions(optionElements, ".answer_p");
+          [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".answer_p");
         } else if (["zj"].includes(this.type)) {
           questionTitle = this.stripTags(((_c = questionElement.querySelector(".fontLabel")) == null ? void 0 : _c.innerHTML) || "")
             .replace(/（[\d.]+分）/g, "").trim(); 
@@ -5826,7 +6126,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               }
               let subOptionsObject = {};
               let subOptionTexts = [];
-              [subOptionsObject, subOptionTexts] = this.extractOptions(subOptionElements, optionSelector);
+              let subOptionsList = [];
+              [subOptionsObject, subOptionTexts, subOptionsList] = this.extractOptions(subOptionElements, optionSelector);
               
               this.questions.push({
                 element: subItem,
@@ -5835,6 +6136,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 title: this.trimTitle(questionTitle + " - " + subTitle),
                 optionsText: subOptionTexts,
                 options: subOptionsObject,
+                optionsList: subOptionsList,
                 answer: [],
                 workType: this.type,
                 refer: this._window.location.href
@@ -5884,6 +6186,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               title: this.trimTitle(fullTitle),
               optionsText: rightItems,
               options: Object.fromEntries(rightItems.map((text, i) => [text, secondListItems[i]])),
+              optionsList: rightItems.map((text, i) => ({ text, el: secondListItems[i] })),
               answer: [],
               workType: this.type,
               refer: this._window.location.href,
@@ -5895,16 +6198,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
           
           optionElements = questionElement.querySelectorAll(SELECTORS.CX_OPTION_ZJ);
-          [optionsObject, optionTexts] = this.extractOptions(optionElements, ".fl.after");
+          [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".fl.after");
         }
         this.questions.push({
           element: questionElement,
-          type: this.typeMap.get(questionTypeText.replace(/[\[\]【】]/g, "")) ||
-               (questionTitle.match(/[\[\【](.+?)[\]\】]/)?.[1] && this.typeMap.get(questionTitle.match(/[\[\【](.+?)[\]\】]/)[1])) ||
-               "999",
+          type: this.resolveQuestionType(questionTypeText, questionTitle, questionElement),
           title: this.trimTitle(questionTitle),
           optionsText: optionTexts,
           options: optionsObject,
+          optionsList: optionsList,
           answer: [],
           workType: this.type,
           refer: this._window.location.href
@@ -8225,46 +8527,36 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         
         
         if (question.type === "0" || question.type === "1" || question.type === "3") {
-          const selectedKeys = new Set();
-          for (const answer of question.answer) {
-            const cleanAnswer = answer.replace(/<[^>]*>/g, "").trim();
-            let matched = false;
-            
+          const optionList = getOptionList(question);
+          const targetEls = [];
+          const answerList = Array.isArray(question.answer) ? question.answer : splitAnswerText(question.answer);
+          for (const answer of answerList) {
+            const cleanAnswer = String(answer == null ? "" : answer).replace(/<[^>]*>/g, "").trim();
+            if (!cleanAnswer) continue;
             if (question.type === "3") {
               const isTrueAnswer = REGEX.JUDGE_TRUE.test(cleanAnswer);
               const isFalseAnswer = REGEX.JUDGE_FALSE.test(cleanAnswer);
-              for (const key in question.options) {
-                const isTrueOption = REGEX.JUDGE_TRUE.test(key);
-                const isFalseOption = REGEX.JUDGE_FALSE.test(key);
+              if (!isTrueAnswer && !isFalseAnswer) continue; // 判定不出就跳过，不瞎猜
+              for (const opt of optionList) {
+                const isTrueOption = REGEX.JUDGE_TRUE.test(opt.text || "");
+                const isFalseOption = REGEX.JUDGE_FALSE.test(opt.text || "");
                 if ((isTrueAnswer && isTrueOption) || (isFalseAnswer && isFalseOption)) {
-                  if (!selectedKeys.has(key)) {
-                    selectedKeys.add(key);
-                    clickOption(question.options[key]);
-                    await randomDelay(0.1, 0.15);
-                    matched = true;
-                  }
+                  if (opt.el && !targetEls.includes(opt.el)) targetEls.push(opt.el);
                   break;
                 }
               }
             } else {
-              for (const key in question.options) {
-                if (key === cleanAnswer && !selectedKeys.has(key)) {
-                  matched = true;
-                  selectedKeys.add(key);
-                  clickOption(question.options[key]);
-                  await randomDelay(0.1, 0.15);
-                  break;
-                }
-              }
-              if (!matched && useSimilarity) {
-                const bestMatch = pickBestOption(cleanAnswer, question.options);
-                if (bestMatch && !selectedKeys.has(bestMatch.key)) {
-                  selectedKeys.add(bestMatch.key);
-                  clickOption(question.options[bestMatch.key]);
-                  await randomDelay(0.1, 0.15);
-                }
+              // 多选答案在服务端已逐条对齐成选项原文，这里一条对应一个下标
+              const idx = matchOptionIndex(optionList, cleanAnswer);
+              if (idx >= 0) {
+                const el = optionList[idx] && optionList[idx].el;
+                if (el && !targetEls.includes(el)) targetEls.push(el);
               }
             }
+          }
+          for (const el of targetEls) {
+            clickOption(el);
+            await randomDelay(0.1, 0.15);
           }
         }
         
@@ -8673,7 +8965,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               await new Promise(r => setTimeout(r, 500));
             }
             
-            const selectedKeys =  new Set();
+            
             
             
             
@@ -8692,45 +8984,34 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               }
             }
             
+            const optionList = getOptionList(question);
+            const targetEls = [];
             for (const answer of answers) {
               const cleanAnswer = this.stripTags(answer).trim();
-              let matched = false;
-              for (const key in question.options) {
-                const cleanKey = key.trim();
-                if (cleanKey === cleanAnswer && !selectedKeys.has(cleanKey)) {
-                  matched = true;
-                  selectedKeys.add(key);
-                  const optionElement = question.options[key];
-                  if (!this.isZhsOptionSelected(optionElement)) {
-                    optionElement.setAttribute("data-filling", "true");
-                    optionElement.click();
-                    await new Promise(r => setTimeout(r, 200));
-                    optionElement.removeAttribute("data-filling");
-                  }
-                  break;
-                }
-              }
-              if (!matched && useSimilarity) {
-                const bestMatch = pickBestOption(cleanAnswer, question.options);
-                if (bestMatch && !selectedKeys.has(bestMatch.key)) {
-                  selectedKeys.add(bestMatch.key);
-                  const optionElement = question.options[bestMatch.key];
-                  if (!this.isZhsOptionSelected(optionElement)) {
-                    optionElement.setAttribute("data-filling", "true");
-                    optionElement.click();
-                    await new Promise(r => setTimeout(r, 200));
-                    optionElement.removeAttribute("data-filling");
-                  }
-                }
-              }
+              if (!cleanAnswer) continue;
+              const idx = matchOptionIndex(optionList, cleanAnswer);
+              if (idx < 0) continue;
+              const el = optionList[idx] && optionList[idx].el;
+              if (el && !targetEls.includes(el)) targetEls.push(el);
+            }
+
+            for (const optionElement of targetEls) {
+              if (this.isZhsOptionSelected(optionElement)) continue;
+              optionElement.setAttribute("data-filling", "true");
+              optionElement.click();
+              await new Promise(r => setTimeout(r, 200));
+              optionElement.removeAttribute("data-filling");
             }
           } else if (typeNum === "3") {
             
-            let answer = "错";
+            let answer = null;
             if (REGEX.JUDGE_FALSE.test(question.answer[0])) {
               answer = "错";
             } else if (REGEX.JUDGE_TRUE.test(question.answer[0])) {
               answer = "对";
+            }
+            if (answer === null) {
+              return;
             }
             for (const key in question.options) {
               const optionElement = question.options[key];
@@ -8784,13 +9065,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     extractOptions(optionElements, optionSelector) {
       const optionsObject = {};
       const optionTexts = [];
+      const optionsList = [];
       optionElements.forEach((optionElement) => {
         var _a;
         const optionTextContent = this.stripTags(((_a = optionElement.querySelector(optionSelector)) == null ? void 0 : _a.innerHTML) || "");
-        optionsObject[optionTextContent] = optionElement;
+        optionsList.push({ text: optionTextContent, el: optionElement });
+        // 重复文本不再互相覆盖
+        let key = optionTextContent;
+        let suffix = 2;
+        while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
+          key = optionTextContent + "#" + suffix;
+          suffix += 1;
+        }
+        optionsObject[key] = optionElement;
         optionTexts.push(optionTextContent);  
       });
-      return [optionsObject, optionTexts];
+      return [optionsObject, optionTexts, optionsList];
     }
     addQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
