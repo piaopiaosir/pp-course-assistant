@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.5.0
+// @version      3.5.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -4865,6 +4865,39 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         });
         return clone.innerHTML;
       });
+
+      __publicField(this, "collectAudioUrls", (root) => {
+        const urls = [];
+        const push = (u) => {
+          const s = String(u || "").trim();
+          if (!s || !/^https?:\/\//i.test(s)) return;
+          if (!urls.includes(s)) urls.push(s);
+        };
+        try {
+          root.querySelectorAll('iframe[src*="audioplay"], audio').forEach((node) => {
+            if (String(node.tagName || "").toLowerCase() === "audio") {
+              push(node.src);
+              node.querySelectorAll("source[src]").forEach((s) => push(s.getAttribute("src")));
+              return;
+            }
+            try {
+              const doc = node.contentDocument;
+              if (!doc) return;
+              const audio = doc.querySelector("audio");
+              if (audio && audio.src) push(audio.src);
+              doc.querySelectorAll("audio source[src], source[src]").forEach((s) => {
+                const u = s.getAttribute("src") || "";
+                if (/\.(mp3|m4a|wav|aac)(\?|$)/i.test(u)) push(u);
+              });
+            } catch (e) {}
+          });
+          root.querySelectorAll("[data-url]").forEach((el) => {
+            const u = el.getAttribute("data-url") || "";
+            if (/\.(mp3|m4a|wav|aac)(\?|$)/i.test(u)) push(u);
+          });
+        } catch (e) {}
+        return urls.slice(0, 3);
+      });
       
       __publicField(this, "trimTitle", (str) => {
         return str.replace(REGEX.CLEAN_TITLE, "");
@@ -5032,6 +5065,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       question: question.title,
       options: question.optionsText,
       type: ["14", "15"].includes(String(question.type)) ? "2" : question.type,
+      audios: Array.isArray(question.audios) ? question.audios : [],
+      subCount: Array.isArray(question._reading) ? question._reading.length : 0,
       blanks: (() => {
         const type = String(question.type);
         if (!["2", "14", "15"].includes(type)) return 0;
@@ -5571,12 +5606,88 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           this.addQuestions(questionElements);
         }
       });
+
+      __publicField(this, "fillReadingQuestion", async (question) => {
+        const subs = question._reading || [];
+        const answers = Array.isArray(question.answer) ? question.answer : [];
+        if (!subs.length || !answers.length) return true;
+
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const norm = (s) =>
+          String(s || "")
+            .replace(/\s+/g, "")
+            .replace(/[，。．！？、；：""''（）【】《》.,;:!?()\[\]·—–~～％%]/g, "")
+            .toLowerCase();
+        const clickEl = async (el) => {
+          if (!el) return;
+          const target = el.querySelector("input") || el;
+          try {
+            target.click();
+          } catch (e) {}
+          await sleep(150);
+        };
+
+        let filled = 0;
+        for (let i = 0; i < subs.length && i < answers.length; i++) {
+          const sub = subs[i];
+          const raw = String(answers[i] == null ? "" : answers[i]).trim();
+          if (!raw) continue;
+
+          if (sub.type === "0" || sub.type === "1") {
+            const letters = raw.replace(/[^A-Za-z]/g, "").toUpperCase();
+            const byLetters =
+              /^[A-Za-z][A-Za-z、,，\s]*$/.test(raw) && letters.length > 0 && letters.length <= sub.elements.length;
+            const idxs = [];
+            if (byLetters) {
+              for (const ch of letters) {
+                const idx = ch.charCodeAt(0) - 65;
+                if (idx >= 0 && idx < sub.elements.length) idxs.push(idx);
+              }
+            } else {
+              const matchOne = (text) => {
+                const wanted = norm(text);
+                if (!wanted) return -1;
+                return sub.options.findIndex((optionText) => {
+                  const n = norm(optionText);
+                  return n === wanted || (n && (n.includes(wanted) || wanted.includes(n)));
+                });
+              };
+              const whole = matchOne(raw);
+              if (whole >= 0) {
+                idxs.push(whole);
+              } else {
+                const parts = raw
+                  .split(/###|\|\||[;；]\s*/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                for (const part of parts) {
+                  const idx = matchOne(part);
+                  if (idx >= 0 && !idxs.includes(idx)) idxs.push(idx);
+                }
+              }
+            }
+            for (const idx of idxs) {
+              const el = sub.elements[idx];
+              if (!el) continue;
+              if (this.isOptionSelected(el)) continue;
+              await clickEl(el);
+              filled++;
+            }
+          }
+          await sleep(120);
+        }
+
+        return filled > 0;
+      });
       
       __publicField(this, "fillQuestion", async (question) => {
         if (!this._window)
           return;
 
         try {
+          if (question.type === "16" && Array.isArray(question._reading)) {
+            return await this.fillReadingQuestion(question);
+          }
           if (await this.fillQuestionV2(question)) return;
           if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7") {
           
@@ -6107,57 +6218,44 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             .replace(/（[\d.]+分）/g, "").trim();
           
           
-          const readComprehensionItems = questionElement.querySelectorAll(".readCompreHensionItem");
-          if (readComprehensionItems.length > 0) {
-            
-            readComprehensionItems.forEach((subItem) => {
-              const childTypeInput = subItem.querySelector("input[name='readCompreHension-childType']");
-              const childType = childTypeInput ? childTypeInput.value : "";
-              
-              
-              const subContentEl = subItem.querySelector(".clearfix");
-              const subTitle = this.stripTags((subContentEl == null ? void 0 : subContentEl.innerHTML) || "")
-                .replace(/（[\d.]+分）/g, "").trim();
-              
-              
-              const subTypeEl = subItem.querySelector(".index");
-              const subTypeText = this.stripTags((subTypeEl == null ? void 0 : subTypeEl.textContent) || "")
-                .replace(/^\(\d+\)\s*/, "").replace(/[\[\]【】]/g, "").trim();
-              
-              
-              
-              
-              
-              let subOptionElements;
-              let optionSelector = ".fl.after";
-              if (childType === "3") {
-                
-                subOptionElements = subItem.querySelectorAll(SELECTORS.CX_OPTION_ZJ);
-              } else if (childType === "0" || childType === "1") {
-                
-                subOptionElements = subItem.querySelectorAll("ul.choice li");
-              } else {
-                
-                subOptionElements = [];
-              }
-              let subOptionsObject = {};
-              let subOptionTexts = [];
-              let subOptionsList = [];
-              [subOptionsObject, subOptionTexts, subOptionsList] = this.extractOptions(subOptionElements, optionSelector);
-              
-              this.questions.push({
-                element: subItem,
-                type: ["0", "1", "3"].includes(String(childType)) ? String(childType) : "999",
-                title: this.trimTitle(questionTitle + " - " + subTitle),
-                optionsText: subOptionTexts,
-                options: subOptionsObject,
-                optionsList: subOptionsList,
-                answer: [],
-                workType: this.type,
-                refer: this._window.location.href
+          const readingItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
+          if (readingItems.length > 0) {
+            const subs = readingItems.map((subItem) => {
+              const typeText = this.stripTags((subItem.querySelector(".index") || {}).textContent || "");
+              const isMulti =
+                subItem.querySelectorAll('input[type="checkbox"], [role="checkbox"]').length > 0;
+              const subType = isMulti ? "1" : "0";
+              const contentEl = subItem.querySelector(".clearfix");
+              const subTitle = this.stripTags(this.htmlWithAbsoluteImages(contentEl || subItem))
+                .replace(/（[\d.]+分）/g, "").replace(/\s+/g, " ").trim();
+              const liList = Array.from(subItem.querySelectorAll("ul li"));
+              const optionTexts = liList.map((li) => {
+                const spans = li.querySelectorAll("span.fl");
+                const textEl = spans.length >= 2 ? spans[1] : li;
+                return this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
               });
+              return { type: subType, title: subTitle, options: optionTexts, elements: liList };
             });
-            return; 
+            const subBlocks = subs.map((sub, i) => {
+              const typeName = sub.type === "1" ? "多选题" : "单选题";
+              const optionLines = sub.options.map((text, j) => `${String.fromCharCode(65 + j)}. ${text}`);
+              return `(${i + 1}) [${typeName}] ${sub.title}\n${optionLines.join("\n")}`;
+            });
+            const article = questionTitle.replace(/【阅读理解】/g, "").trim();
+            this.questions.push({
+              element: questionElement,
+              type: "16",
+              title: this.trimTitle(`【阅读理解】\n${article}\n\n${subBlocks.join("\n\n")}`),
+              audios: this.collectAudioUrls(questionElement),
+              optionsText: [],
+              options: {},
+              optionsList: [],
+              answer: [],
+              workType: this.type,
+              refer: this._window.location.href,
+              _reading: subs
+            });
+            return;
           }
           
           
@@ -6219,6 +6317,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           element: questionElement,
           type: resolvedType,
           title: this.trimTitle(questionTitle),
+          audios: this.collectAudioUrls(questionElement),
           optionsText: optionTexts,
           options: optionsObject,
           optionsList: optionsList,
