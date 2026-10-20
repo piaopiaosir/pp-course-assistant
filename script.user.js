@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.4.7
+// @version      3.4.8
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -194,8 +194,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     CX_AUDIO: 'audio',                                          
     CX_QUESTION_ZJ: '.TiMu',                                    
     CX_QUESTION_ZY_KS: '.questionLi',                           
-    CX_OPTION_ZJ: '[class*="before-after"]',                   
-    CX_OPTION_ZY_KS: '.answerBg',                              
+    CX_OPTION_ZJ: '[class*="before-after"], ul li .after, ul li label:not(.before), ul li textarea, ul textarea',                   
+    CX_OPTION_ZY_KS: '.answerBg, .textDIV, .eidtDiv',                              
     ZHS_QUESTION: '.examPaper_subject',                         
     ZHS_OPTION: '.subject_node .nodeLab'                       
   };
@@ -4753,7 +4753,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return false;
         }
         
-        if (question.type === "2") {
+        if (question.type === "2" || question.type === "14" || question.type === "15") {
           
           const taElements = question.element.querySelectorAll("textarea");
           for (const ta of taElements) {
@@ -4832,6 +4832,33 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         } catch (e) {
           return el.innerHTML || "";
         }
+        const view = el.ownerDocument && el.ownerDocument.defaultView;
+        const dropHidden = (src, dst) => {
+          const srcChildren = Array.from(src.children || []);
+          const dstChildren = Array.from(dst.children || []);
+          for (let i = 0; i < srcChildren.length; i++) {
+            const s = srcChildren[i];
+            const d = dstChildren[i];
+            if (!d) continue;
+            const tag = String(s.tagName || "").toLowerCase();
+            if (tag === "script" || tag === "style") {
+              d.remove();
+              continue;
+            }
+            let hidden = false;
+            try {
+              hidden = Boolean(view && s.isConnected && view.getComputedStyle(s).display === "none");
+            } catch (e) {}
+            if (hidden) {
+              d.remove();
+              continue;
+            }
+            dropHidden(s, d);
+          }
+        };
+        try {
+          dropHidden(el, clone);
+        } catch (e) {}
         clone.querySelectorAll("img").forEach((img) => {
           const abs = img.src;
           if (abs) img.setAttribute("src", abs);
@@ -5004,7 +5031,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const questionData = {
       question: question.title,
       options: question.optionsText,
-      type: question.type,
+      type: ["14", "15"].includes(String(question.type)) ? "2" : question.type,
       questionData: question.element.outerHTML,
       workType: question.workType,
       id: ((_a = question.refer.match(/courseId=(\d+)/)) == null ? void 0 : _a[1]) || "",
@@ -5599,7 +5626,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
     async fillQuestionV2(question) {
       let type = String(question.type);
-      if (!["0", "1", "2", "3", "11", "13"].includes(type)) {
+      if (!["0", "1", "2", "3", "11", "13", "14", "15"].includes(type)) {
         if (type === "999" || !type || type === "undefined" || type === "null") {
           type = getOptionList(question).length > 0 ? "0" : "2";
         } else {
@@ -5723,8 +5750,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return true;
       }
 
-      if (type === "2") {
-        const wordSpans = Array.from(question.element.querySelectorAll("span.saveSingleSelect[data]"));
+      if (type === "2" || type === "14" || type === "15") {
+        const wordScope =
+          (type === "14" ? question.element.querySelector(".filling_answer") : null) ||
+          (type === "15" ? question.element.querySelector(".reading_answer") : null) ||
+          question.element;
+        const wordSpans = Array.from(wordScope.querySelectorAll("span.saveSingleSelect[data]"));
         const selectBoxes = Array.from(question.element.querySelectorAll("select.dept_select"));
         const textareaElements = question.element.querySelectorAll("textarea");
 
@@ -5738,7 +5769,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (parts.length === blankCount) blankAnswers = parts;
         }
 
-        if (wordSpans.length > 0) {
+        const preferTextarea = type === "2" && textareaElements.length > 0;
+        if (wordSpans.length > 0 && !preferTextarea) {
           const used = new Set();
           let filled = 0;
           const optionTexts = optionList.map((o) => o.text);
@@ -5992,22 +6024,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         });
       } catch (e) {}
     }
-    resolveQuestionType(typeText, titleText, questionElement) {
-      const textType = this.typeMap.get(String(typeText || "").replace(/[\[\]【】]/g, "").trim());
-      if (textType) return textType;
-
-      const bracket = String(titleText || "").match(/[\[\【](.+?)[\]\】]/);
-      if (bracket) {
-        const titleType = this.typeMap.get(bracket[1].trim());
-        if (titleType) return titleType;
+    resolveQuestionType(questionElement) {
+      const numericTypes = {
+        0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7",
+        8: "2", 9: "2", 10: "2", 11: "11", 13: "13", 14: "14", 15: "15",
+      };
+      let input = null;
+      if (questionElement) {
+        const named = Array.from(questionElement.querySelectorAll('input[name^="type"]')).find((el) =>
+          /type\d+/.test(el.getAttribute("name") || ""),
+        );
+        input =
+          questionElement.querySelector('input[id^="answertype"]') || named || questionElement.querySelector('input[name^="type"]');
       }
-
-      const input = questionElement
-        ? questionElement.querySelector('input[id^="answertype"], input[name^="type"]')
-        : null;
       const code = input ? String(input.value || "").trim() : "";
-      if (["0", "1", "2", "3", "4", "5", "6", "7", "11", "13"].includes(code)) return code;
-      if (code === "14" || code === "15") return "2";
+      if (Object.prototype.hasOwnProperty.call(numericTypes, code)) return numericTypes[code];
       return "999";
     }
     extractOptions(optionElements, optionSelector) {
@@ -6016,7 +6047,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const optionsList = [];
       optionElements.forEach((optionElement) => {
         var _a;
-        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(optionElement.querySelector(optionSelector)));
+        const inner = optionElement.querySelector(optionSelector) || optionElement;
+        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
+        if (!optionTextContent) return;
         optionsList.push({ text: optionTextContent, el: optionElement });
         optionTexts.push(optionTextContent);
         let key = optionTextContent;
@@ -6033,31 +6066,26 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       questionElements.forEach((questionElement) => {
         var _a, _b, _c, _d;
         let questionTitle = "";
-        let questionTypeText = "";
         let optionElements;
         let optionsObject = {};
         let optionTexts = [];
         let optionsList = [];
+        const resolvedType = this.resolveQuestionType(questionElement);
+        const zyKsSelector = SELECTORS.CX_OPTION_ZY_KS;
+        const zjSelector = SELECTORS.CX_OPTION_ZJ;
         if (["zy", "ks"].includes(this.type)) {
           const h3Element = questionElement.querySelector("h3");
           const colorShallowElement = questionElement.querySelector(".colorShallow");
-          
-          if (["zy"].includes(this.type)) {
-            questionTypeText = (questionElement == null ? void 0 : questionElement.getAttribute("typename")) || "";
-          } else if (["ks"].includes(this.type)) {
-            questionTypeText = colorShallowElement ? this.stripTags(colorShallowElement.outerHTML).slice(1, 4) : "";
-          }
           
           
           const fullText = h3Element ? this.stripTags(this.htmlWithAbsoluteImages(h3Element)) : "";
           const typeText = colorShallowElement ? this.stripTags(colorShallowElement.innerHTML) : "";
           questionTitle = fullText.replace(typeText, "").replace(/^\d+\.\s*/, "").replace(/_{2,}/g, "____").trim();
-          optionElements = questionElement.querySelectorAll(SELECTORS.CX_OPTION_ZY_KS);
-          [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".answer_p");
+            optionElements = questionElement.querySelectorAll(zyKsSelector);
+            [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".answer_p");
         } else if (["zj"].includes(this.type)) {
           questionTitle = this.stripTags(this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel")))
             .replace(/（[\d.]+分）/g, "").trim();
-          questionTypeText = this.stripTags(((_d = questionElement.querySelector(".newZy_TItle")) == null ? void 0 : _d.innerHTML) || "");
           
           
           const readComprehensionItems = questionElement.querySelectorAll(".readCompreHensionItem");
@@ -6100,8 +6128,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               
               this.questions.push({
                 element: subItem,
-                type: this.typeMap.get(subTypeText) || 
-                     (childType === "1" ? "1" : childType === "0" ? "0" : childType === "3" ? "3" : "999"),
+                type: ["0", "1", "3"].includes(String(childType)) ? String(childType) : "999",
                 title: this.trimTitle(questionTitle + " - " + subTitle),
                 optionsText: subOptionTexts,
                 options: subOptionsObject,
@@ -6115,8 +6142,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
           
           
-          const isMatchingQuestion = questionTypeText.includes("连线") || 
-                                     questionElement.getAttribute("data") === "11" ||
+          const isMatchingQuestion = questionElement.getAttribute("data") === "11" ||
+                                     String((questionElement.querySelector('input[id^="answertype"], input[name^="type"]') || {}).value || "") === "11" ||
                                      questionElement.querySelector(".matching") ||
                                      questionElement.querySelector(".connLine");
           if (isMatchingQuestion) {
@@ -6166,12 +6193,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             return;
           }
           
-          optionElements = questionElement.querySelectorAll(SELECTORS.CX_OPTION_ZJ);
-          [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".fl.after");
+            optionElements = questionElement.querySelectorAll(zjSelector);
+            [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".fl.after");
         }
         this.questions.push({
           element: questionElement,
-          type: this.resolveQuestionType(questionTypeText, questionTitle, questionElement),
+          type: resolvedType,
           title: this.trimTitle(questionTitle),
           optionsText: optionTexts,
           options: optionsObject,
@@ -9036,7 +9063,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const optionsList = [];
       optionElements.forEach((optionElement) => {
         var _a;
-        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(optionElement.querySelector(optionSelector)));
+        const inner = optionElement.querySelector(optionSelector) || optionElement;
+        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
+        if (!optionTextContent) return;
         optionsList.push({ text: optionTextContent, el: optionElement });
         let key = optionTextContent;
         let suffix = 2;
