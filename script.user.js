@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.4.6
+// @version      3.4.7
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -4688,7 +4688,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   
-  // ==================== 学习通人脸识别 / 防作弊 ====================
   const CX_FACE_SELECTORS = ["#fcqrimg", ".chapterVideoFaceMaskDiv", ".faceRecognition", ".face-verify"];
   const CX_FACE_TEXT_RE = /(请完成人脸识别|人脸识别验证|请进行人脸识别|请先完成人脸)/;
 
@@ -4699,7 +4698,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const el = doc.querySelector(sel);
       if (el && el.offsetHeight > 0) return true;
     }
-    // 文案兜底只在弹层类容器里判断，避免页面说明文字误判
     const layers = doc.querySelectorAll('[class*="face"],[class*="Face"],.maskDiv,.popDiv');
     for (const layer of layers) {
       if (layer.offsetHeight > 0 && CX_FACE_TEXT_RE.test(layer.innerText || "")) return true;
@@ -4707,10 +4705,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return false;
   };
 
-  /**
-   * 检测到人脸识别弹窗就等待用户完成（最多 120 秒），避免"页面被遮罩、脚本却在点选项"
-   * @returns {Promise<boolean>} 是否等待过
-   */
   const waitForCxFaceRecognition = async (timeoutMs = 120000, pollMs = 2000) => {
     if (!detectCxFacePrompt()) return false;
     try {
@@ -4828,6 +4822,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       __publicField(this, "stripTags", (html) => {
         if (html == null) return "";
         return html.replace(REGEX.HTML_TAGS, "").replace(REGEX.NBSP, " ").replace(REGEX.WHITESPACE, " ").replace(REGEX.BR_TAG, "\n").replace(REGEX.IMG_TAG, '<img src="$1"/>').trim();
+      });
+
+      __publicField(this, "htmlWithAbsoluteImages", (el) => {
+        if (!el) return "";
+        let clone;
+        try {
+          clone = el.cloneNode(true);
+        } catch (e) {
+          return el.innerHTML || "";
+        }
+        clone.querySelectorAll("img").forEach((img) => {
+          const abs = img.src;
+          if (abs) img.setAttribute("src", abs);
+        });
+        return clone.innerHTML;
       });
       
       __publicField(this, "trimTitle", (str) => {
@@ -5082,7 +5091,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
     const pollQueryTask = (taskId, resolve, pollInterval = 1000) => {
       let pollCount = 0;
-      const maxPolls = 120;
+      const MAX_WAIT_MS = 6 * 60 * 1000;
+      const maxPolls = Math.max(120, Math.ceil(MAX_WAIT_MS / Math.max(500, pollInterval)));
       
       const poll = () => {
         pollCount++;
@@ -5354,10 +5364,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
 
 
-  /** 多空答案分隔符：与 OCS 对齐，刻意不含英文逗号，避免切坏英文句子 */
   const ANSWER_SEPARATORS = ["===", "#", "---", "###", "|", ";", "；"];
 
-  /** 全角转半角 + 去标签 + 去中英标点 + 去空白 + 小写，用于宽松比较 */
   const normalizeAnsText = (input) => {
     let s = String(input == null ? "" : input);
     s = s.replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
@@ -5368,13 +5376,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       .toLowerCase();
   };
 
-  /** 去掉选项前的 "A." "B、" "C)" 标号；只认标点，避免把 "I think" 误剥成 "think" */
   const stripOptionPrefix = (input) => String(input == null ? "" : input)
     .trim()
     .replace(/^[A-Ha-h]\s*[.、．，,)）:：\]】]\s*/, "")
     .trim();
 
-  /** "A" / "AB" / "A,C" 这类选项字母答案：<=8 位、只含严格递增且不重复的大写字母 */
   const isPlainLetterAnswer = (input) => {
     const t = String(input == null ? "" : input).trim().replace(/[,，.。．、 #/\\|]/g, "").toUpperCase();
     if (!/^[A-Z]{1,8}$/.test(t)) return false;
@@ -5384,7 +5390,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return true;
   };
 
-  /** 把一条答案拆成多个空 / 多个选项（支持 JSON 数组与 ANSWER_SEPARATORS） */
   const splitAnswerText = (answer) => {
     if (answer == null) return [];
     if (Array.isArray(answer)) return answer.map((a) => String(a).trim()).filter(Boolean);
@@ -5404,7 +5409,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return [raw];
   };
 
-  /** 取题目的有序选项表 [{ text, el }]，兼容老的纯对象结构 */
   const getOptionList = (question) => {
     if (!question) return [];
     if (Array.isArray(question.optionsList) && question.optionsList.length) return question.optionsList;
@@ -5418,11 +5422,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return list;
   };
 
-  /**
-   * 把一条答案落到选项下标上：原文相等 -> 去标号/归一化相等
-   * （字母答案与相似度由服务端负责：答案在返回前已对齐成选项原文）
-   * @returns {number} 命中下标，-1 未命中
-   */
   const matchOptionIndex = (optionList, answer) => {
     if (!optionList || optionList.length === 0 || answer == null) return -1;
     const raw = String(answer).trim();
@@ -5441,8 +5440,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       if (normAnswer && normOpt && normOpt === normAnswer) return i;
     }
 
-    // 服务端返回前已把答案对齐成选项原文（alignAnswersToOptions），
-    // 字母答案与相似度兜底都不再需要：字母在服务端就会被 422 拦掉。
     return -1;
   };
 
@@ -5541,7 +5538,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return;
 
         try {
-          // 0/1/2/3/11/13 走统一作答；4/5/6/7 在这里直接写文本
           if (await this.fillQuestionV2(question)) return;
           if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7") {
           
@@ -5570,7 +5566,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             textareaElement.value = answerText;
             textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
           }
-          // 作业/考试的简答同样需要点“保存”才落库
           const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
           if (saveBtn) saveBtn.click();
         }
@@ -5605,7 +5600,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     async fillQuestionV2(question) {
       let type = String(question.type);
       if (!["0", "1", "2", "3", "11", "13"].includes(type)) {
-        // 未知题型兜底：有选项按单选、没选项按填空，宁可猜一次也别整题不答
         if (type === "999" || !type || type === "undefined" || type === "null") {
           type = getOptionList(question).length > 0 ? "0" : "2";
         } else {
@@ -5644,13 +5638,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         el.removeAttribute("data-filling");
       };
 
-      // ---------- 单选 / 多选 ----------
       if (type === "0" || type === "1") {
         const targetIndices = [];
         for (const ans of flatAnswers) {
           const clean = this.stripTags(ans);
           if (!clean) continue;
-          // 服务端已把每个答案对齐成一条选项原文，多选也是逐条返回，无需再拆字母
           const idx = matchOptionIndex(optionList, clean);
           if (idx >= 0 && !targetIndices.includes(idx)) targetIndices.push(idx);
         }
@@ -5679,14 +5671,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return true;
       }
 
-      // ---------- 判断 ----------
       if (type === "3") {
         const rawAnswer = String(flatAnswers[0] || "").trim();
         let truth = null;
         if (REGEX.JUDGE_FALSE.test(rawAnswer)) truth = false;
         else if (REGEX.JUDGE_TRUE.test(rawAnswer)) truth = true;
 
-        // 答案本身就是选项文本时直接点
         if (truth === null && rawAnswer) {
           const idx = matchOptionIndex(optionList, rawAnswer);
           const el = idx >= 0 ? optionList[idx].el : null;
@@ -5733,14 +5723,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return true;
       }
 
-      // ---------- 填空（含完形/选词/多空） ----------
       if (type === "2") {
         const wordSpans = Array.from(question.element.querySelectorAll("span.saveSingleSelect[data]"));
         const selectBoxes = Array.from(question.element.querySelectorAll("select.dept_select"));
         const textareaElements = question.element.querySelectorAll("textarea");
 
-        // 模型偶尔把多个空合并成一条（"北京，上海"）：按空位数再拆一次，
-        // 只有拆出来的段数正好等于空位数才采用，避免拆坏的答案。
         let blankAnswers = flatAnswers;
         const blankCount = Math.max(wordSpans.length, selectBoxes.length, textareaElements.length);
         if (blankAnswers.length === 1 && blankCount > 1) {
@@ -5751,11 +5738,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (parts.length === blankCount) blankAnswers = parts;
         }
 
-        // 1) 选词/完形：点 span.saveSingleSelect[data]
         if (wordSpans.length > 0) {
           const used = new Set();
           let filled = 0;
-          // 兜底：万一模型仍返回字母，先映射成选项原文再找词块
           const optionTexts = optionList.map((o) => o.text);
           const resolveWord = (raw) => {
             const clean = this.stripTags(String(raw == null ? "" : raw));
@@ -5800,7 +5785,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
         }
 
-        // 2) 下拉型
         if (selectBoxes.length > 0) {
           const count = Math.min(selectBoxes.length, blankAnswers.length);
           for (let i = 0; i < count; i++) {
@@ -5833,13 +5817,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return true;
         }
 
-        // 3) 文本框 / UE 富文本
         if (textareaElements.length === 0) {
           return true;
         }
         for (let i = 0; i < textareaElements.length; i++) {
           const textareaElement = textareaElements[i];
-          // 单输入框但答案有多个空时，合并写入（否则第二空会丢）
           const answerText =
             textareaElements.length === 1
               ? blankAnswers.join("，")
@@ -5874,7 +5856,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
           }
         }
-        // 作业/考试的填空需要点“保存”才会落库（章节测验没有该按钮，查询不到即跳过）
         const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
         if (saveBtn) {
           saveBtn.click();
@@ -5883,11 +5864,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return true;
       }
 
-      // ---------- 连线（每个左侧项一个下拉） ----------
       if (type === "11") {
         const selects = Array.from(question.element.querySelectorAll("select.dept_select"));
         if (selects.length === 0) {
-          // 作业/考试的连线是「点选项连接」型：.line_answer 里的 selectBox + li[data]
           const boxes = Array.from(
             question.element.querySelectorAll(".line_answer_ct .selectBox, .line_answer .selectBox"),
           );
@@ -5954,7 +5933,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return true;
       }
 
-      // ---------- 排序 ----------
       if (type === "13") {
         const sortSelects = Array.from(question.element.querySelectorAll(".sortQuesSelect .dept_select"));
         if (sortSelects.length === 0) return false;
@@ -5996,7 +5974,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
       return false;
     }
-    /** 同步 chosen 下拉的显示文本（原代码在 11/13 分支里各写了一遍） */
     syncChosenSelect(select, value) {
       try {
         const container = select.nextElementSibling;
@@ -6015,7 +5992,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         });
       } catch (e) {}
     }
-    /** 题型解析：题型文字映射 → 题干括号里的题型 → 隐藏 input 的数字码 → 999 */
     resolveQuestionType(typeText, titleText, questionElement) {
       const textType = this.typeMap.get(String(typeText || "").replace(/[\[\]【】]/g, "").trim());
       if (textType) return textType;
@@ -6026,13 +6002,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (titleType) return titleType;
       }
 
-      // 兜底：章节/作业/考试页都有隐藏 input 存题型数字码（比文本切片可靠）
       const input = questionElement
         ? questionElement.querySelector('input[id^="answertype"], input[name^="type"]')
         : null;
       const code = input ? String(input.value || "").trim() : "";
       if (["0", "1", "2", "3", "4", "5", "6", "7", "11", "13"].includes(code)) return code;
-      if (code === "14" || code === "15") return "2"; // 填表 / 阅读类统一走填空逻辑
+      if (code === "14" || code === "15") return "2";
       return "999";
     }
     extractOptions(optionElements, optionSelector) {
@@ -6041,10 +6016,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const optionsList = [];
       optionElements.forEach((optionElement) => {
         var _a;
-        const optionTextContent = this.stripTags(((_a = optionElement.querySelector(optionSelector)) == null ? void 0 : _a.innerHTML) || "");
+        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(optionElement.querySelector(optionSelector)));
         optionsList.push({ text: optionTextContent, el: optionElement });
         optionTexts.push(optionTextContent);
-        // 重复文本不再互相覆盖，而是加后缀保证每个选项都能被点到
         let key = optionTextContent;
         let suffix = 2;
         while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
@@ -6075,16 +6049,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
           
           
-          // 走 innerHTML + stripTags，保留题干里的 <img>，避免题图丢失
-          const fullText = h3Element ? this.stripTags(h3Element.innerHTML) : "";
+          const fullText = h3Element ? this.stripTags(this.htmlWithAbsoluteImages(h3Element)) : "";
           const typeText = colorShallowElement ? this.stripTags(colorShallowElement.innerHTML) : "";
-          // 下划线是填空的占位符，保留成 ____，否则 AI 看不到"有几个空"
           questionTitle = fullText.replace(typeText, "").replace(/^\d+\.\s*/, "").replace(/_{2,}/g, "____").trim();
           optionElements = questionElement.querySelectorAll(SELECTORS.CX_OPTION_ZY_KS);
           [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".answer_p");
         } else if (["zj"].includes(this.type)) {
-          questionTitle = this.stripTags(((_c = questionElement.querySelector(".fontLabel")) == null ? void 0 : _c.innerHTML) || "")
-            .replace(/（[\d.]+分）/g, "").trim(); 
+          questionTitle = this.stripTags(this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel")))
+            .replace(/（[\d.]+分）/g, "").trim();
           questionTypeText = this.stripTags(((_d = questionElement.querySelector(".newZy_TItle")) == null ? void 0 : _d.innerHTML) || "");
           
           
@@ -8533,7 +8505,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             if (question.type === "3") {
               const isTrueAnswer = REGEX.JUDGE_TRUE.test(cleanAnswer);
               const isFalseAnswer = REGEX.JUDGE_FALSE.test(cleanAnswer);
-              if (!isTrueAnswer && !isFalseAnswer) continue; // 判定不出就跳过，不瞎猜
+              if (!isTrueAnswer && !isFalseAnswer) continue;
               for (const opt of optionList) {
                 const isTrueOption = REGEX.JUDGE_TRUE.test(opt.text || "");
                 const isFalseOption = REGEX.JUDGE_FALSE.test(opt.text || "");
@@ -8543,7 +8515,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 }
               }
             } else {
-              // 多选答案在服务端已逐条对齐成选项原文，这里一条对应一个下标
               const idx = matchOptionIndex(optionList, cleanAnswer);
               if (idx >= 0) {
                 const el = optionList[idx] && optionList[idx].el;
@@ -9065,9 +9036,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const optionsList = [];
       optionElements.forEach((optionElement) => {
         var _a;
-        const optionTextContent = this.stripTags(((_a = optionElement.querySelector(optionSelector)) == null ? void 0 : _a.innerHTML) || "");
+        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(optionElement.querySelector(optionSelector)));
         optionsList.push({ text: optionTextContent, el: optionElement });
-        // 重复文本不再互相覆盖
         let key = optionTextContent;
         let suffix = 2;
         while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
