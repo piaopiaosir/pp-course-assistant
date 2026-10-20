@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.4.8
+// @version      3.5.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -5032,6 +5032,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       question: question.title,
       options: question.optionsText,
       type: ["14", "15"].includes(String(question.type)) ? "2" : question.type,
+      blanks: (() => {
+        const type = String(question.type);
+        if (!["2", "14", "15"].includes(type)) return 0;
+        try {
+          const input = question.element.querySelector('input[name^="tiankongsize"]');
+          const fromInput = Number(input && input.value);
+          if (fromInput > 0) return fromInput;
+          return question.element.querySelectorAll(".blankItemDiv").length;
+        } catch (e) {
+          return 0;
+        }
+      })(),
       questionData: question.element.outerHTML,
       workType: question.workType,
       id: ((_a = question.refer.match(/courseId=(\d+)/)) == null ? void 0 : _a[1]) || "",
@@ -5746,6 +5758,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return true;
         }
         if (target.classList && target.classList.contains("check_answer")) return true;
+        if (this.isOptionSelected(target)) return true;
+        const holder = target.closest ? target.closest(".answerBg") : null;
+        if (holder && (holder.querySelector(".check_answer") || holder.querySelector(".check_answer_dx"))) return true;
         await clickOption(target);
         return true;
       }
@@ -6045,7 +6060,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const optionsObject = {};
       const optionTexts = [];
       const optionsList = [];
-      optionElements.forEach((optionElement) => {
+      const allElements = Array.from(optionElements || []);
+      const topElements = allElements.filter(
+        (el) => !allElements.some((other) => other !== el && other.contains(el)),
+      );
+      topElements.forEach((optionElement) => {
         var _a;
         const inner = optionElement.querySelector(optionSelector) || optionElement;
         const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
@@ -9061,7 +9080,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const optionsObject = {};
       const optionTexts = [];
       const optionsList = [];
-      optionElements.forEach((optionElement) => {
+      const allElements = Array.from(optionElements || []);
+      const topElements = allElements.filter(
+        (el) => !allElements.some((other) => other !== el && other.contains(el)),
+      );
+      topElements.forEach((optionElement) => {
         var _a;
         const inner = optionElement.querySelector(optionSelector) || optionElement;
         const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
