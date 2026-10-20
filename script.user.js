@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.5.1
+// @version      3.5.2
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -5437,7 +5437,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
 
-
   const ANSWER_SEPARATORS = ["===", "#", "---", "###", "|", ";", "；"];
 
   const normalizeAnsText = (input) => {
@@ -6203,6 +6202,56 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const resolvedType = this.resolveQuestionType(questionElement);
         const zyKsSelector = SELECTORS.CX_OPTION_ZY_KS;
         const zjSelector = SELECTORS.CX_OPTION_ZJ;
+        
+        
+        const readingItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
+        if (readingItems.length > 0) {
+          const articleEl = questionElement.querySelector(".fontLabel") || questionElement.querySelector("h3");
+          const article = articleEl
+            ? this.stripTags(this.htmlWithAbsoluteImages(articleEl))
+                .replace(/【阅读理解】/g, "")
+                .replace(/（[\d.]+分）/g, "")
+                .replace(/\s+/g, " ")
+                .trim()
+            : "";
+          const subs = readingItems.map((subItem) => {
+            
+            const isMulti = subItem.querySelectorAll('input[type="checkbox"], [role="checkbox"]').length > 0;
+            const subType = isMulti ? "1" : "0";
+            const contentEl = subItem.querySelector(".clearfix");
+            const subTitle = this.stripTags(this.htmlWithAbsoluteImages(contentEl || subItem))
+              .replace(/（[\d.]+分）/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
+            const liList = Array.from(subItem.querySelectorAll("ul li"));
+            const optionTexts = liList.map((li) => {
+              const spans = li.querySelectorAll("span.fl");
+              const textEl = spans.length >= 2 ? spans[1] : li;
+              return this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
+            });
+            return { type: subType, title: subTitle, options: optionTexts, elements: liList };
+          });
+          const subBlocks = subs.map((sub, i) => {
+            const typeName = sub.type === "1" ? "多选题" : "单选题";
+            const optionLines = sub.options.map((text, j) => `${String.fromCharCode(65 + j)}. ${text}`);
+            return `(${i + 1}) [${typeName}] ${sub.title}\n${optionLines.join("\n")}`;
+          });
+          this.questions.push({
+            element: questionElement,
+            type: "16",
+            title: this.trimTitle(`【阅读理解】\n${article}\n\n${subBlocks.join("\n\n")}`),
+            audios: this.collectAudioUrls(questionElement),
+            optionsText: [],
+            options: {},
+            optionsList: [],
+            answer: [],
+            workType: this.type,
+            refer: this._window.location.href,
+            _reading: subs
+          });
+          return;
+        }
+
         if (["zy", "ks"].includes(this.type)) {
           const h3Element = questionElement.querySelector("h3");
           const colorShallowElement = questionElement.querySelector(".colorShallow");
@@ -6217,46 +6266,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           questionTitle = this.stripTags(this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel")))
             .replace(/（[\d.]+分）/g, "").trim();
           
-          
-          const readingItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
-          if (readingItems.length > 0) {
-            const subs = readingItems.map((subItem) => {
-              const typeText = this.stripTags((subItem.querySelector(".index") || {}).textContent || "");
-              const isMulti =
-                subItem.querySelectorAll('input[type="checkbox"], [role="checkbox"]').length > 0;
-              const subType = isMulti ? "1" : "0";
-              const contentEl = subItem.querySelector(".clearfix");
-              const subTitle = this.stripTags(this.htmlWithAbsoluteImages(contentEl || subItem))
-                .replace(/（[\d.]+分）/g, "").replace(/\s+/g, " ").trim();
-              const liList = Array.from(subItem.querySelectorAll("ul li"));
-              const optionTexts = liList.map((li) => {
-                const spans = li.querySelectorAll("span.fl");
-                const textEl = spans.length >= 2 ? spans[1] : li;
-                return this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
-              });
-              return { type: subType, title: subTitle, options: optionTexts, elements: liList };
-            });
-            const subBlocks = subs.map((sub, i) => {
-              const typeName = sub.type === "1" ? "多选题" : "单选题";
-              const optionLines = sub.options.map((text, j) => `${String.fromCharCode(65 + j)}. ${text}`);
-              return `(${i + 1}) [${typeName}] ${sub.title}\n${optionLines.join("\n")}`;
-            });
-            const article = questionTitle.replace(/【阅读理解】/g, "").trim();
-            this.questions.push({
-              element: questionElement,
-              type: "16",
-              title: this.trimTitle(`【阅读理解】\n${article}\n\n${subBlocks.join("\n\n")}`),
-              audios: this.collectAudioUrls(questionElement),
-              optionsText: [],
-              options: {},
-              optionsList: [],
-              answer: [],
-              workType: this.type,
-              refer: this._window.location.href,
-              _reading: subs
-            });
-            return;
-          }
           
           
           const isMatchingQuestion = questionElement.getAttribute("data") === "11" ||
