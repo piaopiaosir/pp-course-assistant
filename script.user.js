@@ -5602,9 +5602,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       }
       return false;
     }
-    /**
-     * 返回 true 表示已处理（含"匹配不到就跳过"，绝不瞎猜），false 表示交给旧逻辑
-     */
     async fillQuestionV2(question) {
       let type = String(question.type);
       if (!["0", "1", "2", "3", "11", "13"].includes(type)) {
