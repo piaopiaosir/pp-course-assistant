@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.5.2
+// @version      3.6.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -1923,7 +1923,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const currentToken = vue.unref(configStore).queryApis[0].token;
         
         
-        if (!currentToken || !/^\d{16}$/.test(currentToken)) {
+        if (!currentToken || !/^\d{16}$|^\d{24}$/.test(currentToken)) {
           
           return;
         }
@@ -1963,10 +1963,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         
         if (!token) {
           
-        } else if (!/^\d{16}$/.test(token)) {
+        } else if (!/^\d{16}$|^\d{24}$/.test(token)) {
           
-          logStore.addLog('❌ Token格式错误，必须是16位数字', 'danger');
-          verifyState.value = { status: 'error', message: 'Token格式错误，必须是16位数字' };
+          logStore.addLog('❌ Token格式错误，必须是24位数字', 'danger');
+          verifyState.value = { status: 'error', message: 'Token格式错误，必须是24位数字' };
           configStore.tokenVerified = false;
           configStore.tokenVerifyError = 'format';
           return;
@@ -2127,17 +2127,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               <div style="font-size:48px;margin-bottom:16px;">🎉</div>
               <h3 style="margin:0 0 12px;color:#333;font-size:18px;">网课小助手发现新版本-飘飘</h3>
               <p style="margin:0 0 8px;color:#666;font-size:14px;">当前版本: v${latestVersion}</p>
-              <p style="margin:0 0 20px;color:#999;font-size:12px;">${updateMessage || '建议更新以获得更好体验'}</p>
-              <div style="display:flex;gap:12px;justify-content:center;">
-                <button id="update-btn" style="background:#6366f1;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:all 0.2s;">立即更新</button>
-                <button id="later-btn" style="background:#f9fafb;color:#6b7280;border:1px solid #d1d5db;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:all 0.2s;">稍后提醒</button>
+              <p style="margin:0 0 8px;color:#999;font-size:12px;">${updateMessage || '请更新至最新版本后继续使用'}</p>
+              <p style="margin:0 0 20px;color:#ef4444;font-size:12px;">旧版本已停止使用，必须更新后才能继续使用</p>
+              <div style="display:flex;justify-content:center;">
+                <button id="update-btn" style="background:#6366f1;color:#fff;border:none;padding:10px 32px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:all 0.2s;">立即更新</button>
               </div>
             </div>
           </div>
         `;
         document.body.appendChild(dialog);
         document.getElementById('update-btn').onclick = () => window.open(updateUrl, '_blank');
-        document.getElementById('later-btn').onclick = () => dialog.remove();
       };
 
       
@@ -2270,7 +2269,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     autoVerifyToken();
                   }
                 }),
-                placeholder: "请输入16位数字Token密钥",
+                placeholder: "请输入24位数字Token密钥",
                 clearable: true,
                 size: "small"
               }, null, 8, ["modelValue"]),
@@ -3159,413 +3158,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   });
   const QuestionTable =  _export_sfc(_sfc_main$6, [["__scopeId", "data-v-18523ca7"]]);
   
-  const _sfc_main_referral =  vue.defineComponent({
-    __name: "ReferralPanel",
-    setup(__props) {
-      const logStore = useLogStore();
-      
-      
-      const myUserId = vue.ref('');
-      const referrerInput = vue.ref('');
-      const submitting = vue.ref(false);
-      const loading = vue.ref(true);
-      
-      
-      const submitState = vue.ref({
-        status: '', 
-        message: ''
-      });
-      
-      
-      const rewardResult = vue.ref({
-        referrerReward: 0,
-        refereeReward: 0
-      });
-      
-      
-      const referralStatus = vue.ref({
-        canRefer: false,
-        canReferReason: '',
-        isReferred: false,
-        referrerId: null,
-        myReward: 0,
-        totalReferrals: 0,
-        totalRewards: 0,
-        userType: 1
-      });
-
-      
-      const initUserId = () => {
-        try {
-          const uid = getUid();
-          myUserId.value = uid || '';
-        } catch (e) {
-        }
-      };
-      
-      
-      const fetchReferralStatus = () => {
-        const userId = myUserId.value;
-        if (!userId) {
-          loading.value = false;
-          return;
-        }
-        _GM_xmlhttpRequest({
-          method: "GET",
-          url: getRandomServer() + "/referral/status?userId=" + encodeURIComponent(userId),
-          timeout: 10000,
-          onload: (response) => {
-            loading.value = false;
-            try {
-              const res = JSON.parse(response.responseText);
-              if (res.code === 200 && res.data) {
-                referralStatus.value = res.data;
-              }
-            } catch (e) {
-            }
-          },
-          onerror: () => {
-            loading.value = false;
-          }
-        });
-      };
-      
-      
-      const copyUserId = () => {
-        if (myUserId.value) {
-          navigator.clipboard.writeText(myUserId.value).then(() => {
-            logStore.addLog('✅ 用户ID已复制到剪贴板', 'success');
-          }).catch(() => {
-            logStore.addLog('❌ 复制失败', 'danger');
-          });
-        }
-      };
-      
-      
-      const submitReferral = () => {
-        if (!referrerInput.value.trim()) {
-          submitState.value = { status: 'error', message: '请输入推荐人ID' };
-          return;
-        }
-        if (!myUserId.value) {
-          submitState.value = { status: 'error', message: '无法获取您的用户ID' };
-          return;
-        }
-        submitting.value = true;
-        submitState.value = { status: 'submitting', message: '正在提交...' };
-        _GM_xmlhttpRequest({
-          method: "POST",
-          url: getRandomServer() + "/referral",
-          headers: { "Content-Type": "application/json" },
-          data: JSON.stringify({
-            referrerId: referrerInput.value.trim(),
-            refereeId: myUserId.value
-          }),
-          timeout: 10000,
-          onload: (response) => {
-            submitting.value = false;
-            try {
-              const res = JSON.parse(response.responseText);
-              if (res.code === 200) {
-                submitState.value = { status: 'success', message: res.msg };
-                referrerInput.value = '';
-                
-                if (res.data) {
-                  rewardResult.value = {
-                    referrerReward: res.data.referrerReward || 0,
-                    refereeReward: res.data.refereeReward || 0
-                  };
-                }
-                fetchReferralStatus();
-              } else {
-                submitState.value = { status: 'error', message: res.msg };
-              }
-            } catch (e) {
-              submitState.value = { status: 'error', message: '提交失败，请稍后重试' };
-            }
-          },
-          onerror: () => {
-            submitting.value = false;
-            submitState.value = { status: 'error', message: '网络错误，请稍后重试' };
-          }
-        });
-      };
-      
-      
-      vue.onMounted(() => {
-        initUserId();
-        fetchReferralStatus();
-      });
-      
-      return (_ctx, _cache) => {
-        const userId = vue.unref(myUserId);
-        const status = vue.unref(referralStatus);
-        const isSubmitting = vue.unref(submitting);
-        
-        return vue.openBlock(), vue.createElementBlock("div", {
-          key: 'referral-' + userId + '-' + status.totalReferrals + '-' + status.totalRewards + '-' + status.canRefer + '-' + status.hasReferred
-        }, [
-          
-          vue.createElementVNode("div", {
-            style: {
-              "margin-bottom": "15px",
-              "padding": "16px",
-              "background": "#ffffff",
-              "border-radius": "4px",
-              "border": "1px solid #e5e7eb"
-            }
-          }, [
-            vue.createElementVNode("div", {
-              style: {
-                "display": "flex",
-                "align-items": "center",
-                "justify-content": "space-between",
-                "margin-bottom": "12px"
-              }
-            }, [
-              vue.createElementVNode("span", { 
-                style: { 
-                  "font-weight": "600", 
-                  "font-size": "14px",
-                  "color": "#111827"
-                } 
-              }, "推广奖励"),
-              vue.createElementVNode("span", { 
-                style: { 
-                  "font-size": "12px", 
-                  "color": "#6b7280"
-                } 
-              }, "邀请好友获得免费查询次数")
-            ]),
-            
-            vue.createElementVNode("div", {
-              style: {
-                "padding": "14px",
-                "margin-bottom": "12px",
-                "background": "#f9fafb",
-                "border-radius": "4px",
-                "border": "1px solid #e5e7eb"
-              }
-            }, [
-              vue.createElementVNode("p", { style: { "margin": "0 0 8px 0", "font-size": "13px", "color": "#374151", "font-weight": "500" } }, "我的用户ID"),
-              vue.createElementVNode("div", {
-                style: { "display": "flex", "align-items": "center", "gap": "10px" }
-              }, [
-                vue.createElementVNode("span", { 
-                  style: { 
-                    "font-size": "16px", 
-                    "color": userId ? "#0052D9" : "#e65100", 
-                    "font-weight": "600",
-                    "font-family": "monospace"
-                  } 
-                }, vue.toDisplayString(userId || '请先在学习通网站登录')),
-                userId ? (vue.openBlock(), vue.createElementBlock("button", {
-                  key: 0,
-                  onClick: copyUserId,
-                  style: {
-                    "padding": "4px 10px",
-                    "font-size": "12px",
-                    "border": "none",
-                    "border-radius": "4px",
-                    "background": "#0052D9",
-                    "color": "#fff",
-                    "cursor": "pointer"
-                  }
-                }, "复制")) : vue.createCommentVNode("", true)
-              ])
-            ]),
-            
-            vue.createElementVNode("div", {
-              style: {
-                "display": "grid",
-                "grid-template-columns": "1fr 1fr",
-                "gap": "10px"
-              }
-            }, [
-              vue.createElementVNode("div", {
-                style: {
-                  "padding": "12px",
-                  "background": "#f0fdf4",
-                  "border-radius": "4px",
-                  "border": "1px solid #bbf7d0",
-                  "text-align": "center"
-                }
-              }, [
-                vue.createElementVNode("div", { 
-                  style: { "font-size": "20px", "font-weight": "600", "color": "#2e7d32" } 
-                }, vue.toDisplayString(status.totalReferrals)),
-                vue.createElementVNode("div", { 
-                  style: { "font-size": "11px", "color": "#388e3c" } 
-                }, "已推广人数")
-              ]),
-              vue.createElementVNode("div", {
-                style: {
-                  "padding": "12px",
-                  "background": "#fffbeb",
-                  "border-radius": "4px",
-                  "border": "1px solid #fde68a",
-                  "text-align": "center"
-                }
-              }, [
-                vue.createElementVNode("div", { 
-                  style: { "font-size": "20px", "font-weight": "600", "color": "#e65100" } 
-                }, vue.toDisplayString(status.totalRewards)),
-                vue.createElementVNode("div", { 
-                  style: { "font-size": "11px", "color": "#f57c00" } 
-                }, "获得奖励次数")
-              ])
-            ])
-          ]),
-          
-          vue.createElementVNode("div", {
-            style: {
-              "padding": "16px",
-              "background": "#ffffff",
-              "border-radius": "4px",
-              "border": "1px solid #e5e7eb"
-            }
-          }, [
-            vue.createElementVNode("div", {
-              style: {
-                "display": "flex",
-                "align-items": "center",
-                "justify-content": "space-between",
-                "margin-bottom": "12px"
-              }
-            }, [
-              vue.createElementVNode("span", { style: { "font-weight": "600", "font-size": "14px", "color": "#111827" } }, "填写推荐人"),
-              vue.createElementVNode("span", { style: { "font-size": "12px", "color": "#6b7280" } }, "新用户福利")
-            ]),
-            vue.createElementVNode("div", {
-              style: { "padding": "12px", "background": "#fafcfe" }
-            }, [
-              status.isReferred ? (vue.openBlock(), vue.createElementBlock("div", {
-                key: 0,
-                style: {
-                  "padding": "12px",
-                  "background": "#e8f5e9",
-                  "border-radius": "4px",
-                  "border-left": "4px solid #4caf50"
-                }
-              }, [
-                vue.createElementVNode("p", { 
-                  style: { "margin": "0", "font-size": "13px", "color": "#2e7d32" } 
-                }, "您已填写过推荐人：" + vue.toDisplayString(status.referrerId)),
-                status.myReward > 0 ? (vue.createElementVNode("p", { 
-                  style: { "margin": "8px 0 0 0", "font-size": "13px", "color": "#0052D9", "font-weight": "500" } 
-                }, "获得 " + vue.toDisplayString(status.myReward) + " 次查询奖励")) : vue.createCommentVNode("", true)
-              ])) : (vue.openBlock(), vue.createElementBlock("div", { key: 1 }, [
-                status.canRefer ? (vue.openBlock(), vue.createElementBlock("div", { key: 0 }, [
-                  
-                  vue.createElementVNode("div", {
-                    style: {
-                      "padding": "10px",
-                      "margin-bottom": "10px",
-                      "background": "#fff3e0",
-                      "border-radius": "4px",
-                      "font-size": "12px",
-                      "color": "#e65100"
-                    }
-                  }, [
-                    vue.createElementVNode("p", { style: { "margin": "0" } }, "📌 规则说明："),
-                    vue.createElementVNode("p", { style: { "margin": "5px 0 0 0" } }, "• 仅限新用户（注册24小时内）填写"),
-                    vue.createElementVNode("p", { style: { "margin": "3px 0 0 0" } }, "• 每人只能填写一次推荐人"),
-                    vue.createElementVNode("p", { style: { "margin": "3px 0 0 0", "color": "#f44336" } }, "• 推荐人必须是赞助过的用户（免费Token无法被推荐）"),
-                    vue.createElementVNode("p", { style: { "margin": "3px 0 0 0" } }, 
-                      rewardResult.value.refereeReward > 0 
-                        ? `✅ 推荐人获得${rewardResult.value.referrerReward}次，您获得${rewardResult.value.refereeReward}次`
-                        : "• 推荐人获得20-100次（随机），您获得20-50次（随机）"
-                    )
-                  ]),
-                  vue.createElementVNode("div", { style: { "margin-bottom": "10px" } }, [
-                    vue.createElementVNode("input", {
-                      type: "text",
-                      value: vue.unref(referrerInput),
-                      onInput: _cache[0] || (_cache[0] = ($event) => referrerInput.value = $event.target.value),
-                      placeholder: "请输入推荐人的用户ID",
-                      style: {
-                        "width": "100%",
-                        "padding": "10px 12px",
-                        "border": "1px solid #ddd",
-                        "border-radius": "8px",
-                        "font-size": "14px",
-                        "box-sizing": "border-box"
-                      }
-                    }, null, 40, ["value", "onInput"])
-                  ]),
-                  vue.createElementVNode("button", {
-                    onClick: submitReferral,
-                    disabled: isSubmitting,
-                    style: {
-                      "width": "100%",
-                      "padding": "10px",
-                      "border": "none",
-                      "border-radius": "8px",
-                      "background": isSubmitting ? "#d1d5db" : "#6366f1",
-                      "color": "#fff",
-                      "font-size": "14px",
-                      "font-weight": "500",
-                      "cursor": isSubmitting ? "not-allowed" : "pointer"
-                    }
-                  }, vue.toDisplayString(isSubmitting ? "提交中..." : "提交推荐人"), 9, ["onClick", "disabled"]),
-                  
-                  submitState.value.status ? (vue.openBlock(), vue.createElementBlock("div", {
-                    key: 0,
-                    style: {
-                      "margin-top": "10px",
-                      "padding": "10px 12px",
-                      "border-radius": "8px",
-                      "border": "2px solid",
-                      "border-color": submitState.value.status === 'success' ? "#4caf50" :
-                                      submitState.value.status === 'error' ? "#dc3545" : "#ffc107",
-                      "background-color": submitState.value.status === 'success' ? "#e8f5e9" :
-                                             submitState.value.status === 'error' ? "#f8d7da" : "#fff8e1"
-                    }
-                  }, [
-                    vue.createElementVNode("div", {
-                      style: {
-                        "display": "flex",
-                        "align-items": "center",
-                        "gap": "6px"
-                      }
-                    }, [
-                      vue.createElementVNode("span", {
-                        style: { "font-size": "14px" }
-                      }, vue.toDisplayString(
-                        submitState.value.status === 'success' ? "✅" :
-                        submitState.value.status === 'error' ? "❌" : "⏳"
-                      ), 1),
-                      vue.createElementVNode("span", {
-                        style: {
-                          "font-size": "13px",
-                          "color": submitState.value.status === 'success' ? "#2e7d32" :
-                                      submitState.value.status === 'error' ? "#721c24" : "#856404"
-                        }
-                      }, vue.toDisplayString(submitState.value.message), 1)
-                    ])
-                  ])) : vue.createCommentVNode("v-if", true)
-                ])) : (vue.openBlock(), vue.createElementBlock("div", {
-                  key: 1,
-                  style: {
-                    "padding": "12px",
-                    "background": "linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)",
-                    "border-radius": "8px",
-                    "border-left": "4px solid #ff9800"
-                  }
-                }, [
-                  vue.createElementVNode("p", { 
-                    style: { "margin": "0", "font-size": "13px", "color": "#e65100", "font-weight": "500" } 
-                  }, "⚠️ " + vue.toDisplayString(status.canReferReason || '你已不是新用户，无法填写推荐人'))
-                ]))
-              ]))
-            ])
-          ])
-        ]);
-      };
-    }
-  });
-  const ReferralPanel =  _export_sfc(_sfc_main_referral, [["__scopeId", "data-v-referral-panel"]]);
-  
+    
   const TOKEN_USAGE_MODE_OPTIONS = [
     { label: "全部模式", value: "" },
     { label: "正常模式", value: "正常模式" },
@@ -3581,7 +3174,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const getConfigToken = () => {
         const apis = configStore.queryApis || [];
         const raw = apis[0] && apis[0].token ? String(apis[0].token).trim() : "";
-        return /^\d{16}$/.test(raw) ? raw : "";
+        return /^\d{16}$|^\d{24}$/.test(raw) ? raw : "";
       };
       
       const loading = vue.ref(false);
@@ -3595,7 +3188,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const queried = vue.ref(false);
       const lastUpdated = vue.ref("");
       
-      const isTokenValid = (value) => /^\d{16}$/.test(String(value || "").trim());
+      const isTokenValid = (value) => /^\d{16}$|^\d{24}$/.test(String(value || "").trim());
       
       const pad2 = (n) => n < 10 ? "0" + n : "" + n;
       const formatTime = (ts) => {
@@ -3630,7 +3223,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       };
       const maskedInput = vue.computed(() => {
         const raw = String(tokenInput.value || "").trim();
-        return /^\d{16}$/.test(raw) ? raw.substring(0, 4) + "****" + raw.substring(12) : "";
+        return /^\d{16}$|^\d{24}$/.test(raw) ? raw.substring(0, 4) + "****" + raw.substring(raw.length - 4) : "";
       });
       
       const CHIP_BASE_STYLE = {
@@ -3675,7 +3268,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           records.value = [];
           total.value = 0;
           queried.value = false;
-          errorMsg.value = "请输入正确的16位数字Token";
+          errorMsg.value = "请输入正确的24位数字Token";
           return;
         }
         const usePage = Math.max(1, parseInt(targetPage, 10) || 1);
@@ -3810,7 +3403,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     tokenInput.value = $event;
                     errorMsg.value = "";
                   }),
-                  placeholder: "请输入16位数字Token",
+                  placeholder: "请输入24位数字Token",
                   clearable: true,
                   style: { "width": "210px" },
                   onKeyup: handleKeyup
@@ -4283,7 +3876,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 }
               }, [
                 vue.createElementVNode("p", { style: { "margin": "0 0 5px 0", "font-weight": "500", "color": "#0052D9" } }, "🔑 题库配置"),
-                vue.createElementVNode("p", { style: { "margin": "0", "color": "#374151", "font-size": "13px" } }, '脚本接入了综合题库，如需填写密钥，依次操作：【1】 点击标签页"脚本配置" --> 【2】 在顶部文本框内填写16位数字Token --> 【3】 点击验证')
+                vue.createElementVNode("p", { style: { "margin": "0", "color": "#374151", "font-size": "13px" } }, '脚本接入了综合题库，如需填写密钥，依次操作：【1】 点击标签页"脚本配置" --> 【2】 在顶部文本框内填写24位数字Token --> 【3】 点击验证')
               ]),
               vue.createElementVNode("div", {
                 style: {
@@ -5080,7 +4673,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
       })(),
       questionData: question.element.outerHTML,
-      workType: question.workType,
+      workType: String(question.workType) === "zhs" ? "zhs" : "cx",
       id: ((_a = question.refer.match(/courseId=(\d+)/)) == null ? void 0 : _a[1]) || "",
       refer: question.refer,
       u: userId,
@@ -5101,6 +4694,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
     
     
+    let step1TaskId = null;
     const sendRequest = (checkOnly = false) => {
       return new Promise((resolve) => {
         
@@ -5138,7 +4732,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             aiMode: useAIOnly,  
             enableWebSearch: enableWebSearch,  
             model: modelType,  
-            checkOnly: checkOnly,  
+            checkOnly: checkOnly,
+            step1TaskId: step1TaskId || undefined,
             userId: questionData.u,
             async: true
           }),
@@ -5165,7 +4760,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
     const pollQueryTask = (taskId, resolve, pollInterval = 1000) => {
       let pollCount = 0;
-      const MAX_WAIT_MS = 6 * 60 * 1000;
+      const MAX_WAIT_MS = 10 * 60 * 1000;
       const maxPolls = Math.max(120, Math.ceil(MAX_WAIT_MS / Math.max(500, pollInterval)));
       
       const poll = () => {
@@ -5185,6 +4780,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               if (result.code === 200 && result.data) {
                 const { status, result: taskResult } = result.data;
                 if (status === 'completed' && taskResult) {
+                  if (taskResult.code === 202 && taskResult.status === "thinking") step1TaskId = taskId;
                   resolve(taskResult);
                 } else if (status === 'processing' || status === 'pending') {
                   setTimeout(poll, pollInterval);
@@ -9445,11 +9041,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           id: "author-words",
           component: AuthorWords
         },
-        ...(configStore.platformName === "zhs" ? [] : [{
-          label: "推广奖励",
-          id: "referral-panel",
-          component: ReferralPanel
-        }]),
         {
           label: "使用查询",
           id: "token-usage",
