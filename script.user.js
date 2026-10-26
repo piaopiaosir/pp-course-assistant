@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.6.0
+// @version      3.6.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -1990,6 +1990,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             try {
               const res = JSON.parse(response.responseText);
 
+              if (res.data?.sponsorUrl) {
+                SPONSOR_URL = res.data.sponsorUrl;
+                const isFreeTokenWithBalance =
+                  res.code === 200 &&
+                  res.data.valid &&
+                  Number(res.data.num) > 0 &&
+                  (res.data.newToken || res.data.isNew || res.data.planCode === 'free');
+                if (!isFreeTokenWithBalance) triggerWelfarePromo();
+              }
+
               if (res.code === 200 && res.data && res.data.valid) {
                 remainingCount.value = res.data.num;
                 verifyState.value = { status: 'success', message: `验证成功！剩余次数: ${res.data.num}次` };
@@ -2139,17 +2149,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         document.getElementById('update-btn').onclick = () => window.open(updateUrl, '_blank');
       };
 
-      
-      vue.watchEffect(() => {
-        const noToken = !vue.unref(configStore).queryApis[0].token;
-        const verifyError = verifyState.value.status === 'error';
-        const noRemaining = verifyState.value.status === 'success' && remainingCount.value <= 0;
-        if (noToken || verifyError || noRemaining) {
-          triggerWelfarePromo();
-        }
-      });
-
-      
       vue.onMounted(async () => {
         
         checkUpdate();
