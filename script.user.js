@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.6.1
+// @version      3.7.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -42,6 +42,7 @@ const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
   "http://152.136.30.238:3000"
 ];
+
 
 const _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE = (() => new Promise((resolve) => {
   const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
@@ -182,7 +183,17 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     JOB_ID: /[?&]jobid=([^&]+)/i,                            
     HEX_HASH: /([a-f0-9]{24,})/i,                            
     JUDGE_TRUE: /(^|,)(是|对|正确|确定|√|对的|是的|正确的|true|True|T|yes|1)(,|$)/, 
-    JUDGE_FALSE: /(^|,)(非|否|错|错误|×|X|错的|不对|不正确的|不正确|不是|不是的|false|False|F|no|0)(,|$)/ 
+    JUDGE_FALSE: /(^|,)(非|否|错|错误|×|X|错的|不对|不正确的|不正确|不是|不是的|false|False|F|no|0)(,|$)/
+  };
+
+  const ppJudgeKey = (text) => {
+    const key = String(text == null ? "" : text)
+      .replace(/^[A-Ha-h]\s*[.、．:：)）]\s*/, "")
+      .replace(/[\s，。！？、；：""''“”‘’（）【】,.!?;:'"()\[\]]/g, "")
+      .toLowerCase();
+    if (["对", "正确", "√", "✓", "是", "对的", "是的", "正确的", "确定", "true", "t", "yes", "1"].includes(key)) return "T";
+    if (["错", "错误", "×", "✗", "否", "错的", "不对", "不是", "不是的", "不正确", "不正确的", "非", "false", "f", "no", "0"].includes(key)) return "F";
+    return "";
   };
 
   
@@ -4310,6 +4321,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return true;
   };
 
+  const waitForAudioFrames = async (doc, timeoutMs = 5000) => {
+    if (!doc) return;
+    const frames = Array.from(doc.querySelectorAll('iframe[src*="audioplay"]'));
+    if (!frames.length) return;
+    const ready = () =>
+      frames.every((frame) => {
+        try {
+          const inner = frame.contentDocument;
+          if (!inner) return false;
+          const audio = inner.querySelector("audio");
+          return Boolean((audio && audio.src) || inner.querySelector("source[src]"));
+        } catch (e) {
+          return false;
+        }
+      });
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (ready()) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  };
+
   class QuestionProcessor {
     constructor() {
       __publicField(this, "_document", document);           
@@ -4345,7 +4378,26 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return false;
         }
         
-        if (question.type === "2" || question.type === "14" || question.type === "15") {
+        if (question.type === "14" && Array.isArray(question._cloze) && question._cloze.length > 0) {
+          return question._cloze.every((c) => (c.elements || []).some((el) => el.querySelector(".check_answer")));
+        }
+
+        if (question.type === "24" && question._fillBlanks && Array.isArray(question._fillBlanks.blanks)) {
+          return question._fillBlanks.blanks.every((b) => b && b.classList && b.classList.contains("hasFill"));
+        }
+
+        if (question.type === "20" && Array.isArray(question._shared) && question._shared.length > 0) {
+          return question._shared.every((s) =>
+            (s.elements || []).some((el) => (el.classList ? el.classList.contains("check_answer") : false)),
+          );
+        }
+
+        if (
+          question.type === "2" ||
+          question.type === "14" ||
+          question.type === "9" ||
+          (question.type === "10" && String(question.workType) !== "zhs")
+        ) {
           
           const taElements = question.element.querySelectorAll("textarea");
           for (const ta of taElements) {
@@ -4379,7 +4431,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return false;
         }
         
-        if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7") {
+        if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7" || question.type === "8") {
           const taEl = question.element.querySelector("textarea");
           if (taEl && taEl.value && taEl.value.trim() !== "") {
             return true;
@@ -4396,6 +4448,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return selectElements.length > 0;
         }
         
+        if (Array.isArray(question._reading) && question._reading.length > 0) {
+          return question._reading.every((sub) =>
+            (sub.elements || []).some((el) =>
+              el.querySelector(".check_answer, .onChecked") ||
+              (el.classList && el.classList.contains("check_answer"))
+            )
+          );
+        }
         return false;
       });
       
@@ -4488,6 +4548,36 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             if (/\.(mp3|m4a|wav|aac)(\?|$)/i.test(u)) push(u);
           });
         } catch (e) {}
+        return urls.slice(0, 3);
+      });
+      __publicField(this, "collectVideoUrls", () => {
+        const urls = [];
+        const push = (u) => {
+          const s = String(u || "").trim();
+          if (!s || !/^https?:\/\//i.test(s)) return;
+          if (!urls.includes(s)) urls.push(s);
+        };
+        const scan = (doc, depth) => {
+          if (!doc || depth > 3) return;
+          try {
+            doc.querySelectorAll("video").forEach((v) => push(v.currentSrc || v.src));
+          } catch (e) {}
+          try {
+            doc.querySelectorAll('iframe[src*="video"]').forEach((f) => {
+              try {
+                scan(f.contentDocument, depth + 1);
+              } catch (e) {}
+            });
+          } catch (e) {}
+        };
+        let w = this._window;
+        for (let i = 0; i < 3 && w; i++) {
+          try {
+            scan(w.document, 0);
+          } catch (e) {}
+          if (!w.parent || w.parent === w) break;
+          w = w.parent;
+        }
         return urls.slice(0, 3);
       });
       
@@ -4654,12 +4744,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     
     
     const questionData = {
-      question: question.title,
-      options: question.optionsText,
-      type: ["14", "15"].includes(String(question.type)) ? "2" : question.type,
+      questionData: question.element.outerHTML,
       audios: Array.isArray(question.audios) ? question.audios : [],
-      subCount: Array.isArray(question._reading) ? question._reading.length : 0,
-      blanks: (() => {
+      audioReferer: (() => {
+        try {
+          return new URL(question.refer || window.location.href).origin + "/";
+        } catch (e) {
+          return "";
+        }
+      })(),
+      workType: String(question.workType) === "zhs" ? "zhs" : "cx",
+      refer: question.refer,
+      u: userId,
+      t: Math.floor(( new Date()).getTime() / 1e3).toString()
+    };
+
+
+    if (String(question.workType) === "zhs") {
+      questionData.question = question.title;
+      questionData.options = question.optionsText;
+      questionData.type = ["14", "15"].includes(String(question.type)) ? "2" : question.type;
+      questionData.subCount = Array.isArray(question._reading) ? question._reading.length : 0;
+      questionData.blanks = (() => {
         const type = String(question.type);
         if (!["2", "14", "15"].includes(type)) return 0;
         try {
@@ -4670,14 +4776,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         } catch (e) {
           return 0;
         }
-      })(),
-      questionData: question.element.outerHTML,
-      workType: String(question.workType) === "zhs" ? "zhs" : "cx",
-      id: ((_a = question.refer.match(/courseId=(\d+)/)) == null ? void 0 : _a[1]) || "",
-      refer: question.refer,
-      u: userId,
-      t: Math.floor(( new Date()).getTime() / 1e3).toString()
-    };
+      })();
+      questionData.id = ((question.refer.match(/courseId=(\d+)/) || [])[1]) || "";
+    }
     
     
     const startTaskId = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
@@ -4857,140 +4958,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   
-  const detectAndReportResults = async (document, maxWaitTime = 10000) => {
-    try {
-      const logStore = useLogStore();
-      const questionStore = useQuestionStore();
-      
-      
-      let questionElements = [];
-      const startTime = Date.now();
-      while (Date.now() - startTime < maxWaitTime) {
-        questionElements = document.querySelectorAll(SELECTORS.CX_QUESTION_ZJ);
-        if (questionElements.length === 0) {
-          questionElements = document.querySelectorAll(SELECTORS.CX_QUESTION_ZY_KS);
-        }
-        if (questionElements.length > 0) break;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
-      if (questionElements.length === 0) {
-        logStore.addLog(`[正确性检测] 等待${maxWaitTime}ms后仍未找到题目元素，跳过上报`, "warning");
-        return;
-      }
-      
-      const questionsWithResults = [];
-      let correctCount = 0;
-      let wrongCount = 0;
-      
-      questionElements.forEach((qEl, index) => {
-        const question = questionStore.questionList?.[index];
-        if (!question) return;
-        
-        
-        const markingDui = qEl.querySelector(".marking_dui");
-        const markingCuo = qEl.querySelector(".marking_cuo");
-        const markingBandui = qEl.querySelector(".marking_bandui");
-        
-        if (markingDui) {
-          question.isCorrect = 1;
-          correctCount++;
-        } else if (markingCuo || markingBandui) {
-          
-          question.isCorrect = 0;
-          wrongCount++;
-        }
-        
-        questionsWithResults.push(question);
-      });
-      
-      
-      if (correctCount > 0 || wrongCount > 0) {
-        logStore.addLog(`检测结果: ${correctCount}题正确, ${wrongCount}题错误`, correctCount > wrongCount ? "success" : "warning");
-      }
-      
-      
-      if (questionsWithResults.length > 0) {
-        await reportAnswerResults(questionsWithResults);
-      }
-    } catch (e) {
-      try {
-        const logStore = useLogStore();
-        logStore.addLog(`检测正确性出错: ${e.message}`, "danger");
-      } catch (e2) {
-      }
-    }
-  };
-  
-  
-  
-  
-  
-  
-  const reportAnswerResults = async (questions) => {
-    const configStore = useConfigStore();
-    const logStore = useLogStore();
-    const token = configStore.queryApis[0].token;
-    
-    
-    const validQuestions = questions.filter(q => (q.type === "0" || q.type === "1" || q.type === "3") && (q.isCorrect === 0 || q.isCorrect === 1));
-    
-    if (validQuestions.length === 0) {
-      logStore.addLog("无选择题/判断题，跳过正确性上报", "info");
-      return;
-    }
-    
-    logStore.addLog(`开始上报${validQuestions.length}道题的正确性结果...`, "primary");
-    
-    
-    const reportData = validQuestions.map(q => ({
-      question: q.title,
-      options: q.optionsText || [],
-      type: q.type,
-      isCorrect: q.isCorrect 
-    }));
-    
-    
-    try {
-      _GM_xmlhttpRequest({
-        method: "POST",
-        url: getRandomServer() + "/report-answer-results",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": token ? `Bearer ${token}` : ""
-        },
-        data: JSON.stringify({
-          results: reportData
-        }),
-        timeout: 10000,
-        onload: (response) => {
-          try {
-            const res = JSON.parse(response.responseText);
-            if (res.code === 200) {
-              logStore.addLog(`✓ 正确性上报成功: ${res.data.successCount}/${validQuestions.length}`, "success");
-            } else {
-              logStore.addLog(`⚠ 正确性上报失败: ${res.msg}`, "warning");
-            }
-          } catch (e) {
-            logStore.addLog(`⚠ 正确性上报响应解析失败`, "warning");
-          }
-        },
-        ontimeout: () => {
-          logStore.addLog(`⚠ 正确性上报超时(10秒)`, "warning");
-        },
-        onerror: () => {
-          logStore.addLog(`⚠ 正确性上报网络错误`, "warning");
-        }
-      });
-    } catch (e) {
-      logStore.addLog(`⚠ 正确性上报异常: ${e.message}`, "warning");
-    }
-  };
-  
-  
-  
-  
-  
   const computeMatch = (str1, str2) => {
     const s1 = str1.trim().toLowerCase();
     const s2 = str2.trim().toLowerCase();
@@ -5026,13 +4993,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const similarity = (maxLength - distance) / maxLength * 100;
     return Math.round(similarity);
   };
-  
-  
-  
-  
-  
-
-  const ANSWER_SEPARATORS = ["===", "#", "---", "###", "|", ";", "；"];
 
   const normalizeAnsText = (input) => {
     let s = String(input == null ? "" : input);
@@ -5056,25 +5016,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       if (t.charCodeAt(i) <= t.charCodeAt(i - 1)) return false;
     }
     return true;
-  };
-
-  const splitAnswerText = (answer) => {
-    if (answer == null) return [];
-    if (Array.isArray(answer)) return answer.map((a) => String(a).trim()).filter(Boolean);
-    const raw = String(answer).trim();
-    if (!raw) return [];
-    if (raw.startsWith("[")) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.map((a) => String(a).trim()).filter(Boolean);
-      } catch (e) {}
-    }
-    for (const sep of ANSWER_SEPARATORS) {
-      if (raw.includes(sep)) {
-        return raw.split(sep).map((p) => p.trim()).filter(Boolean);
-      }
-    }
-    return [raw];
   };
 
   const getOptionList = (question) => {
@@ -5123,6 +5064,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       
       __publicField(this, "init", async () => {
         await waitForCxFaceRecognition();
+        await waitForAudioFrames(this._document, 5000);
         this.questions = [];
         this.parseHtml();
         if (this.questions.length) {
@@ -5202,8 +5144,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       });
 
       __publicField(this, "fillReadingQuestion", async (question) => {
-        const subs = question._reading || [];
-        const answers = Array.isArray(question.answer) ? question.answer : [];
+        const subs = Array.isArray(question._reading) ? question._reading : [];
+        const rawAnswer = question.answer;
+        const answers = Array.isArray(rawAnswer)
+          ? rawAnswer
+          : (rawAnswer == null || rawAnswer === "" ? [] : [rawAnswer]);
         if (!subs.length || !answers.length) return true;
 
         const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -5220,57 +5165,60 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           } catch (e) {}
           await sleep(150);
         };
+        const indexOfText = (options, text) => {
+          const want = norm(text);
+          if (!want) return -1;
+          const exact = options.findIndex((t) => norm(t) === want);
+          if (exact >= 0) return exact;
+          const wantJudge = ppJudgeKey(text);
+          if (!wantJudge) return -1;
+          return options.findIndex((t) => ppJudgeKey(t) === wantJudge);
+          };
 
         let filled = 0;
-        for (let i = 0; i < subs.length && i < answers.length; i++) {
+        let answeredSubs = 0;
+        for (let i = 0; i < subs.length; i++) {
           const sub = subs[i];
-          const raw = String(answers[i] == null ? "" : answers[i]).trim();
-          if (!raw) continue;
+          const answerText = String(answers[i] == null ? "" : answers[i]).trim();
+          if (!answerText) continue;
 
-          if (sub.type === "0" || sub.type === "1") {
-            const letters = raw.replace(/[^A-Za-z]/g, "").toUpperCase();
-            const byLetters =
-              /^[A-Za-z][A-Za-z、,，\s]*$/.test(raw) && letters.length > 0 && letters.length <= sub.elements.length;
-            const idxs = [];
-            if (byLetters) {
-              for (const ch of letters) {
-                const idx = ch.charCodeAt(0) - 65;
-                if (idx >= 0 && idx < sub.elements.length) idxs.push(idx);
-              }
-            } else {
-              const matchOne = (text) => {
-                const wanted = norm(text);
-                if (!wanted) return -1;
-                return sub.options.findIndex((optionText) => {
-                  const n = norm(optionText);
-                  return n === wanted || (n && (n.includes(wanted) || wanted.includes(n)));
-                });
-              };
-              const whole = matchOne(raw);
-              if (whole >= 0) {
-                idxs.push(whole);
-              } else {
-                const parts = raw
-                  .split(/###|\|\||[;；]\s*/)
-                  .map((s) => s.trim())
-                  .filter(Boolean);
-                for (const part of parts) {
-                  const idx = matchOne(part);
-                  if (idx >= 0 && !idxs.includes(idx)) idxs.push(idx);
-                }
-              }
+          const parts = sub.type === "1"
+            ? answerText.split(/###|\|\||[;；\n]+/).map((s) => s.trim()).filter(Boolean)
+            : [answerText];
+          const idxs = [];
+          for (const part of parts) {
+            const idx = indexOfText(sub.options || [], part);
+            if (idx >= 0 && !idxs.includes(idx)) idxs.push(idx);
+          }
+          if (idxs.length === 0) {
+            if (typeof this.addLog === "function") {
+              this.addLog(
+                "阅读理解第 " + (i + 1) + " 小题：答案文本没匹配到选项 - " + answerText.slice(0, 40),
+                "warning"
+              );
             }
-            for (const idx of idxs) {
-              const el = sub.elements[idx];
-              if (!el) continue;
-              if (this.isOptionSelected(el)) continue;
-              await clickEl(el);
-              filled++;
-            }
+            continue;
+          }
+
+          const picked = sub.type === "1" ? idxs : idxs.slice(0, 1);
+          answeredSubs += 1;
+          for (const idx of picked) {
+            const el = (sub.elements || [])[idx];
+            if (!el) continue;
+            if (this.isOptionSelected(el)) continue;
+            await clickEl(el);
+            filled += 1;
           }
           await sleep(120);
         }
 
+        if (typeof this.addLog === "function" && filled > 0) {
+          this.addLog(
+            "阅读理解 " + subs.length + " 小题：填入 " + answeredSubs + " 题" +
+              (answeredSubs >= subs.length ? "" : "（有小题未匹配）"),
+            answeredSubs >= subs.length ? "success" : "warning"
+          );
+        }
         return filled > 0;
       });
       
@@ -5279,37 +5227,43 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return;
 
         try {
-          if (question.type === "16" && Array.isArray(question._reading)) {
+          if (Array.isArray(question._reading) && question._reading.length > 0) {
             return await this.fillReadingQuestion(question);
           }
           if (await this.fillQuestionV2(question)) return;
-          if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7") {
-          
+          if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7" || question.type === "8") {
           const textareaElement = question.element.querySelector("textarea");
           if (!textareaElement) return;
-          
-          
-          const answerText = Array.isArray(question.answer) 
-            ? question.answer.join("\n") 
+
+          const answerText = Array.isArray(question.answer)
+            ? question.answer.join("\n")
             : String(question.answer);
-          
-          
-          const htmlContent = answerText.split("\n")
-            .map(line => `<p>${line}</p>`)
+          const htmlContent = answerText
+            .split("\n")
+            .map((line) => "<p>" + line + "</p>")
             .join("");
-          
-          try {
-            const ueditor = this._window.UE.getEditor(textareaElement.id || textareaElement.name);
-            if (ueditor && typeof ueditor.setContent === "function") {
-              ueditor.setContent(htmlContent);
-            } else {
-              textareaElement.value = answerText;
-              textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
-            }
-          } catch (e) {
-            textareaElement.value = answerText;
-            textareaElement.dispatchEvent(new Event("input", { bubbles: true }));
+
+          const ue = this._window.UE;
+          const ueditor =
+            ue && typeof ue.getEditor === "function"
+              ? ue.getEditor(textareaElement.id || textareaElement.name)
+              : null;
+          if (!ueditor || typeof ueditor.setContent !== "function") {
+            this.addLog("简答题未取到编辑器实例，已跳过", "warning");
+            return;
           }
+
+          if (ueditor.body === null) {
+            await new Promise((resolve) => {
+              ueditor.addListener("ready", () => resolve());
+              setTimeout(resolve, 2000);
+            });
+          }
+
+          ueditor.setContent(htmlContent);
+          ueditor.fireEvent("contentChange");
+          if (typeof ueditor.sync === "function") ueditor.sync();
+
           const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
           if (saveBtn) saveBtn.click();
         }
@@ -5343,7 +5297,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
     async fillQuestionV2(question) {
       let type = String(question.type);
-      if (!["0", "1", "2", "3", "11", "13", "14", "15"].includes(type)) {
+      const isZhs = String(question.workType) === "zhs";
+      const supportedTypes = isZhs
+        ? ["0", "1", "2", "3", "8", "9", "11", "13", "14"]
+        : ["0", "1", "2", "3", "8", "9", "10", "11", "13", "14", "20", "24"];
+      if (!supportedTypes.includes(type)) {
         if (type === "999" || !type || type === "undefined" || type === "null") {
           type = getOptionList(question).length > 0 ? "0" : "2";
         } else {
@@ -5359,17 +5317,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const threshold = Math.min(99, Math.max(50, Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 85));
 
       const optionList = getOptionList(question);
-      const rawAnswers = Array.isArray(question.answer) ? question.answer.slice() : splitAnswerText(question.answer);
-      const flatAnswers = [];
-      for (const a of rawAnswers) {
-        const parts = splitAnswerText(a);
-        if (parts.length > 1) {
-          parts.forEach((p) => flatAnswers.push(p));
-        } else {
-          const one = String(a == null ? "" : a).trim();
-          if (one) flatAnswers.push(one);
-        }
-      }
+      const answerList = Array.isArray(question.answer)
+        ? question.answer.map((a) => String(a == null ? "" : a).trim())
+        : [];
+      const keepEmptySlots = !isZhs && ["2", "9", "10", "14", "15", "19", "24"].includes(type);
+      const flatAnswers = keepEmptySlots ? answerList : answerList.filter(Boolean);
+      const rawAnswers = flatAnswers;
       if (flatAnswers.length === 0) {
         return true;
       }
@@ -5381,6 +5334,49 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         await sleep(200);
         el.removeAttribute("data-filling");
       };
+
+      if (type === "24" && question._fillBlanks && Array.isArray(question._fillBlanks.blanks)) {
+        const info = question._fillBlanks;
+        const normWord = (s) =>
+          String(s == null ? "" : s).replace(/\s+/g, "").replace(/[“”"']/g, "").toLowerCase();
+        let done = 0;
+        for (let i = 0; i < info.blanks.length && i < flatAnswers.length; i++) {
+          const blank = info.blanks[i];
+          const ans = String(flatAnswers[i] == null ? "" : flatAnswers[i]).trim();
+          if (!ans || !blank) continue;
+          const word = info.words.find((w) => normWord(w.text) === normWord(ans));
+          if (!word) continue;
+          blank.innerHTML = word.text;
+          blank.classList.add("hasFill");
+          blank.setAttribute("data-choose-name", word.code);
+          blank.draggable = true;
+          done += 1;
+        }
+        try {
+          const fn = this._window && this._window.getFillinBlanksDataForQuestion;
+          if (typeof fn === "function") fn.call(this._window, info.qid);
+        } catch (e) {}
+        return done > 0;
+      }
+
+      if (type === "20" && Array.isArray(question._shared) && question._shared.length > 0) {
+        let done = 0;
+        for (let i = 0; i < question._shared.length && i < flatAnswers.length; i++) {
+          const sub = question._shared[i];
+          const letter = String(flatAnswers[i] == null ? "" : flatAnswers[i])
+            .replace(/[.、:：\s]/g, "")
+            .toUpperCase()
+            .charAt(0);
+          if (!letter) continue;
+          const target = (sub.elements || []).find((el) => {
+            return String(el.getAttribute("data") || "").toUpperCase() === letter;
+          });
+          if (!target) continue;
+          await clickOption(target);
+          done += 1;
+        }
+        return done > 0;
+      }
 
       if (type === "0" || type === "1") {
         const targetIndices = [];
@@ -5456,6 +5452,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               target = span;
               break;
             }
+            if (ppJudgeKey(opt.text || el.getAttribute("aria-label") || "") === (truth ? "T" : "F")) {
+              target = el;
+              break;
+            }
           }
         }
 
@@ -5470,10 +5470,30 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return true;
       }
 
-      if (type === "2" || type === "14" || type === "15") {
+      if (type === "14" && Array.isArray(question._cloze) && question._cloze.length > 0) {
+        const normCloze = (s) =>
+          String(s == null ? "" : s)
+            .replace(/\s+/g, "")
+            .replace(/[，。．！？、；：""''（）【】《》.,;:!?()\[\]·—–~～％%]/g, "")
+            .toLowerCase();
+        let done = 0;
+        for (let i = 0; i < question._cloze.length && i < flatAnswers.length; i++) {
+          const cloze = question._cloze[i];
+          const ans = String(flatAnswers[i] == null ? "" : flatAnswers[i]).trim();
+          if (!ans) continue;
+          const target = normCloze(ans);
+          const pick = cloze.options.findIndex((t) => normCloze(t) === target);
+          if (pick < 0 || !cloze.elements[pick]) continue;
+          cloze.elements[pick].click();
+          done += 1;
+          await sleep(150);
+        }
+        return done > 0;
+      }
+
+      if (type === "2" || type === "10" || type === "14" || type === "9") {
         const wordScope =
           (type === "14" ? question.element.querySelector(".filling_answer") : null) ||
-          (type === "15" ? question.element.querySelector(".reading_answer") : null) ||
           question.element;
         const wordSpans = Array.from(wordScope.querySelectorAll("span.saveSingleSelect[data]"));
         const selectBoxes = Array.from(question.element.querySelectorAll("select.dept_select"));
@@ -5481,15 +5501,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         let blankAnswers = flatAnswers;
         const blankCount = Math.max(wordSpans.length, selectBoxes.length, textareaElements.length);
-        if (blankAnswers.length === 1 && blankCount > 1) {
-          const parts = String(blankAnswers[0])
-            .split(/[、,，;；|]+/)
-            .map((s) => s.trim())
-            .filter(Boolean);
-          if (parts.length === blankCount) blankAnswers = parts;
-        }
+        
 
-        const preferTextarea = type === "2" && textareaElements.length > 0;
+        const preferTextarea = (type === "2" || type === "10") && textareaElements.length > 0;
         if (wordSpans.length > 0 && !preferTextarea) {
           const used = new Set();
           let filled = 0;
@@ -5624,7 +5638,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           );
           if (boxes.length === 0) return false;
           const flat = [];
-          for (const a of rawAnswers) splitAnswerText(a).forEach((p) => flat.push(p));
+          for (const a of rawAnswers) { if (a) flat.push(a); }
           let clicked = 0;
           for (let i = 0; i < boxes.length && i < flat.length; i++) {
             const value = String(flat[i] || "").trim();
@@ -5643,7 +5657,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return clicked > 0;
         }
         const flat = [];
-        for (const a of rawAnswers) splitAnswerText(a).forEach((p) => flat.push(p));
+        for (const a of rawAnswers) { if (a) flat.push(a); }
         if (flat.length === 0) {
           return true;
         }
@@ -5657,8 +5671,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (isPlainLetterAnswer(value)) {
             const letter = value.replace(/[,，.。．、 #/\\|]/g, "").toUpperCase().charAt(0);
             const byValue = options.find((o) => String(o.value).toUpperCase() === letter);
+            const byText = options.find((o) => String(o.text || "").trim().toUpperCase() === letter);
             const byIndex = options[letter.charCodeAt(0) - 65];
-            target = byValue ? byValue.value : byIndex ? byIndex.value : "";
+            target = byValue ? byValue.value : byText ? byText.value : byIndex ? byIndex.value : "";
           }
           if (!target) {
             const norm = normalizeAnsText(value);
@@ -5690,8 +5705,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (sortSelects.length === 0) return false;
         const seq = [];
         for (const a of rawAnswers) {
-          const parts = splitAnswerText(a);
-          const list = parts.length > 1 ? parts : [String(a == null ? "" : a).trim()];
+          const list = [String(a == null ? "" : a).trim()];
           for (const item of list) {
             if (!item) continue;
             if (isPlainLetterAnswer(item)) {
@@ -5713,8 +5727,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           const letter = seq[i];
           if (!letter) continue;
           const options = Array.from(select.options || []);
-          const byValue = options.find((o) => String(o.value).toUpperCase() === letter);
-          select.value = byValue ? byValue.value : letter;
+          let pick = options.find((o) => String(o.value).toUpperCase() === letter)
+            || options.find((o) => String(o.text || "").trim().toUpperCase() === letter);
+          if (!pick) {
+            const num = String(letter.charCodeAt(0) - 64);
+            pick = options.find((o) => String(o.value) === num);
+          }
+          select.value = pick ? pick.value : letter;
           select.dispatchEvent(new Event("change", { bubbles: true }));
           this.syncChosenSelect(select, select.value);
           filled += 1;
@@ -5745,11 +5764,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       } catch (e) {}
     }
     resolveQuestionType(questionElement) {
-      const numericTypes = {
-        0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7",
-        8: "2", 9: "2", 10: "2", 11: "11", 13: "13", 14: "14", 15: "15",
-      };
-      let input = null;
+            let input = null;
       if (questionElement) {
         const named = Array.from(questionElement.querySelectorAll('input[name^="type"]')).find((el) =>
           /type\d+/.test(el.getAttribute("name") || ""),
@@ -5758,8 +5773,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           questionElement.querySelector('input[id^="answertype"]') || named || questionElement.querySelector('input[name^="type"]');
       }
       const code = input ? String(input.value || "").trim() : "";
-      if (Object.prototype.hasOwnProperty.call(numericTypes, code)) return numericTypes[code];
-      return "999";
+      return code || "999";
     }
     extractOptions(optionElements, optionSelector) {
       const optionsObject = {};
@@ -5799,43 +5813,58 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const zjSelector = SELECTORS.CX_OPTION_ZJ;
         
         
-        const readingItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
-        if (readingItems.length > 0) {
-          const articleEl = questionElement.querySelector(".fontLabel") || questionElement.querySelector("h3");
-          const article = articleEl
-            ? this.stripTags(this.htmlWithAbsoluteImages(articleEl))
-                .replace(/【阅读理解】/g, "")
+        const subItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
+        const subTypeCode = String(resolvedType);
+        if ((subTypeCode === "15" || subTypeCode === "19") && subItems.length > 0) {
+          const isListening = subTypeCode === "19";
+          const passageEl = questionElement.querySelector(".fontLabel") || questionElement.querySelector("h3");
+          const passageText = passageEl
+            ? this.stripTags(this.htmlWithAbsoluteImages(passageEl))
+                .replace(/【(阅读理解|听力题)】/g, "")
                 .replace(/（[\d.]+分）/g, "")
                 .replace(/\s+/g, " ")
                 .trim()
             : "";
-          const subs = readingItems.map((subItem) => {
+          const subs = subItems.map((subItem) => {
             
-            const isMulti = subItem.querySelectorAll('input[type="checkbox"], [role="checkbox"]').length > 0;
-            const subType = isMulti ? "1" : "0";
+            const childTypeEl = subItem.querySelector('input[name="readCompreHension-childType"]');
+            const subType = childTypeEl ? String(childTypeEl.value || "").trim() || "0" : "0";
             const contentEl = subItem.querySelector(".clearfix");
             const subTitle = this.stripTags(this.htmlWithAbsoluteImages(contentEl || subItem))
               .replace(/（[\d.]+分）/g, "")
               .replace(/\s+/g, " ")
               .trim();
             const liList = Array.from(subItem.querySelectorAll("ul li"));
-            const optionTexts = liList.map((li) => {
+            const optionTexts = liList.map((li, j) => {
               const spans = li.querySelectorAll("span.fl");
-              const textEl = spans.length >= 2 ? spans[1] : li;
-              return this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
+              const textEl =
+                li.querySelector("a.fl.after") ||
+                li.querySelector("a.after") ||
+                (spans.length >= 2 ? spans[1] : li);
+              let text = this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
+              const letter = String.fromCharCode(65 + j);
+              text = text.replace(new RegExp("^" + letter + "[.、:：\\s]+", "i"), "").trim();
+              return text;
             });
             return { type: subType, title: subTitle, options: optionTexts, elements: liList };
           });
           const subBlocks = subs.map((sub, i) => {
-            const typeName = sub.type === "1" ? "多选题" : "单选题";
             const optionLines = sub.options.map((text, j) => `${String.fromCharCode(65 + j)}. ${text}`);
-            return `(${i + 1}) [${typeName}] ${sub.title}\n${optionLines.join("\n")}`;
+            return `(${i + 1}) ${sub.title}\n${optionLines.join("\n")}`;
           });
           this.questions.push({
             element: questionElement,
-            type: "16",
-            title: this.trimTitle(`【阅读理解】\n${article}\n\n${subBlocks.join("\n\n")}`),
-            audios: this.collectAudioUrls(questionElement),
+            type: resolvedType,
+            title: this.trimTitle(`【${isListening ? "听力题" : "阅读理解"}】\n${passageText}\n\n${subBlocks.join("\n\n")}`),
+            audios: (() => {
+              const list = this.collectAudioUrls(questionElement);
+              if (isListening && list.length === 0) {
+                this.collectVideoUrls().forEach((u) => {
+                  if (!list.includes(u)) list.push(u);
+                });
+              }
+              return list.slice(0, 3);
+            })(),
             optionsText: [],
             options: {},
             optionsList: [],
@@ -5845,6 +5874,129 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             _reading: subs
           });
           return;
+        }
+
+        if (String(resolvedType) === "14") {
+          const clozeLis = Array.from(questionElement.querySelectorAll("ul.Cy_ulTop > li"));
+          const cloze = clozeLis
+            .map((li) => {
+              const optEls = Array.from(li.querySelectorAll("ul.Zy_ulTop > li"));
+              const options = optEls.map((o) => {
+                const textEl = o.querySelector("div.after") || o.querySelector(".fl.after") || o;
+                return this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
+              });
+              return { options, elements: optEls, el: li, input: li.querySelector('input[id^="answer"]') };
+            })
+            .filter((c) => c.elements.length > 0);
+          if (cloze.length > 0) {
+            const clozeTitle = this.stripTags(
+              this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel") || questionElement),
+            )
+              .replace(/（[\d.]+分）/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
+            this.questions.push({
+              element: questionElement,
+              type: "14",
+              title: this.trimTitle(clozeTitle),
+              audios: this.collectAudioUrls(questionElement),
+              optionsText: [],
+              options: {},
+              optionsList: [],
+              answer: [],
+              workType: this.type,
+              refer: this._window.location.href,
+              _cloze: cloze
+            });
+            return;
+          }
+        }
+
+        if (String(resolvedType) === "20") {
+          const sharedEls = Array.from(questionElement.querySelectorAll("ul.mark_letter > li"));
+          const subEls = Array.from(questionElement.querySelectorAll("div.B-answer-ct"));
+          if (subEls.length > 0) {
+            const sharedOptions = sharedEls
+              .map((li) => this.stripTags(li.innerHTML).replace(/\s+/g, " ").trim())
+              .filter(Boolean);
+            const subs = subEls.map((ct) => {
+              const titEl = ct.querySelector(".B-tit");
+              const title = this.stripTags((titEl || ct).innerHTML)
+                .replace(/^\(\d+\)\s*/, "")
+                .replace(/^【[^】]*题】\s*/, "")
+                .replace(/（[\d.]+分）/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+              const els = Array.from(ct.querySelectorAll(".B-answerCon span.num_option"));
+              return { title, options: [], elements: els };
+            });
+            const sharedStem = this.stripTags(
+              this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel") || questionElement),
+            )
+              .replace(/（[\d.]+分）/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
+            this.questions.push({
+              element: questionElement,
+              type: "20",
+              title: this.trimTitle(sharedStem),
+              audios: this.collectAudioUrls(questionElement),
+              optionsText: sharedOptions,
+              options: {},
+              optionsList: [],
+              answer: [],
+              workType: this.type,
+              refer: this._window.location.href,
+              _shared: subs
+            });
+            return;
+          }
+        }
+
+        if (String(resolvedType) === "24") {
+          const wrap = questionElement.querySelector(".fillBlanksChoose");
+          if (wrap) {
+            const blankEls = Array.from(wrap.querySelectorAll(".textTarget"));
+            const wordEls = Array.from(wrap.querySelectorAll(".blanksBox span"));
+            const words = wordEls
+              .map((w) => {
+                const raw =
+                  w.childNodes && w.childNodes[0] && typeof w.childNodes[0].nodeValue === "string"
+                    ? w.childNodes[0].nodeValue
+                    : w.textContent;
+                return {
+                  text: String(raw || "").replace(/\s+/g, " ").trim(),
+                  code: String(w.getAttribute("data-choose-name") || ""),
+                  el: w,
+                };
+              })
+              .filter((w) => w.text);
+            const textEl = wrap.querySelector(".textContent");
+            let stem = "";
+            if (textEl) {
+              const clone = textEl.cloneNode(true);
+              const doc = textEl.ownerDocument;
+              clone.querySelectorAll(".textTarget").forEach((el, i) => {
+                el.replaceWith(doc.createTextNode(" __" + (i + 1) + "__ "));
+              });
+              stem = this.stripTags(clone.innerHTML).replace(/\s+/g, " ").trim();
+            }
+            const qid = wrap.getAttribute("data") || "";
+            this.questions.push({
+              element: questionElement,
+              type: "24",
+              title: this.trimTitle(stem),
+              audios: this.collectAudioUrls(questionElement),
+              optionsText: words.map((w) => w.text),
+              options: {},
+              optionsList: [],
+              answer: [],
+              workType: this.type,
+              refer: this._window.location.href,
+              _fillBlanks: { qid, blanks: blankEls, words }
+            });
+            return;
+          }
         }
 
         if (["zy", "ks"].includes(this.type)) {
@@ -5901,9 +6053,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               element: questionElement,
               type: "11", 
               title: this.trimTitle(fullTitle),
-              optionsText: rightItems,
-              options: Object.fromEntries(rightItems.map((text, i) => [text, secondListItems[i]])),
-              optionsList: rightItems.map((text, i) => ({ text, el: secondListItems[i] })),
+              optionsText: leftItems.map((item, i) => {
+                const m = String(item).match(/^(\d+)/);
+                return (m ? m[1] : String(i + 1)) + "-空";
+              }),
+              options: {},
+              optionsList: [],
               answer: [],
               workType: this.type,
               refer: this._window.location.href,
@@ -5916,6 +6071,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           
             optionElements = questionElement.querySelectorAll(zjSelector);
             [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".fl.after");
+        }
+        if (String(resolvedType) === "13") {
+          const sortItems = Array.from(
+            questionElement.querySelectorAll("ul.sortQuesOption li, ul.ulTop.sortQuesOption li")
+          )
+            .map((li) => this.stripTags(li.innerHTML).trim())
+            .filter(Boolean);
+          if (sortItems.length > 0) {
+            questionTitle = `${questionTitle} 选项: ${sortItems.join("；")}`;
+          }
         }
         this.questions.push({
           element: questionElement,
@@ -7817,10 +7982,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             logStore.addLog("提交成功", "success");
             
             
-            await delay(3);
-            
-            const resultDocument = iframe.contentDocument || iframe.contentWindow.document;
-            await detectAndReportResults(resultDocument);
           }
         } else {
           logStore.addLog("未开启自动提交，暂存", "primary");
@@ -8170,7 +8331,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       "单选题": "0",
       "多选题": "1",
       "判断题": "3",
-      "填空题": "2"
+      "填空题": "2",
+      "简答题": "4",
+      "名词解释": "5",
+      "论述题": "6",
+      "计算题": "7",
+      "其它": "8",
+      "其他": "8",
+      "分录题": "9",
+      "资料题": "10"
     };
     
     const questions = [];
@@ -8178,18 +8347,30 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const questionNameEl = questionItem.querySelector(".question-name");
       const questionText = questionNameEl ? questionNameEl.innerText.trim() : "";
       
-      let questionTypeText = "单选题";
-      if (questionItem.classList.contains("multiple-choice")) {
-        questionTypeText = "多选题";
-      } else if (questionText.includes("判断题")) {
-        questionTypeText = "判断题";
-      } else if (questionText.includes("填空题")) {
-        questionTypeText = "填空题";
+      const labelEl = questionItem.querySelector(".grey-text");
+      const labelText = labelEl ? labelEl.textContent.replace(/[\[\]\s]/g, "") : "";
+      let questionTypeText = "";
+      for (const name of Object.keys(questionTypeMapping)) {
+        if (labelText && labelText.includes(name)) {
+          questionTypeText = name;
+          break;
+        }
+      }
+      if (!questionTypeText) {
+        if (questionItem.classList.contains("multiple-choice")) {
+          questionTypeText = "多选题";
+        } else if (questionText.includes("判断题")) {
+          questionTypeText = "判断题";
+        } else if (questionText.includes("填空题")) {
+          questionTypeText = "填空题";
+        } else {
+          questionTypeText = "单选题";
+        }
       }
       
       const cleanTitle = questionText
         .replace(/^\d+\.\s*/, "")
-        .replace(/\[单选题\]|\[多选题\]|\[判断题\]|\[填空题\]/g, "")
+        .replace(/\[[^\]]{1,10}\]/g, "")
         .trim();
       
       const optionLis = questionItem.querySelectorAll(".option-list li");
@@ -8247,7 +8428,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (question.type === "0" || question.type === "1" || question.type === "3") {
           const optionList = getOptionList(question);
           const targetEls = [];
-          const answerList = Array.isArray(question.answer) ? question.answer : splitAnswerText(question.answer);
+          const answerList = Array.isArray(question.answer) ? question.answer : [];
           for (const answer of answerList) {
             const cleanAnswer = String(answer == null ? "" : answer).replace(/<[^>]*>/g, "").trim();
             if (!cleanAnswer) continue;
@@ -8274,6 +8455,42 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           for (const el of targetEls) {
             clickOption(el);
             await randomDelay(0.1, 0.15);
+          }
+        }
+
+        if (["2", "9", "10"].includes(String(question.type))) {
+          const plainAnswers = Array.isArray(question.answer)
+            ? question.answer.map((a) => String(a == null ? "" : a).trim())
+            : [];
+          const boxInputs = Array.from(question.element.querySelectorAll(".option-fill-list input"))
+            .filter((el) => !el.getAttribute("type") || el.getAttribute("type") === "text");
+          const textInputs = boxInputs.length
+            ? boxInputs
+            : Array.from(question.element.querySelectorAll('input[type="text"], input:not([type])'));
+          for (let i = 0; i < textInputs.length && i < plainAnswers.length; i++) {
+            const el = textInputs[i];
+            const value = plainAnswers[i];
+            if (!el || !value) continue;
+            el.focus();
+            el.value = value;
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            await randomDelay(0.05, 0.1);
+          }
+        }
+
+        if (["4", "5", "6", "7"].includes(String(question.type))) {
+          const plainAnswers = Array.isArray(question.answer)
+            ? question.answer.map((a) => String(a == null ? "" : a).trim()).filter(Boolean)
+            : [];
+          const area =
+            question.element.querySelector(".short-answer-textarea textarea") ||
+            question.element.querySelector("textarea");
+          if (area && plainAnswers.length) {
+            area.focus();
+            area.value = plainAnswers.join("\n");
+            area.dispatchEvent(new Event("input", { bubbles: true }));
+            area.dispatchEvent(new Event("change", { bubbles: true }));
           }
         }
         
@@ -8334,10 +8551,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       if (submitBtn) {
         clickOption(submitBtn);
         logStore.addLog("已点击提交", "success");
+
+        for (let i = 0; i < 15; i++) {
+          const affirm = document.querySelector(".dialog_affrim");
+          if (affirm) {
+            clickOption(affirm);
+            logStore.addLog("已确认提交", "primary");
+            break;
+          }
+          await delay(0.2);
+        }
         
         
-        await delay(3);
-        await detectAndReportResults(document);
       } else {
         logStore.addLog("未找到提交按钮，请手动提交", "danger");
       }
