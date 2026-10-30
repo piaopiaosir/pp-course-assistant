@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.7.0
+// @version      3.7.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -2164,7 +2164,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         
         checkUpdate();
         
-        logStore.addLog('🔄 脚本启动，正在验证Token...', 'primary');
         verifyToken();
       });
       
@@ -4679,6 +4678,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     } catch (e) {
       return fallback;
     }
+  };
+
+  const getCxModeLabel = () => {
+    const taskMode =
+      ["复习模式", "仅视频", "仅答题"].find((name) => readCxParamValue("模式设置", name, false)) ||
+      "正常模式";
+    return `当前模式：${taskMode}`;
   };
 
   const fetchAnswerData = async (question) => {
@@ -8126,8 +8132,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       
       
       const reviewMode = readCxParamValue("模式设置", "复习模式", false);
-      
-      
+
+      if (reviewMode && isCompletedAnswerTaskPoint(iframe)) {
+        logStore.addLog("复习模式：答题任务点已完成，跳过", "primary");
+        return 'skip';
+      }
+
+      if (reviewMode && /api\/work|selectWorkQuestion/.test(iframeSrc)) {
+        try {
+          const submittedText = iframeDocument.documentElement.innerText || "";
+          if (submittedText.includes("已完成") || submittedText.includes("待批阅")) {
+            return 'skip';
+          }
+        } catch (e) {}
+      }
+
       if (!reviewMode) {
         let element = iframe.parentElement;
         while (element) {
@@ -8289,6 +8308,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
     element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  };
+
+  const isCompletedAnswerTaskPoint = (iframe) => {
+    if (!iframe) return false;
+    const src = String(iframe.src || '');
+    if (!/(?:api\/work|\/work\/|selectWorkQuestion|work\/view)/.test(src)) return false;
+
+    if (typeof iframe.closest === 'function' && iframe.closest('.ans-job-finished')) {
+      return true;
+    }
+
+    const icon =
+      (typeof iframe.closest === 'function' && iframe.closest('.ans-job-icon')) ||
+      (iframe.parentElement && iframe.parentElement.querySelector('.ans-job-icon'));
+    return Boolean(icon && /已完成/.test(icon.getAttribute('aria-label') || ''));
   };
 
   
@@ -9165,9 +9199,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const questionStore = useQuestionStore();
       const url2 = window.location.href;
       logStore.addLog("用户悉知：使用脚本即为完全同意用户协议", "success");
-      logStore.addLog("脚本加载成功，正在解析网页", "primary");
-      logStore.addLog("请不要多个脚本同时使用，会有脚本冲突问题", "warning");
-      logStore.addLog("如果脚本出现异常，请用谷歌浏览器", "warning");
+      logStore.addLog("请不要多个脚本同时使用；如果脚本出现异常，请使用谷歌浏览器", "warning");
       
       
       
@@ -9210,6 +9242,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         for (const { keyword, logic } of urlLogicPairs) {
           if (url22.includes(keyword)) {
             isShow.value = true;
+            logStore.addLog(getCxModeLabel(), "info");
             const _ppRunLogic = () => {
               logic();
             };
