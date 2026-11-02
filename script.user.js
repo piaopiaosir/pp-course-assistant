@@ -2,12 +2,13 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.7.1
+// @version      3.7.2
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
+// @match        *://*.xueyinonline.com/*
 // @match        *://*.edu.cn/*
 // @match        *://*.nbdlib.cn/*
 // @match        *://*.hnsyu.net/*
@@ -4225,6 +4226,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   
   
+  let _ppFontTableCache = null;
+  function _ppGetFontTable() {
+    if (_ppFontTableCache) return _ppFontTableCache;
+    const text = _GM_getResourceText("ttf");
+    if (!text) throw new Error("字体参考表资源缺失（@resource ttf 未取到）");
+    _ppFontTableCache = JSON.parse(text);
+    return _ppFontTableCache;
+  }
+
   function decodeCipherFont(doc) {
     const styleNodes = doc.querySelectorAll("style");
     let cipherStyle = null;
@@ -4244,7 +4254,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const fontObj = new Font_1(buf);
     const encryptedEls = doc.querySelectorAll(".font-cxsecret");
     if (!encryptedEls.length) return;
-    const ttfTable = JSON.parse(_GM_getResourceText("ttf"));
+    const ttfTable = _ppGetFontTable();
     const charMap = {};
     const pendingPoints = [];
     const seenPoints = new Set();
@@ -9701,7 +9711,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     setup(__props) {
       const configStore = useConfigStore();
       const url2 = window.location.href;
-      if (url2.includes("chaoxing") || url2.includes("xuexitong"))
+      if (url2.includes("chaoxing") || url2.includes("xuexitong") || url2.includes("xueyin"))
         configStore.platformName = "cx";  
       else if (url2.includes("zhihuishu"))
         configStore.platformName = "zhs";
