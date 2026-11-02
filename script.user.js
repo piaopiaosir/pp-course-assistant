@@ -2,9 +2,9 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.7.2
+// @version      3.7.3
 // @author       PIAOPIAO
-// @description  🏆🏆【超星学习通｜知到智慧树】【免费】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【永久免费题库】【挑战全网最全题库】【拥有题库 AI双重校验】。🚀 目前已经具有的功能包括：▶️视频自动观看，跳转下一个任务点，📄章节测试、作业自动完成，无答案自动保存，💯考试自动完成，自动切换、保存。使用脚本请进入对应平台的页面。
+// @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
@@ -15,6 +15,8 @@
 // @match        *://*.gdhkmooc.com/*
 // @match        *://*.sslibrary.com/*
 // @match        *://onlineexamh5new.zhihuishu.com/*
+// @match        *://*.yuketang.cn/*
+// @match        *://*.gdufemooc.cn/*
 // @require      https://lib.baomitu.com/vue/3.5.0/vue.global.prod.js
 // @require      https://lib.baomitu.com/vue-demi/0.14.7/index.iife.js
 // @require      data:application/javascript,window.Vue%3DVue%3B
@@ -33,9 +35,10 @@
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @run-at       document-start
-// @antifeature  payment  答案需调用AI的API需收费
+// @antifeature  payment  使用AI答题可能会产生较低费用
 // @tag          ChatGPT|Gemini|Deepseek多模型支持
 // @tag          免费题库
+// @tag          全题型支持
 // ==/UserScript==
 
 
@@ -95,7 +98,7 @@ const _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE = (() => new Promise((resolve) => {
   });
 }))();
 
-const LAYOUT_CSS = `@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}@keyframes fadeIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}@keyframes slideIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}@keyframes progressPulse{0%,100%{opacity:1;}50%{opacity:0.7;}}.log[data-v-83e6bb0c] el-text{white-space:normal;}.setting[data-v-9ea68a6a]{margin-top:-8px;font-size:13px;}.setting[data-v-9ea68a6a] .el-form-item[data-v-9ea68a6a]{margin-bottom:6px;}.question_table[data-v-18523ca7]{width:100%;}.main-page{z-index:100003;position:fixed;width:760px;max-width:760px;transition:width 0.4s cubic-bezier(0.34,1.56,0.64,1),max-width 0.4s cubic-bezier(0.34,1.56,0.64,1),height 0.4s cubic-bezier(0.34,1.56,0.64,1),max-height 0.4s cubic-bezier(0.34,1.56,0.64,1),opacity 0.3s ease;animation:fadeIn 0.25s ease-out;will-change:width,height,opacity;transform:translateZ(0);}.main-page .overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1001;}.main-page .el-card{border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15),0 2px 8px rgba(0,0,0,0.1);border:2px solid #0052D9;height:100%;display:flex;flex-direction:column;background:#ffffff;transition:all 0.2s ease;}.main-page .el-card:hover{border-color:#003BB3;box-shadow:0 12px 32px rgba(0,0,0,0.2),0 4px 12px rgba(0,0,0,0.15);}.main-page .el-card .card-header{display:flex;justify-content:space-between;flex-direction:row;align-items:center;margin:0;padding:0;cursor:move;}.main-page .el-card .card-header .title{font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:500;color:#111827;}.main-page .el-card .minus{margin:5px 10px -10px 0;}.main-page .el-card .toggle-switch{margin:0 10px -10px 0;display:flex;align-items:center;gap:8px;}.main-page .el-card .toggle-switch .switch-label{font-size:12px;color:#6b7280;font-weight:500;}.main-page .el-card .toggle-switch .el-switch{--el-switch-on-color:#0052D9;--el-switch-off-color:#dcdfe6;}.main-page .el-card__header{background:#ffffff;color:#111827;padding:12px 16px;margin:0;border-bottom:1px solid #e5e7eb;flex-shrink:0;transition:background 0.2s ease;}.main-page .el-card__body{padding:16px;background:#ffffff;flex:1;overflow-y:auto;overflow-x:hidden;font-size:13px;}.main-page .config-tabs-container{display:flex;gap:0;margin-bottom:16px;padding:0;background:transparent;border-bottom:1px solid #e5e7eb;flex-shrink:0;}.main-page .config-tab{background:transparent;border:none;border-bottom:2px solid transparent;padding:10px 16px;cursor:pointer;border-radius:0;font-size:13px;transition:all 0.2s ease;white-space:nowrap;font-weight:400;color:#6b7280;margin-bottom:-1px;position:relative;}.main-page .config-tab::after{content:'';position:absolute;bottom:-1px;left:50%;width:0;height:2px;background:#0052D9;transition:all 0.2s ease;transform:translateX(-50%);}.main-page .config-tab:hover{color:#111827;background:#f9fafb;}.main-page .config-tab:hover::after{width:60%;}.main-page .config-tab.active{color:#0052D9;border-bottom-color:#0052D9;font-weight:500;background:transparent;}.main-page .config-tab.active::after{width:100%;}.main-page .config-panel{flex:1;overflow-y:auto;overflow-x:hidden;padding:0;animation:slideIn 0.2s ease-out;}.main-page .el-button--primary{background:#0052D9;border:1px solid #0052D9;box-shadow:none;transition:all 0.2s ease;border-radius:4px;font-weight:500;}.main-page .el-button--primary:hover{background:#0041b3;border-color:#0041b3;transform:translateY(-1px);}.main-page .el-button--primary:active{transform:translateY(0);}.main-page .el-input__wrapper{border-radius:4px;transition:all 0.2s ease;padding:8px 12px;box-shadow:none;border:1px solid #d1d5db;background:#ffffff;}.main-page .el-input__wrapper:hover{border-color:#9ca3af;}.main-page .el-input__wrapper:focus-within{border-color:#0052D9;box-shadow:0 0 0 2px rgba(0,82,217,0.1);}.main-page .el-input__inner{font-size:13px;color:#374151;}.main-page .el-input-number{position:relative;}.main-page .el-input-number .el-input__wrapper{padding-left:8px;padding-right:35px;}.main-page .el-input-number__decrease,.main-page .el-input-number__increase{background:#f9fafb;border:none;color:#6b7280;transition:all 0.2s ease;width:28px;}.main-page .el-input-number__decrease:hover,.main-page .el-input-number__increase:hover{background:#e5e7eb;color:#374151;}.main-page .el-form-item__label{font-size:13px;color:#374151;font-weight:500;padding-right:12px;}.main-page .el-checkbox{margin-right:8px;margin-bottom:6px;}.main-page .el-checkbox__input{position:absolute;opacity:0;}.main-page .el-checkbox__label{padding:8px 12px;background:#ffffff;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-weight:400;color:#374151;cursor:pointer;transition:all 0.2s ease;display:inline-block;position:relative;}.main-page .el-checkbox__input:hover + .el-checkbox__label{border-color:#0052D9;background:#f9fafb;transform:translateY(-1px);}.main-page .el-checkbox__input.is-checked + .el-checkbox__label{background:#0052D9;border-color:#0052D9;color:#ffffff;}.main-page .el-checkbox__inner{display:none;}.main-page .el-divider{margin:16px 0;}.main-page .el-text{font-size:12px;}.main-page .el-scrollbar__bar{opacity:0.3 !important;}.main-page .el-scrollbar__thumb{background:rgba(156,163,175,0.4) !important;border-radius:4px !important;transition:background 0.2s ease;}.main-page .el-scrollbar__thumb:hover{background:rgba(156,163,175,0.6) !important;}.main-page .el-card__body::-webkit-scrollbar,.main-page .config-panel::-webkit-scrollbar{width:6px;height:6px;}.main-page .el-card__body::-webkit-scrollbar-track,.main-page .config-panel::-webkit-scrollbar-track{background:transparent;}.main-page .el-card__body::-webkit-scrollbar-thumb,.main-page .config-panel::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:3px;transition:background 0.2s ease;}.main-page .el-card__body::-webkit-scrollbar-thumb:hover,.main-page .config-panel::-webkit-scrollbar-thumb:hover{background:#9ca3af;}.main-page .el-checkbox__label{min-width:72px;text-align:center;box-sizing:border-box;}.high-z-index-select{z-index:200000 !important;}.progress-bar-animated{animation:progressPulse 2s ease-in-out infinite;}`;
+const LAYOUT_CSS = `@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}@keyframes fadeIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}@keyframes slideIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}@keyframes progressPulse{0%,100%{opacity:1;}50%{opacity:0.7;}}.log[data-v-83e6bb0c] el-text{white-space:normal;}.setting[data-v-9ea68a6a]{margin-top:-8px;font-size:13px;}.setting[data-v-9ea68a6a] .el-form-item[data-v-9ea68a6a]{margin-bottom:6px;}.question_table[data-v-18523ca7]{width:100%;}.main-page{z-index:100003;position:fixed;width:760px;max-width:760px;transition:width 0.4s cubic-bezier(0.34,1.56,0.64,1),max-width 0.4s cubic-bezier(0.34,1.56,0.64,1),height 0.4s cubic-bezier(0.34,1.56,0.64,1),max-height 0.4s cubic-bezier(0.34,1.56,0.64,1),opacity 0.3s ease;animation:fadeIn 0.25s ease-out;will-change:width,height,opacity;transform:translateZ(0);}.main-page .overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1001;}.main-page .el-card{border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15),0 2px 8px rgba(0,0,0,0.1);border:2px solid #0052D9;height:100%;display:flex;flex-direction:column;background:#ffffff;transition:all 0.2s ease;}.main-page .el-card:hover{border-color:#003BB3;box-shadow:0 12px 32px rgba(0,0,0,0.2),0 4px 12px rgba(0,0,0,0.15);}.main-page .el-card .card-header{display:flex;justify-content:space-between;flex-direction:row;align-items:center;margin:0;padding:0;cursor:move;}.main-page .el-card .card-header .title{font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:500;color:#111827;}.main-page .el-card .minus{margin:5px 10px -10px 0;}.main-page .el-card .toggle-switch{margin:0 10px -10px 0;display:flex;align-items:center;gap:8px;}.main-page .el-card .toggle-switch .switch-label{font-size:12px;color:#6b7280;font-weight:500;}.main-page .el-card .toggle-switch .el-switch{--el-switch-on-color:#0052D9;--el-switch-off-color:#dcdfe6;}.main-page .el-card__header{background:#ffffff;color:#111827;padding:12px 16px;margin:0;border-bottom:1px solid #e5e7eb;flex-shrink:0;transition:background 0.2s ease;}.main-page .el-card__body{padding:16px;background:#ffffff;flex:1;overflow-y:auto;overflow-x:hidden;font-size:13px;}.main-page .config-tabs-container{display:flex;gap:0;margin-bottom:16px;padding:0;background:transparent;border-bottom:1px solid #e5e7eb;flex-shrink:0;}.main-page .config-tab{background:transparent;border:none;border-bottom:2px solid transparent;padding:10px 16px;cursor:pointer;border-radius:0;font-size:13px;transition:all 0.2s ease;white-space:nowrap;font-weight:400;color:#6b7280;margin-bottom:-1px;position:relative;}.main-page .config-tab::after{content:'';position:absolute;bottom:-1px;left:50%;width:0;height:2px;background:#0052D9;transition:all 0.2s ease;transform:translateX(-50%);}.main-page .config-tab:hover{color:#111827;background:#f9fafb;}.main-page .config-tab:hover::after{width:60%;}.main-page .config-tab.active{color:#0052D9;border-bottom-color:#0052D9;font-weight:500;background:transparent;}.main-page .config-tab.active::after{width:100%;}.main-page .config-panel{flex:1;overflow-y:auto;overflow-x:hidden;padding:0;animation:slideIn 0.2s ease-out;}.main-page .el-button--primary{background:#0052D9;border:1px solid #0052D9;box-shadow:none;transition:all 0.2s ease;border-radius:4px;font-weight:500;}.main-page .el-button--primary:hover{background:#0041b3;border-color:#0041b3;transform:translateY(-1px);}.main-page .el-button--primary:active{transform:translateY(0);}.main-page .el-input__wrapper{border-radius:4px;transition:all 0.2s ease;padding:8px 12px;box-shadow:none;border:1px solid #d1d5db;background:#ffffff;}.main-page .el-input__wrapper:hover{border-color:#9ca3af;}.main-page .el-input__wrapper:focus-within{border-color:#0052D9;box-shadow:0 0 0 2px rgba(0,82,217,0.1);}.main-page .el-input__inner{font-size:13px;color:#374151;}.main-page .el-input-number{position:relative;}.main-page .el-input-number .el-input__wrapper{padding-left:8px;padding-right:35px;}.main-page .el-input-number__decrease,.main-page .el-input-number__increase{background:#f9fafb;border:none;color:#6b7280;transition:all 0.2s ease;width:28px;}.main-page .el-input-number__decrease:hover,.main-page .el-input-number__increase:hover{background:#e5e7eb;color:#374151;}.main-page .el-form-item__label{font-size:13px;color:#374151;font-weight:500;padding-right:12px;}.main-page .el-checkbox{margin-right:8px;margin-bottom:6px;}.main-page .el-checkbox__input{position:absolute;opacity:0;}.main-page .el-checkbox__label{padding:8px 12px;background:#ffffff;border:1px solid #d1d5db;border-radius:4px;font-size:13px;font-weight:400;color:#374151;cursor:pointer;transition:all 0.2s ease;display:inline-block;position:relative;}.main-page .el-checkbox__input:hover + .el-checkbox__label{border-color:#0052D9;background:#f9fafb;transform:translateY(-1px);}.main-page .el-checkbox__input.is-checked + .el-checkbox__label{background:#0052D9;border-color:#0052D9;color:#ffffff;}.main-page .el-checkbox__inner{display:none;}.main-page .el-divider{margin:16px 0;}.main-page .el-text{font-size:12px;}.main-page .el-scrollbar__bar{opacity:0.3 !important;}.main-page .el-scrollbar__thumb{background:rgba(156,163,175,0.4) !important;border-radius:4px !important;transition:background 0.2s ease;}.main-page .el-scrollbar__thumb:hover{background:rgba(156,163,175,0.6) !important;}.main-page .el-card__body::-webkit-scrollbar,.main-page .config-panel::-webkit-scrollbar{width:6px;height:6px;}.main-page .el-card__body::-webkit-scrollbar-track,.main-page .config-panel::-webkit-scrollbar-track{background:transparent;}.main-page .el-card__body::-webkit-scrollbar-thumb,.main-page .config-panel::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:3px;transition:background 0.2s ease;}.main-page .el-card__body::-webkit-scrollbar-thumb:hover,.main-page .config-panel::-webkit-scrollbar-thumb:hover{background:#9ca3af;}.main-page .el-checkbox__label{min-width:78px;text-align:center;box-sizing:border-box;}.high-z-index-select{z-index:200000 !important;}.progress-bar-animated{animation:progressPulse 2s ease-in-out infinite;}`;
 
 const LAYOUT_CSS_GLOBAL = `.high-z-index-select{z-index:200000 !important;}`;
 
@@ -748,11 +751,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     type: "boolean"
                   },
                   {
-                    name: "激活挂机",
-                    value: false,
-                    type: "boolean"
-                  },
-                  {
                     name: "播放倍速",
                     value: 1,
                     type: "number",
@@ -849,6 +847,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             name: `网课小助手-飘飘友情提供 v${scriptInfo.version}`,
             parts: [
               {
+                name: "模式设置",
+                params: [
+                  { name: "答题", value: true, type: "boolean", exclusiveGroup: "zhs_mode" }
+                ]
+              },
+              {
                 name: "答题参数",
                 params: [
                   {
@@ -903,14 +907,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     type: "number"
                   }
                 ]
-              },
-              {
-                name: "答题设置",
-                params: [{
-                  name: "自动切换",
-                  value: true,
-                  type: "boolean"
-                }]
               }
             ]
           },
@@ -924,6 +920,35 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 type: "boolean"
               }]
             }]
+          },
+          ykt: {
+            name: `网课小助手-飘飘友情提供 v${scriptInfo.version}`,
+            parts: [
+              {
+                name: "模式设置",
+                params: [
+                  { name: "仅视频", value: true, type: "boolean", exclusiveGroup: "ykt_mode" },
+                  { name: "复习模式", value: false, type: "boolean", exclusiveGroup: "ykt_mode" }
+                ]
+              },
+              {
+                name: "视频设置",
+                params: [
+                  { name: "自动播放", value: true, type: "boolean" },
+                  { name: "手动倍速", value: true, type: "boolean", exclusiveGroup: "ykt_rate" },
+                  { name: "自动倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" },
+                  { name: "突破倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" },
+                  { name: "播放倍速", value: 1.5, type: "number", min: 1, max: 8 }
+                ]
+              },
+              {
+                name: "任务设置",
+                params: [
+                  { name: "自动评论", value: false, type: "boolean" },
+                  { name: "自动切换", value: true, type: "boolean" }
+                ]
+              }
+            ]
           }
         },
         queryApis: [
@@ -1005,6 +1030,89 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             };
             migrateCxParts();
             
+            try {
+              const zhsParts = globalConfig.platformParams?.zhs?.parts;
+              if (Array.isArray(zhsParts)) {
+                const settingIdx = zhsParts.findIndex((p) => p.name === "答题设置");
+                if (settingIdx >= 0) zhsParts.splice(settingIdx, 1);
+                if (!zhsParts.some((p) => p.name === "模式设置")) {
+                  zhsParts.unshift({
+                    name: "模式设置",
+                    params: [{ name: "答题", value: true, type: "boolean", exclusiveGroup: "zhs_mode" }]
+                  });
+                }
+              }
+            } catch (e) {}
+            
+            try {
+              const yktParts = globalConfig.platformParams?.ykt?.parts;
+              if (Array.isArray(yktParts)) {
+                const videoPart = yktParts.find((p) => p.name === "视频设置");
+                let legacyReview = false;
+                if (videoPart && Array.isArray(videoPart.params)) {
+                  const idx = videoPart.params.findIndex((p) => p.name === "复习模式");
+                  if (idx >= 0) {
+                    legacyReview = Boolean(videoPart.params[idx].value);
+                    videoPart.params.splice(idx, 1);
+                  }
+                }
+                let modePart = yktParts.find((p) => p.name === "模式设置");
+                if (!modePart) {
+                  modePart = { name: "模式设置", params: [] };
+                  yktParts.unshift(modePart);
+                }
+                if (!Array.isArray(modePart.params)) modePart.params = [];
+                const legacyNormal = modePart.params.find((p) => p.name === "正常模式");
+                if (legacyNormal) {
+                  legacyNormal.name = "仅视频";
+                  legacyNormal.exclusiveGroup = "ykt_mode";
+                }
+                if (!modePart.params.some((p) => p.name === "仅视频")) {
+                  modePart.params.push({ name: "仅视频", value: !legacyReview, type: "boolean", exclusiveGroup: "ykt_mode" });
+                }
+                if (!modePart.params.some((p) => p.name === "复习模式")) {
+                  modePart.params.push({ name: "复习模式", value: legacyReview, type: "boolean", exclusiveGroup: "ykt_mode" });
+                }
+                const videoPartCfg = yktParts.find((p) => p.name === "视频设置");
+                if (videoPartCfg && Array.isArray(videoPartCfg.params)) {
+                  const speedParam = videoPartCfg.params.find((p) => p.name === "播放倍速");
+                  if (speedParam) speedParam.max = 8;
+                  const autoRateParam = videoPartCfg.params.find((p) => p.name === "自动倍速");
+                  if (autoRateParam) {
+                    if (!autoRateParam.exclusiveGroup) autoRateParam.exclusiveGroup = "ykt_rate";
+                  } else {
+                    videoPartCfg.params.push({ name: "自动倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" });
+                  }
+                  if (!videoPartCfg.params.some((p) => p.name === "突破倍速")) {
+                    const autoIdx = videoPartCfg.params.findIndex((p) => p.name === "自动倍速");
+                    const breakParam = { name: "突破倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" };
+                    if (autoIdx >= 0) {
+                      videoPartCfg.params.splice(autoIdx + 1, 0, breakParam);
+                    } else {
+                      videoPartCfg.params.push(breakParam);
+                    }
+                  }
+                  if (!videoPartCfg.params.some((p) => p.name === "手动倍速")) {
+                    const autoIdx2 = videoPartCfg.params.findIndex((p) => p.name === "自动倍速");
+                    const manualParam = { name: "手动倍速", value: true, type: "boolean", exclusiveGroup: "ykt_rate" };
+                    if (autoIdx2 >= 0) {
+                      videoPartCfg.params.splice(autoIdx2, 0, manualParam);
+                    } else {
+                      videoPartCfg.params.push(manualParam);
+                    }
+                  }
+                }
+                const taskPart = yktParts.find((p) => p.name === "任务设置");
+                if (taskPart && Array.isArray(taskPart.params)) {
+                  const legacyComment = taskPart.params.find((p) => p.name === "自动讨论评论");
+                  if (legacyComment) legacyComment.name = "自动评论";
+                  if (!taskPart.params.some((p) => p.name === "自动切换")) {
+                    taskPart.params.push({ name: "自动切换", value: true, type: "boolean" });
+                  }
+                }
+              }
+            } catch (e) {}
+            
             
             
             const restoreAiGetters = (platformConfig) => {
@@ -1050,6 +1158,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             
             if (!globalConfig.platformParams) {
               globalConfig.platformParams = defaultConfig.platformParams;
+            }
+            if (globalConfig.platformParams && !globalConfig.platformParams.ykt) {
+              globalConfig.platformParams.ykt = defaultConfig.platformParams.ykt;
             }
             if (!globalConfig.queryApis || !globalConfig.queryApis.length) {
               globalConfig.queryApis = defaultConfig.queryApis;
@@ -1145,6 +1256,66 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         }
       }
+      try {
+        const yktVideoPart = globalConfig.platformParams?.ykt?.parts?.find((p) => p.name === "视频设置");
+        const rateParams = (yktVideoPart?.params || []).filter((p) => p.exclusiveGroup === "ykt_rate");
+        if (!globalConfig.yktRateDefaultMigrated) {
+          const autoRateParam = rateParams.find((p) => p.name === "自动倍速");
+          if (autoRateParam) autoRateParam.value = false;
+          const manualRateParam = rateParams.find((p) => p.name === "手动倍速");
+          if (manualRateParam) manualRateParam.value = true;
+          globalConfig.yktRateDefaultMigrated = true;
+        }
+        const active = rateParams.filter((p) => p.value);
+        if (active.length > 1) {
+          const keep = active.find((p) => p.name !== "手动倍速") || active[0];
+          rateParams.forEach((p) => { p.value = p.name === keep.name; });
+        }
+        const speedParamYkt = yktVideoPart?.params?.find((p) => p.name === "播放倍速");
+        if (speedParamYkt) {
+          const manualOn = rateParams.some((p) => p.name === "手动倍速" && p.value);
+          const breakOn = rateParams.some((p) => p.name === "突破倍速" && p.value);
+          const limit = breakOn ? 8 : manualOn ? 2 : 8;
+          speedParamYkt.max = limit;
+          if (Number(speedParamYkt.value) > limit) speedParamYkt.value = limit;
+        }
+      } catch (e) {}
+      try {
+        const platforms = globalConfig.platformParams || {};
+        let afkValue = false;
+        Object.keys(platforms).forEach((key) => {
+          const parts = platforms[key] && platforms[key].parts;
+          if (!Array.isArray(parts)) return;
+          parts.forEach((part) => {
+            (part.params || []).forEach((param) => {
+              if (param.name === "激活挂机" && param.value === true) afkValue = true;
+            });
+          });
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const part = parts[i];
+            if (part.name === "通用设置") {
+              parts.splice(i, 1);
+              continue;
+            }
+            if (Array.isArray(part.params)) {
+              const idx = part.params.findIndex((p) => p.name === "激活挂机");
+              if (idx >= 0) part.params.splice(idx, 1);
+            }
+          }
+        });
+        const sharedAfkParam = { name: "激活挂机", value: afkValue, type: "boolean" };
+        Object.keys(platforms).forEach((key) => {
+          const parts = platforms[key] && platforms[key].parts;
+          if (!Array.isArray(parts)) return;
+          let modePart = parts.find((p) => p.name === "模式设置");
+          if (!modePart) {
+            modePart = { name: "模式设置", params: [] };
+            parts.unshift(modePart);
+          }
+          if (!Array.isArray(modePart.params)) modePart.params = [];
+          modePart.params.push(sharedAfkParam);
+        });
+      } catch (e) {}
       _GM_setValue("globalConfig", JSON.stringify(globalConfig));
       return globalConfig;
     },
@@ -2550,7 +2721,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                       style: {
                         "display": "flex",
                         "flex-wrap": "wrap",
-                        "gap": "12px",
+                        "gap": "10px",
                         "align-items": "flex-start",
                         "margin-bottom": "10px"
                       }
@@ -2683,13 +2854,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                       style: {
                         "display": "flex",
                         "flex-wrap": "wrap",
-                        "gap": "15px",
+                        "gap": "10px",
+                        "width": "100%",
+                        "flex-basis": "100%",
                         "margin-bottom": "10px"
                       }
                     }, [
-                      (vue.openBlock(true), vue.createElementBlock(vue.Fragment, null, vue.renderList(item.params.filter(p => p.type === "boolean" && !p.exclusiveGroup && p.name !== "联网搜索"), (param, index2) => {
+                      (vue.openBlock(true), vue.createElementBlock(vue.Fragment, null, vue.renderList(item.params.filter(p => p.type === "boolean" && !p.exclusiveGroup && p.name !== "联网搜索" && p.name !== "激活挂机"), (param, index2) => {
                         return vue.openBlock(), vue.createBlock(_component_el_checkbox, {
-                          style: { "margin": "0" },
+                          style: param.name === "激活挂机" ? { "margin": "0", "width": "100%" } : { "margin": "0" },
                           key: index2,
                           modelValue: param.value,
                           "onUpdate:modelValue": ($event) => {
@@ -2743,6 +2916,40 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                         }, null, 8, ["modelValue", "onUpdate:modelValue", "label", "disabled"]);
                       }), 128))
                     ]),
+                    
+                    item.params.some(p => p.name === "激活挂机") ? (vue.openBlock(), vue.createElementBlock("div", {
+                      key: 7,
+                      style: {
+                        "display": "block",
+                        "width": "100%",
+                        "margin-bottom": "6px"
+                      }
+                    }, [
+                      (() => {
+                        const afkParam = item.params.find(p => p.name === "激活挂机");
+                        return vue.createVNode(_component_el_checkbox, {
+                          style: { "margin": "0" },
+                          modelValue: afkParam.value,
+                          "onUpdate:modelValue": ($event) => { afkParam.value = $event; triggerUiUpdate(); },
+                          label: afkParam.name
+                        }, null, 8, ["modelValue", "onUpdate:modelValue", "label"]);
+                      })()
+                    ])) : vue.createCommentVNode("", true),
+                    
+                    item.params.some(p => p.name === "激活挂机") ? (vue.openBlock(), vue.createElementBlock("div", {
+                      key: 8,
+                      style: {
+                        "width": "100%",
+                        "font-size": "11px",
+                        "color": "#4caf50",
+                        "margin-top": "-4px",
+                        "margin-bottom": "10px",
+                        "padding": "8px",
+                        "background": "rgba(76, 175, 80, 0.1)",
+                        "border-radius": "6px",
+                        "line-height": "1.5"
+                      }
+                    }, "ℹ️ 浏览器最小化刷课时，请开启激活挂机")) : vue.createCommentVNode("", true),
                     
                     vue.createElementVNode("div", {
                       style: {
@@ -2800,12 +3007,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                       return vue.openBlock(), vue.createElementBlock(vue.Fragment, {
                         key: index2
                       }, [
-                        (item.name === "视频设置" && (param.name === "规避检测" || param.name === "播放倍速")) || (item.name === "模式设置" && param.name === "正常模式") ? (vue.openBlock(), vue.createElementBlock("div", {
+                        (item.name === "视频设置" && (param.name === "规避检测" || param.name === "播放倍速" || param.name === "手动倍速")) || (item.name === "模式设置" && param.name === "正常模式") || (item.name === "模式设置" && param.name === "激活挂机") ? (vue.openBlock(), vue.createElementBlock("div", {
                           key: "br-" + index2,
                           style: { "width": "100%", "height": "0" }
                         })) : vue.createCommentVNode("", true),
                         param.type === "boolean" ? (vue.openBlock(), vue.createBlock(_component_el_checkbox, {
-                          style: { "margin": "0", "min-width": "4em" },
+                          style: { "margin": "0" },
                           key: index2,
                           modelValue: param.value,
                           "onUpdate:modelValue": ($event) => {
@@ -2946,6 +3153,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                               }
                             }
                             
+                            if (item.name === "视频设置" && (param.name === "手动倍速" || param.name === "突破倍速")) {
+                              const playbackRateParam = item.params.find(p => p.name === "播放倍速");
+                              if (playbackRateParam) {
+                                let menuMax = 2;
+                                try {
+                                  const listText = document.querySelector("xt-speedlist")?.textContent || "";
+                                  const rates = (listText.match(/(\d+(?:\.\d+)?)\s*X/gi) || []).map((s) => parseFloat(s));
+                                  if (rates.length) menuMax = Math.max(...rates);
+                                } catch (e) {}
+                                const limit = param.name === "手动倍速" ? menuMax : 8;
+                                playbackRateParam.max = limit;
+                                if (Number(playbackRateParam.value) > limit) playbackRateParam.value = limit;
+                              }
+                            }
+                            
                             const parentPart = item;
                             const dependentParams = parentPart.params.filter(p => 
                               p.type === "boolean" && 
@@ -2997,6 +3219,20 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                       ], 64);
                     }), 128)),
                     
+                    item.name === "模式设置" ? (vue.openBlock(), vue.createElementBlock("div", {
+                      key: "mode-tips",
+                      style: {
+                        "width": "100%",
+                        "font-size": "11px",
+                        "color": "#4caf50",
+                        "margin-top": "6px",
+                        "padding": "8px",
+                        "background": "rgba(76, 175, 80, 0.1)",
+                        "border-radius": "6px",
+                        "line-height": "1.5"
+                      }
+                    }, "ℹ️ 浏览器最小化刷课时，请开启激活挂机")) : vue.createCommentVNode("", true),
+                    
                     item.name === "视频设置" ? (vue.openBlock(), vue.createElementBlock("div", {
                       key: "video-tips",
                       style: {
@@ -3005,6 +3241,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                         "padding-left": "0"
                       }
                     }, [
+                      
+                      item.params.some(p => p.name === "突破倍速") && item.params.some(p => p.name === "自动倍速" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
+                        key: "ykt-auto-tip",
+                        style: { "font-size": "11px", "color": "#4caf50", "margin-bottom": "6px", "padding": "8px", "background": "rgba(76, 175, 80, 0.1)", "border-radius": "6px", "line-height": "1.5" }
+                      }, "ℹ️ 自动倍速受播放器限制，使用播放器允许的最大值")) : vue.createCommentVNode("", true),
+                      
+                      item.params.some(p => p.name === "手动倍速" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
+                        key: "ykt-manual-tip",
+                        style: { "font-size": "11px", "color": "#4caf50", "margin-bottom": "6px", "padding": "8px", "background": "rgba(76, 175, 80, 0.1)", "border-radius": "6px", "line-height": "1.5" }
+                      }, "ℹ️ 手动倍速受播放器限制，最大为播放器允许的最大值")) : vue.createCommentVNode("", true),
+                      
+                      item.params.some(p => p.name === "突破倍速" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
+                        key: "ykt-break-tip",
+                        style: { "font-size": "11px", "color": "#ff9800", "margin-bottom": "6px", "padding": "8px", "background": "rgba(255, 152, 0, 0.1)", "border-radius": "6px", "line-height": "1.5" }
+                      }, "⚠️ 突破倍速最大限制为 8x，过高的倍数学习记录可能会被清空")) : vue.createCommentVNode("", true),
                       
                       item.params.some(p => p.name === "模拟播放" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
                         key: 0,
@@ -3019,7 +3270,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                         }
                       }, "💡 模拟播放倍速与正常播放一致，使用播放器允许的最大值")) : vue.createCommentVNode("", true),
                       
-                      !item.params.some(p => p.name === "模拟播放" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
+                      !item.params.some(p => p.name === "模拟播放" && p.value) && !(item.params.some(p => p.name === "突破倍速") && (item.params.some(p => p.name === "自动倍速" && p.value) || item.params.some(p => p.name === "突破倍速" && p.value) || item.params.some(p => p.name === "手动倍速" && p.value))) ? (vue.openBlock(), vue.createElementBlock("div", {
                         key: 1,
                         style: {
                           "font-size": "11px",
@@ -3126,9 +3377,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   width: "40"
                 }),
                 vue.createVNode(_component_el_table_column, {
-                  prop: "title",
                   label: "题目",
                   width: "370"
+                }, {
+                  default: vue.withCtx((scope) => [
+                    scope.row.titleHtml
+                      ? vue.createElementVNode("div", { innerHTML: scope.row.titleHtml }, null, 8, _hoisted_2$1)
+                      : vue.createElementVNode("div", null, vue.toDisplayString(scope.row.title), 1)
+                  ]),
+                  _: 1
                 }),
                 vue.createVNode(_component_el_table_column, {
                   style: { "background-color": "red" },
@@ -4458,12 +4715,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
         
         if (Array.isArray(question._reading) && question._reading.length > 0) {
-          return question._reading.every((sub) =>
-            (sub.elements || []).some((el) =>
+          return question._reading.every((sub) => {
+            if (Array.isArray(sub.blanks) && sub.blanks.length > 0) {
+              return sub.blanks.every((blankEl) => this.isBlankFilled(blankEl));
+            }
+            return (sub.elements || []).some((el) =>
               el.querySelector(".check_answer, .onChecked") ||
               (el.classList && el.classList.contains("check_answer"))
-            )
-          );
+            );
+          });
         }
         return false;
       });
@@ -4521,6 +4781,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           dropHidden(el, clone);
         } catch (e) {}
         clone.querySelectorAll("img").forEach((img) => {
+          const lazy = img.getAttribute("data-src") || img.getAttribute("data-original") || img.getAttribute("data-lazy-src") || img.getAttribute("data-actualsrc");
+          const cur = (img.getAttribute("src") || "").trim();
+          if (lazy && (!cur || /^data:/i.test(cur))) {
+            try {
+              img.setAttribute("src", new URL(lazy, window.location.href).toString());
+            } catch (e) {
+              img.setAttribute("src", lazy);
+            }
+            return;
+          }
           const abs = img.src;
           if (abs) img.setAttribute("src", abs);
         });
@@ -4690,7 +4960,116 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   };
 
+  const readGlobalAfk = () => {
+    try {
+      const store = useConfigStore();
+      const parts = store.platformParams?.[store.platformName]?.parts || [];
+      const modePart = parts.find((p) => p.name === "模式设置");
+      const param = (modePart?.params || []).find((p) => p.name === "激活挂机");
+      return Boolean(param && param.value);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const PpWorkerTimer = (() => {
+    let worker = null;
+    let seq = 0;
+    const callbacks = new Map();
+    const code = `self.onmessage=function(e){var d=e.data;if(d.type==='start'){self._t=self._t||{};self._t[d.id]=setInterval(function(){self.postMessage({type:'tick',id:d.id})},d.interval)}else if(d.type==='stop'){if(self._t&&self._t[d.id]){clearInterval(self._t[d.id]);delete self._t[d.id]}}else if(d.type==='once'){setTimeout(function(){self.postMessage({type:'once',id:d.id})},d.delay)}};`;
+    const ensure = () => {
+      if (worker) return true;
+      try {
+        const blob = new Blob([code], { type: "application/javascript" });
+        worker = new Worker(URL.createObjectURL(blob));
+        worker.onmessage = (e) => {
+          const { type, id } = e.data || {};
+          if (type === "tick") {
+            const cb = callbacks.get(id);
+            if (cb) cb();
+          } else if (type === "once") {
+            const cb = callbacks.get(id);
+            callbacks.delete(id);
+            if (cb) cb();
+          }
+        };
+        worker.onerror = () => {};
+      } catch (e) {
+        worker = null;
+      }
+      return Boolean(worker);
+    };
+    return {
+      interval(cb, ms) {
+        if (!ensure()) return null;
+        const id = `ppw${++seq}`;
+        callbacks.set(id, cb);
+        worker.postMessage({ type: "start", id, interval: ms });
+        return id;
+      },
+      once(ms, cb) {
+        if (!ensure()) return null;
+        const id = `ppo${++seq}`;
+        callbacks.set(id, cb);
+        worker.postMessage({ type: "once", id, delay: ms });
+        return id;
+      },
+      stop(id) {
+        if (!id || !worker) return;
+        callbacks.delete(id);
+        try {
+          worker.postMessage({ type: "stop", id });
+        } catch (e) {}
+      }
+    };
+  })();
+
+  const afkWait = (ms) => new Promise((resolve) => {
+    if (!readGlobalAfk()) {
+      setTimeout(resolve, ms);
+      return;
+    }
+    if (!PpWorkerTimer.once(ms, resolve)) setTimeout(resolve, ms);
+  });
+
+  const afkIntervalHandle = (cb, ms) => {
+    if (readGlobalAfk()) {
+      const id = PpWorkerTimer.interval(cb, ms);
+      if (id) return { kind: "worker", id, stop() { PpWorkerTimer.stop(id); } };
+    }
+    const timer = setInterval(cb, ms);
+    return { kind: "timer", id: timer, stop() { clearInterval(timer); } };
+  };
+  const afkInterval = (cb, ms) => afkIntervalHandle(cb, ms);
+
+  let _afkHeartbeatStarted = false;
+  const startAfkHeartbeat = () => {
+    if (_afkHeartbeatStarted) return;
+    if (!readGlobalAfk()) return;
+    _afkHeartbeatStarted = true;
+    const tick = () => {
+      try {
+        const doc = _unsafeWindow.document;
+        const view = _unsafeWindow;
+        const x = 20 + Math.floor(Math.random() * 200);
+        const y = 20 + Math.floor(Math.random() * 200);
+        doc.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: x, clientY: y, view }));
+        doc.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Shift", view }));
+        doc.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "Shift", view }));
+      } catch (e) {}
+    };
+    PpWorkerTimer.interval(tick, 20000);
+  };
+
   const getCxModeLabel = () => {
+    try {
+      const platform = useConfigStore().platformName;
+      if (platform === "ykt") {
+        const review = readYktParam("模式设置", "复习模式", false);
+        return `当前模式：${review ? "复习模式" : "正常模式"}`;
+      }
+      if (platform !== "cx") return "";
+    } catch (e) {}
     const taskMode =
       ["复习模式", "仅视频", "仅答题"].find((name) => readCxParamValue("模式设置", name, false)) ||
       "正常模式";
@@ -4759,41 +5138,27 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const userId = getUidRealtime();
     
     
+    const isZhs = String(question.workType) === "zhs";
     const questionData = {
       questionData: question.element.outerHTML,
-      audios: Array.isArray(question.audios) ? question.audios : [],
-      audioReferer: (() => {
-        try {
-          return new URL(question.refer || window.location.href).origin + "/";
-        } catch (e) {
-          return "";
-        }
-      })(),
-      workType: String(question.workType) === "zhs" ? "zhs" : "cx",
+      workType: isZhs ? "zhs" : "cx",
       refer: question.refer,
       u: userId,
       t: Math.floor(( new Date()).getTime() / 1e3).toString()
     };
 
 
-    if (String(question.workType) === "zhs") {
-      questionData.question = question.title;
-      questionData.options = question.optionsText;
-      questionData.type = ["14", "15"].includes(String(question.type)) ? "2" : question.type;
-      questionData.subCount = Array.isArray(question._reading) ? question._reading.length : 0;
-      questionData.blanks = (() => {
-        const type = String(question.type);
-        if (!["2", "14", "15"].includes(type)) return 0;
+    if (isZhs) {
+      questionData.questionData = question.html || question.element.outerHTML;
+    } else {
+      questionData.audios = Array.isArray(question.audios) ? question.audios : [];
+      questionData.audioReferer = (() => {
         try {
-          const input = question.element.querySelector('input[name^="tiankongsize"]');
-          const fromInput = Number(input && input.value);
-          if (fromInput > 0) return fromInput;
-          return question.element.querySelectorAll(".blankItemDiv").length;
+          return new URL(question.refer || window.location.href).origin + "/";
         } catch (e) {
-          return 0;
+          return "";
         }
       })();
-      questionData.id = ((question.refer.match(/courseId=(\d+)/) || [])[1]) || "";
     }
     
     
@@ -5047,6 +5412,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return list;
   };
 
+  const imageNamesOf = (text) => {
+    const names = [];
+    try {
+      const re = /<img[^>]+src=["']?([^"'\s>]+)["']?/gi;
+      const src = String(text || "");
+      let m;
+      while ((m = re.exec(src))) {
+        const url = m[1];
+        if (/^data:/i.test(url)) continue;
+        const name = url.split(/[?#]/)[0].split("/").pop();
+        if (name) names.push(name);
+      }
+    } catch (e) {}
+    return names;
+  };
+
   const matchOptionIndex = (optionList, answer) => {
     if (!optionList || optionList.length === 0 || answer == null) return -1;
     const raw = String(answer).trim();
@@ -5063,6 +5444,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       if (optText === strippedAnswer) return i;
       const normOpt = normalizeAnsText(optText);
       if (normAnswer && normOpt && normOpt === normAnswer) return i;
+    }
+
+    const answerImages = imageNamesOf(raw);
+    if (answerImages.length) {
+      for (let i = 0; i < optionList.length; i++) {
+        const optionImages = imageNamesOf(optionList[i].text);
+        if (optionImages.length && optionImages.some((name) => answerImages.includes(name))) return i;
+      }
     }
 
     return -1;
@@ -5159,6 +5548,118 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
       });
 
+      __publicField(this, "isBlankFilled", (blankEl) => {
+        if (!blankEl) return false;
+        try {
+          const iframe = blankEl.querySelector(".textDIV iframe") || blankEl.querySelector("iframe");
+          if (iframe) {
+            const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+            const body = doc && doc.body;
+            if (body && String(body.textContent || "").trim() !== "") return true;
+          }
+        } catch (e) {}
+        const textarea = blankEl.querySelector("textarea");
+        if (textarea && String(textarea.value || "").trim() !== "") return true;
+        const inpDiv = blankEl.querySelector(".InpDIV");
+        if (inpDiv && String(inpDiv.textContent || "").trim() !== "") return true;
+        return false;
+      });
+
+      __publicField(this, "fillReadingBlankFallback", async (question, index, answerText) => {
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const text = String(answerText == null ? "" : answerText).trim();
+        if (!text || !question || !question.element) return 0;
+
+        let subEl = null;
+        try {
+          const subEls = question.element.querySelectorAll(".readCompreHensionItem");
+          subEl = subEls[index] || null;
+        } catch (e) {}
+        if (!subEl) return 0;
+
+        const blanks = Array.from(subEl.querySelectorAll(".blankItemDiv"));
+        const parts = text
+          .split(/###|\|\||[;；\n]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const escapeHtml = (s) =>
+          String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        const writeBlank = async (blankEl, value) => {
+          if (!blankEl || !value) return 0;
+          const inpDiv = blankEl.querySelector(".InpDIV");
+          if (inpDiv) {
+            try {
+              inpDiv.click();
+            } catch (e) {}
+            await sleep(120);
+          }
+          let wrote = 0;
+          const UE = this._window && this._window.UE;
+          const textarea = blankEl.querySelector("textarea");
+          const editor =
+            UE && textarea && typeof UE.getEditor === "function"
+              ? UE.getEditor(textarea.id || textarea.name)
+              : null;
+          if (editor && typeof editor.setContent === "function") {
+            try {
+              if (editor.body === null && typeof editor.addListener === "function") {
+                await new Promise((resolve) => {
+                  editor.addListener("ready", () => resolve());
+                  setTimeout(resolve, 1500);
+                });
+              }
+              editor.setContent(escapeHtml(value));
+              if (typeof editor.fireEvent === "function") editor.fireEvent("contentChange");
+              wrote += 1;
+            } catch (e) {}
+          }
+          if (!wrote) {
+            const holder = blankEl.querySelector(".textDIV") || blankEl;
+            const iframe = holder.querySelector("iframe");
+            if (iframe) {
+              try {
+                const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                const body = doc && doc.body;
+                if (body) {
+                  body.innerHTML = escapeHtml(value);
+                  ["input", "keyup", "change"].forEach((name) => {
+                    try {
+                      body.dispatchEvent(new Event(name, { bubbles: true }));
+                    } catch (e) {}
+                  });
+                  wrote += 1;
+                }
+              } catch (e) {}
+            }
+          }
+          if (textarea) {
+            try {
+              textarea.value = value;
+              textarea.dispatchEvent(new Event("input", { bubbles: true }));
+              textarea.dispatchEvent(new Event("change", { bubbles: true }));
+            } catch (e) {}
+          }
+          return wrote;
+        };
+
+        if (blanks.length > 0) {
+          let done = 0;
+          for (let k = 0; k < blanks.length; k++) {
+            const value = parts.length <= 1 ? parts[0] || text : parts[k] || "";
+            if (!value) continue;
+            done += await writeBlank(blanks[k], value);
+            await sleep(100);
+          }
+          return done;
+        }
+
+        if (subEl.querySelector("textarea")) {
+          return await writeBlank(subEl, text);
+        }
+        return 0;
+      });
+
       __publicField(this, "fillReadingQuestion", async (question) => {
         const subs = Array.isArray(question._reading) ? question._reading : [];
         const rawAnswer = question.answer;
@@ -5207,6 +5708,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             if (idx >= 0 && !idxs.includes(idx)) idxs.push(idx);
           }
           if (idxs.length === 0) {
+            const blankFilled = await this.fillReadingBlankFallback(question, i, answerText);
+            if (blankFilled > 0) {
+              filled += blankFilled;
+              answeredSubs += 1;
+              await sleep(120);
+              continue;
+            }
             if (typeof this.addLog === "function") {
               this.addLog(
                 "阅读理解第 " + (i + 1) + " 小题：答案文本没匹配到选项 - " + answerText.slice(0, 40),
@@ -5228,13 +5736,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           await sleep(120);
         }
 
-        if (typeof this.addLog === "function" && filled > 0) {
-          this.addLog(
-            "阅读理解 " + subs.length + " 小题：填入 " + answeredSubs + " 题" +
-              (answeredSubs >= subs.length ? "" : "（有小题未匹配）"),
-            answeredSubs >= subs.length ? "success" : "warning"
-          );
-        }
         return filled > 0;
       });
       
@@ -5862,7 +6363,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               text = text.replace(new RegExp("^" + letter + "[.、:：\\s]+", "i"), "").trim();
               return text;
             });
-            return { type: subType, title: subTitle, options: optionTexts, elements: liList };
+            return {
+              type: subType,
+              title: subTitle,
+              options: optionTexts,
+              elements: liList,
+              blanks: Array.from(subItem.querySelectorAll(".blankItemDiv"))
+            };
           });
           const subBlocks = subs.map((sub, i) => {
             const optionLines = sub.options.map((text, j) => `${String.fromCharCode(65 + j)}. ${text}`);
@@ -6157,7 +6664,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     
     
     const monitorIframes = () => {
-      const afkEnabledMonitor = readCxParamValue("视频设置", "激活挂机", false);
+      const afkEnabledMonitor = readGlobalAfk();
       
       if (_urlBackupTimer) {
         clearTimeout(_urlBackupTimer);
@@ -6216,7 +6723,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
     const watchUrlChanges = () => {
       let currentUrl = window.location.href;
-      const afkEnabled = readCxParamValue("视频设置", "激活挂机", false);
+      const afkEnabled = readGlobalAfk();
       
       const checkUrlChange = () => {
         if (currentUrl !== window.location.href) {
@@ -6274,7 +6781,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const thisTaskId = ++_globalTaskId;
       hasLoggedSkipTip = false;
       
-      const afkEnabledWatch = readCxParamValue("视频设置", "激活挂机", false);
+      const afkEnabledWatch = readGlobalAfk();
       if (afkEnabledWatch) {
         await new Promise(resolve => {
           BackgroundWorker.start('watch_iframe_delay', () => { BackgroundWorker.stop('watch_iframe_delay'); resolve(); }, 3000);
@@ -6305,7 +6812,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           complete: async () => {
             if (thisTaskId === _globalTaskId) {
               const autoSwitch = readCxParamValue("章节/作业/测验设置", "自动切换", true);
-              logStore.addLog(`本页任务点已全部完成，${autoSwitch ? "正前往下一章节" : "自动切换已关闭"}`, "success");
+              logStore.addLog("本页任务点已全部完成", "success");
+              if (!autoSwitch) {
+                logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
+              }
               if (autoSwitch) {
                 
                 const nextBtn1 = documentElement.querySelector("#prevNextFocusNext");
@@ -6464,7 +6974,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       window._blockPlayScroll = updateOverlayPositions;
       window.addEventListener('scroll', updateOverlayPositions, true);
       window.addEventListener('resize', updateOverlayPositions);
-      const afkEnabledOverlay = readCxParamValue("视频设置", "激活挂机", false);
+      const afkEnabledOverlay = readGlobalAfk();
       if (afkEnabledOverlay) {
         BackgroundWorker.start('overlay_refresh', createOverlay, 1000);
         window._blockPlayInterval = 'overlay_refresh';
@@ -7526,7 +8036,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           let isReporting = false;
           let lastLoggedPercent = 0;
 
-          const afkEnabled = readCxParamValue("视频设置", "激活挂机", false);
+          const afkEnabled = readGlobalAfk();
           const simulateLoopId = 'simulate_' + Date.now();
           let loopInterval = null;
 
@@ -7859,9 +8369,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
         }
         let isExecuted = false;
-        const afkEnabledPlay = readCxParamValue("视频设置", "激活挂机", false);
+        const afkEnabledPlay = readGlobalAfk();
         const playLoopId = 'play_media_' + Date.now();
         const healthCheckId = 'play_health_' + Date.now();
+        let playLoopTimer = null;
         const playLoopCallback = async () => {
           const mediaElement = iframeDocument.documentElement.querySelector(mediaType);
           if (mediaElement && !isExecuted) {
@@ -7904,7 +8415,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             if (afkEnabledPlay) {
               BackgroundWorker.stop(playLoopId);
             } else {
-              clearInterval(intervalId);
+              clearInterval(playLoopTimer);
+              playLoopTimer = null;
             }
             
             if (afkEnabledPlay) {
@@ -7924,7 +8436,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (afkEnabledPlay) {
           BackgroundWorker.start(playLoopId, playLoopCallback, 2500);
         } else {
-          const intervalId = setInterval(playLoopCallback, 2500);
+          playLoopTimer = setInterval(playLoopCallback, 2500);
         }
       });
     };
@@ -8099,7 +8611,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
     const awaitFrameReady = async (iframe) => {
       return new Promise((resolve) => {
-        const afkEnabledFrame = readCxParamValue("视频设置", "激活挂机", false);
+        const afkEnabledFrame = readGlobalAfk();
         const frameReadyId = 'frame_ready_' + Date.now();
         const checkReady = async () => {
           var _a;
@@ -8302,7 +8814,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     watchUrlChanges();
     
     
-    const afkEnabledGlobal = readCxParamValue("视频设置", "激活挂机", false);
+    const afkEnabledGlobal = readGlobalAfk();
     if (afkEnabledGlobal) {
       FakeMediaPlayer.start();
       logStore.addLog('🖥️ 全局挂机模式已启用', 'success');
@@ -8350,8 +8862,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const logStore = useLogStore();
     const questionStore = useQuestionStore();
     const configStore = useConfigStore();
-    logStore.addLog(`进入随堂练习答题页面`, "primary");
-    logStore.addLog(`等待Vue渲染题目...`, "warning");
+    logStore.addLog(`检测到用户进入到随堂练习页面`, "primary");
+    logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     
     
     decodeCipherFont(document);
@@ -8621,8 +9133,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   const useCxWorkLogic = async () => {
     const logStore = useLogStore();
     useConfigStore();
-    logStore.addLog(`进入新版作业页面，开始准备答题`, "primary");
-    logStore.addLog(`正在解析题目, 请等待5s`, "warning");
+    logStore.addLog(`检测到用户进入到作业页面`, "primary");
+    logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     await new CxQuestionHandler("zy").init();
   };
   
@@ -8630,8 +9142,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   
   const answerExamPreview = async () => {
     const logStore = useLogStore();
-    logStore.addLog(`进入考试整卷预览页面，开始准备答题`, "primary");
-    logStore.addLog(`正在解析题目, 请等待5s`, "warning");
+    logStore.addLog(`检测到用户进入到考试预览页面`, "primary");
+    logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     await new CxQuestionHandler("ks").init();
     logStore.addLog("答题完成，请自行检查后保存或提交", "primary");
   };
@@ -8652,7 +9164,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
     if (!inSequentialMode) {
       
-      logStore.addLog(`进入新版考试页面，开始准备答题`, "primary");
+      logStore.addLog(`检测到用户进入到考试页面`, "primary");
+      logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
 
       
       const markInfo = _unsafeWindow.document.querySelector('.mark_info');
@@ -8740,7 +9253,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
     
     if (!currentUrl.includes('/ztnodedetailcontroller/visitnodedetail')) {
-      logStore.addLog(`进入课程目录，即将点击第一个章节开始阅读`, "primary");
+      logStore.addLog(`检测到用户进入到课程目录页面`, "primary");
       await delay(2);
       const firstChapter = document.querySelector('.course_section .chapterText');
       if (firstChapter) {
@@ -8752,7 +9265,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
 
     
-    logStore.addLog(`进入阅读页面，开始自动滚动阅读`, "primary");
+    logStore.addLog(`检测到用户进入到阅读页面`, "primary");
     logStore.addLog(`阅读任务次日才会统计阅读时长`, "warning");
 
     
@@ -8851,29 +9364,123 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return false;
       });
       __publicField(this, "init", async () => {
-        var _a;
         this.questions = [];
-        this.parseHtml();
-        if (this.questions.length) {
-          this.addLog(`成功解析到${this.questions.length}个题目`, "primary");
-          const configStore = useConfigStore();
-          
-          const _answerParamsPart2 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数");
-          const skipAnswered = _answerParamsPart2?.params.find(p => p.name === "跳过已答")?.value || false;
-          let skippedCount = 0;
-          for (const [index, question] of this.questions.entries()) {
+        const configStore = useConfigStore();
+        
+        const _answerParamsPart2 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数");
+        const skipAnswered = _answerParamsPart2?.params.find(p => p.name === "跳过已答")?.value || false;
+        
+        const waitForPageReady = async () => {
+          const startedAt = Date.now();
+          let visibleWaitStart = 0;
+          let diagLogged = false;
+          while (Date.now() - startedAt < 5 * 60 * 1000) {
+            const els = this.getZhsQuestionElements();
+            if (els.length) {
+              const stems = els.map((el) => this.readStem(el));
+              const visibleIdx = els.findIndex((el) => {
+                const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+                return rect && rect.width > 0 && rect.height > 0;
+              });
+              const visibleReady = visibleIdx >= 0 && Boolean(stems[visibleIdx].html || stems[visibleIdx].text);
+              if (visibleReady) return els;
+              if (visibleIdx >= 0) {
+                if (!visibleWaitStart) visibleWaitStart = Date.now();
+                if (!diagLogged && Date.now() - visibleWaitStart >= 2000) {
+                  diagLogged = true;
+                  this.addLog(`第${this.zhsQuestionNumber(els[visibleIdx])}题题干暂未读取到（${this.describeStemState(els[visibleIdx])}），继续等待…`, "warning");
+                }
+                if (Date.now() - visibleWaitStart >= 60000) {
+                  this.addLog(`题目渲染超过 60 秒仍未完成，先继续处理（${this.describeStemState(els[visibleIdx])}）`, "warning");
+                  return els;
+                }
+              }
+            }
+            await afkWait(150);
+          }
+          return this.getZhsQuestionElements();
+        };
+        
+        this.addLog("等待页面加载完成，开始扫描任务点", "info");
+        const readyElements = await waitForPageReady();
+        if (!readyElements.length) {
+          this.addLog("未解析到题目，请刷新重试或进入答题页面", "danger");
+          return;
+        }
+        this.addLog("发现一个作业，正在解析", "primary");
+        this.addLog("题目列表获取成功", "primary");
+        this.addLog(`成功解析到${readyElements.length}个题目`, "primary");
+        
+        const handled = new Set();
+        let running = false;
+        let finishedLogged = false;
+        
+        const markFinishedIfDone = () => {
+          if (finishedLogged) return;
+          const els = this.getZhsQuestionElements();
+          if (!els.length) return;
+          const allHandled = els.every((el) => handled.has(this.zhsQuestionKey(el)));
+          if (!allHandled) return;
+          finishedLogged = true;
+          this.addLog("作业已完成", "success");
+        };
+        
+        const clickNextQuestion = async () => {
+          const switchBtns = this._document?.querySelectorAll(".switch-btn-box > button");
+          const nextBtn = switchBtns && switchBtns[1];
+          if (!nextBtn) {
+            this.addLog("未找到下一题按钮，请手动切换", "danger");
+            return false;
+          }
+          nextBtn.click();
+          await afkWait(1200);
+          return true;
+        };
+        
+        const findPendingQuestion = () => {
+          for (const el of this.getZhsQuestionElements()) {
+            const key = this.zhsQuestionKey(el);
+            if (!key || handled.has(key)) continue;
+            const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+            if (rect && rect.width > 0 && rect.height > 0) return el;
+          }
+          return null;
+        };
+        
+        const handleCurrentQuestion = async () => {
+          if (running) return;
+          const el = findPendingQuestion();
+          if (!el) return;
+          handled.add(this.zhsQuestionKey(el));
+          running = true;
+          try {
+            const label = this.zhsQuestionNumber(el) || String(this.questions.length + 1);
+            const stemStartedAt = Date.now();
+            let stem = this.readStem(el);
+            if (!stem.html && !stem.text) {
+              this.addLog(`第${label}题题干正在渲染，等待就绪…（${this.describeStemState(el)}）`, "info");
+              while (Date.now() - stemStartedAt < 60000 && !stem.html && !stem.text) {
+                await afkWait(150);
+                stem = this.readStem(el);
+              }
+              const waited = ((Date.now() - stemStartedAt) / 1000).toFixed(1);
+              if (stem.html || stem.text) {
+                this.addLog(`第${label}题题干已就绪（等待 ${waited}s）`, "primary");
+              } else {
+                this.addLog(`第${label}题题干读取失败（等了 ${waited}s，${this.describeStemState(el)}），按空题干上传`, "warning");
+              }
+            }
+            const question = this.buildQuestion(el, stem);
+            this.questions.push(question);
             
             if (skipAnswered && this.isZhsQuestionAnswered(question)) {
-              this.addLog(`第${index + 1}道题已作答，跳过`, "warning");
-              skippedCount += 1;
+              this.addLog(`第${label}道题已作答，跳过`, "warning");
               this.addQuestion(question);
-              
-              await ((_a = this._document) == null ? void 0 : _a.querySelectorAll(".switch-btn-box > button")[1]).click();
-              
-              await new Promise(r => setTimeout(r, 1500));
-              continue;
+              await clickNextQuestion();
+              return;
             }
-            this.addLog(`正在查找第${index + 1}道题目答案...`, "primary");
+            
+            this.addLog(`正在查找第${label}道题目答案...`, "primary");
             const answerData = await queryAnswer(question);
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
@@ -8891,7 +9498,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               const msgLines = (answerData.msg || '').split('\n');
               const firstLine = msgLines.shift();
               const msgHint = firstLine ? ` - ${firstLine}` : "";
-              this.addLog(`第${index + 1}道题查询成功${sourceHint}${msgHint}`, "success");
+              this.addLog(`第${label}道题查询成功${sourceHint}${msgHint}`, "success");
               for (const line of msgLines) {
                 if (line.trim()) this.addLog(line, "primary");
               }
@@ -8899,7 +9506,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 this.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
               }
             } else {
-              this.addLog(`第${index + 1}道题搜索失败：${answerData.msg}`, "danger");
+              this.addLog(`第${label}道题搜索失败：${answerData.msg}`, "danger");
               if (answerData.data?.sponsorUrl) {
                 this.addLog(`💎 ${getSponsorLink(answerData.data.sponsorUrl, '点我赞助获取新token')}，可继续使用答题`, 'warning');
               }
@@ -8908,15 +9515,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               await new Promise(r => setTimeout(r, 100));
             }
             
-            await ((_a = this._document) == null ? void 0 : _a.querySelectorAll(".switch-btn-box > button")[1]).click();
-            
-            await new Promise(r => setTimeout(r, 1500));
+            await clickNextQuestion();
+          } finally {
+            running = false;
+            markFinishedIfDone();
           }
-          if (skippedCount > 0) {
-            this.addLog(`共跳过${skippedCount}道已答题目`, "primary");
-          }
-        } else
-          this.addLog("未解析到题目，请刷新重试或进入答题页面", "danger");
+        };
+        
+        await handleCurrentQuestion();
+        
+        this._zhsWatchTimer = afkInterval(() => {
+          handleCurrentQuestion().catch(() => {});
+        }, 800);
       });
       __publicField(this, "parseHtml", () => {
         if (!this._document)
@@ -9075,40 +9685,164 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
     addQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
-        var _a, _b;
-        const questionTitle = (questionElement == null ? void 0 : questionElement.querySelector(".subject_describe div,.smallStem_describe p")).__Ivue__._data.shadowDom.textContent;
-        const questionTypeText = ((_b = (_a = questionElement == null ? void 0 : questionElement.querySelector(".subject_type span")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.slice(1, 4)) || "";
-        
-        
-        const zhsTypeMapping = {
-          "单选": "单选题",
-          "多选": "多选题", 
-          "填空": "填空题",
-          "判断": "判断题",
-          "简答": "简答题",
-          "名词": "名词解释",
-          "论述": "论述题",
-          "计算": "计算题"
-        };
-        
-        
-        const fullQuestionType = zhsTypeMapping[questionTypeText] || questionTypeText;
-        
-        
-        const numericType = this.typeMap.get(fullQuestionType) || "999";
-        
-        const [optionsObject, optionTexts] = this.extractOptions(questionElement == null ? void 0 : questionElement.querySelectorAll(SELECTORS.ZHS_OPTION), ".node_detail");
-        this.questions.push({
-          element: questionElement,
-          type: numericType,  
-          title: questionTitle,
-          optionsText: optionTexts,
-          options: optionsObject,
-          answer: [],
-          workType: "zhs",
-          refer: this._window.location.href
-        });
+        this.questions.push(this.buildQuestion(questionElement));
       });
+    }
+    getZhsQuestionElements() {
+      try {
+        return this._document ? Array.from(this._document.querySelectorAll(SELECTORS.ZHS_QUESTION)) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    readStem(questionElement) {
+      let bridged = "";
+      try {
+        bridged = questionElement && questionElement.getAttribute ? questionElement.getAttribute("data-pp-stem") || "" : "";
+      } catch (e) {}
+      if (bridged) {
+        let text = this.stripTags(bridged.replace(/<img\b[^>]*>/gi, "")).trim();
+        if (!text && /<img\b/i.test(bridged)) text = "[图片题干]";
+        return { html: bridged, text };
+      }
+      const stemNode = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe div, .smallStem_describe p, .subject_describe, .smallStem_describe");
+      const stemVm = stemNode == null ? void 0 : stemNode.__Ivue__;
+      let stemShadow = stemVm == null ? void 0 : stemVm._data?.shadowDom;
+      if (!stemShadow && stemNode && stemNode.__ppShadowRoot) {
+        stemShadow = stemNode.__ppShadowRoot;
+      }
+      if (!stemShadow) {
+        const stemScope = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe, .smallStem_describe");
+        stemShadow = readRecordedShadow(stemScope);
+      }
+      const html = stemShadow ? String(stemShadow.innerHTML || "") : "";
+      let text = stemShadow
+        ? String(stemShadow.textContent || "").trim()
+        : String((stemNode == null ? void 0 : stemNode.textContent) || "").trim();
+      if (!text && /<img\b/i.test(html)) {
+        text = "[图片题干]";
+      }
+      return { html, text };
+    }
+    describeStemState(questionElement) {
+      try {
+        const stemNode = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe div, .smallStem_describe p, .subject_describe, .smallStem_describe");
+        const vm = stemNode && stemNode.__Ivue__;
+        const sd = vm && vm._data && vm._data.shadowDom;
+        const scope = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe, .smallStem_describe");
+        const recorded = readRecordedShadow(scope);
+        const originWrapped = (() => {
+          try {
+            const fn = _unsafeWindow.originFunction;
+            return !!(fn && fn.__ppAttachWrapped);
+          } catch (e) {
+            return false;
+          }
+        })();
+        const htmlLen = sd ? String(sd.innerHTML || "").length : 0;
+        let bridged = "";
+        try {
+          bridged = questionElement && questionElement.getAttribute ? questionElement.getAttribute("data-pp-stem") || "" : "";
+        } catch (e) {}
+        return `bridge=${bridged ? "有" : "无"} ivue=${vm ? "有" : "无"} shadow=${sd ? "有" : "无"} recorded=${recorded ? "有" : "无"} origin=${originWrapped ? "已接管" : "未接管"} htmlLen=${htmlLen}`;
+      } catch (e) {
+        return `诊断失败:${e.message}`;
+      }
+    }
+    buildQuestion(questionElement, stem) {
+      var _a, _b;
+      const stemInfo = stem || this.readStem(questionElement);
+      const stemHtml = stemInfo.html || "";
+      const questionTitle = stemInfo.text || "";
+      const questionTitleHtml = (() => {
+        try {
+          const tags = String(stemHtml).match(/<img\b[^>]*>/gi) || [];
+          const imgs = [];
+          for (const tag of tags) {
+            const lazyMatch = tag.match(/data-src=["']?([^"'\s>]+)/i);
+            const srcMatch = tag.match(/\ssrc=["']?([^"'\s>]+)/i);
+            let src = srcMatch ? srcMatch[1] : "";
+            if (lazyMatch && (!src || /^data:/i.test(src))) src = lazyMatch[1];
+            if (src && !/^data:/i.test(src)) {
+              imgs.push(`<img src="${src}" style="max-width:150px;max-height:70px;vertical-align:middle;margin:2px 4px 2px 0;border-radius:3px">`);
+            }
+          }
+          if (imgs.length) return imgs.join("");
+        } catch (e) {}
+        return "";
+      })();
+      const questionTypeText = ((_b = (_a = questionElement == null ? void 0 : questionElement.querySelector(".subject_type span")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.slice(1, 4)) || "";
+      
+      
+      const zhsTypeMapping = {
+        "单选": "单选题",
+        "多选": "多选题", 
+        "填空": "填空题",
+        "判断": "判断题",
+        "简答": "简答题",
+        "名词": "名词解释",
+        "论述": "论述题",
+        "计算": "计算题"
+      };
+      
+      
+      const fullQuestionType = zhsTypeMapping[questionTypeText] || questionTypeText;
+      
+      
+      const numericType = this.typeMap.get(fullQuestionType) || "999";
+      
+      const [optionsObject, optionTexts] = this.extractOptions(questionElement == null ? void 0 : questionElement.querySelectorAll(SELECTORS.ZHS_OPTION), ".node_detail");
+      return {
+        element: questionElement,
+        type: numericType,  
+        title: questionTitle,
+        titleHtml: questionTitleHtml,
+        optionsText: optionTexts,
+        options: optionsObject,
+        answer: [],
+        workType: "zhs",
+        refer: this._window.location.href,
+        html: this.serializeQuestionHtml(questionElement, stemHtml, questionTitle)
+      };
+    }
+    zhsQuestionNumber(questionElement) {
+      try {
+        const numEl = questionElement.querySelector(".subject_num span, .subject_num");
+        const raw = numEl ? String(numEl.textContent || "").trim() : "";
+        return raw.replace(/[^\d]/g, "") || raw;
+      } catch (e) {
+        return "";
+      }
+    }
+    zhsQuestionKey(questionElement) {
+      const number = this.zhsQuestionNumber(questionElement);
+      let title = "";
+      try {
+        const stemEl = questionElement.querySelector(".subject_describe, .smallStem_describe");
+        title = String((stemEl == null ? void 0 : stemEl.textContent) || "").replace(/\s+/g, "").slice(0, 20);
+      } catch (e) {}
+      if (number) return `${number}#${title}`;
+      try {
+        return `idx${Array.prototype.indexOf.call(this._document.querySelectorAll(SELECTORS.ZHS_QUESTION), questionElement)}`;
+      } catch (e) {
+        return "";
+      }
+    }
+    serializeQuestionHtml(questionElement, stemHtml, stemText) {
+      try {
+        const clone = questionElement.cloneNode(true);
+        const host = clone.querySelector(".subject_describe") || clone.querySelector(".smallStem_describe");
+        if (host) {
+          if (stemHtml) {
+            host.innerHTML = stemHtml;
+          } else if (stemText) {
+            host.textContent = stemText;
+          }
+        }
+        return clone.outerHTML;
+      } catch (e) {
+        return questionElement.outerHTML;
+      }
     }
   }
   
@@ -9172,10 +9906,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     hookError();
     const logStore = useLogStore();
     useConfigStore();
-    logStore.addLog(`进入答题页面，开始准备答题`, "primary");
-    logStore.addLog(`正在解析题目, 请等待5s`, "warning");
-    new XMLHttpRequestInterceptor(["gateway/t/v1/answer/hasAnswer"], async () => {
-      await delay(1);
+    logStore.addLog(`检测到用户进入到答题页面`, "primary");
+    logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
+    
+    let started = false;
+    const startAnswering = async () => {
+      if (started) return;
+      started = true;
       _unsafeWindow.document.getSelection = function() {
         return {
           removeAllRanges: function() {
@@ -9188,13 +9925,387 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       _unsafeWindow.document.oncopy = true;
       _unsafeWindow.document.onpaste = true;
       await new ZhsQuestionHandler().init();
+    };
+    
+    new XMLHttpRequestInterceptor(["gateway/t/v1/answer/hasAnswer"], async () => {
+      await delay(1);
+      await startAnswering();
       return true;
     });
+    
+    const waitTimer = setInterval(() => {
+      if (started) {
+        clearInterval(waitTimer);
+        return;
+      }
+      if (document.querySelectorAll(SELECTORS.ZHS_QUESTION).length) {
+        clearInterval(waitTimer);
+        startAnswering().catch(() => {});
+      }
+    }, 500);
   };
 
   
 
   
+
+  const readYktParam = (partName, paramName, fallback = false) => {
+    try {
+      const parts = useConfigStore().platformParams?.ykt?.parts || [];
+      const part = parts.find((p) => p.name === partName);
+      const param = (part?.params || []).find((p) => p.name === paramName);
+      const val = param ? param.value : undefined;
+      return val === undefined || val === null ? fallback : val;
+    } catch (e) {
+      return fallback;
+    }
+  };
+
+  const YKT_SEL = {
+    job: "div.leaf-item",
+    jobTitle: ".leaf-item-title",
+    jobTag: ".leaf-item-tag",
+    jobDone: '[class*="yuanquangou"]',
+    detail: ".detail-container",
+    media: ".detail-container video",
+    pptSlide: ".swiper-container .container",
+    pptUnread: ".noRead",
+    navCollapsed: ".nav-item-title:not(.is-expand)",
+    forum: ".detail-container .lms-graph-forum",
+    forumStatus: ".learning-space-control-unit .control-right .f12",
+    forumInput: ".forum-publish textarea.el-textarea__inner",
+    forumComment: ".forum-content .forum-item .comment-text",
+    forumSend: ".prompt-send-btn:not(.disabled)"
+  };
+
+  const yktJobs = () => Array.from(document.querySelectorAll(YKT_SEL.job));
+  const yktJobTag = (el) => (el.querySelector(YKT_SEL.jobTag)?.textContent || "").trim();
+  const yktJobTitle = (el) => (el.querySelector(YKT_SEL.jobTitle)?.textContent || "").trim() || "未知任务点";
+  const yktJobDone = (el) => !!el.querySelector(YKT_SEL.jobDone);
+
+  const yktExpandTree = async () => {
+    for (let i = 0; i < 5; i++) {
+      const collapsed = document.querySelectorAll(YKT_SEL.navCollapsed);
+      if (!collapsed.length) break;
+      collapsed.forEach((el) => el.click());
+      await delay(0.15);
+    }
+  };
+
+  const forceMediaRate = (media, rate) => {
+    try {
+      const desc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "playbackRate");
+      if (!desc || typeof desc.set !== "function" || typeof desc.get !== "function") return false;
+      if (!media.__ppRateLocked) {
+        Object.defineProperty(media, "playbackRate", {
+          configurable: true,
+          get() { return this.__ppForcedRate; },
+          set() {}
+        });
+        media.__ppRateLocked = true;
+      }
+      media.__ppForcedRate = rate;
+      desc.set.call(media, rate);
+      try {
+        const label = document.querySelector("xt-speedvalue");
+        if (label) label.textContent = `${Number(rate).toFixed(2)}X`;
+      } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const forceMediaMute = (media) => {
+    try {
+      const dm = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "muted");
+      const dv = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "volume");
+      if (!dm || !dv || typeof dm.set !== "function" || typeof dv.set !== "function") return false;
+      if (!media.__ppMuteLocked) {
+        Object.defineProperty(media, "muted", {
+          configurable: true,
+          get() { return true; },
+          set() {}
+        });
+        Object.defineProperty(media, "volume", {
+          configurable: true,
+          get() { return 0; },
+          set() {}
+        });
+        media.__ppMuteLocked = true;
+      }
+      dm.set.call(media, true);
+      dv.set.call(media, 0);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const yktPlayMedia = (media, opts) => new Promise((resolve) => {
+    let settled = false;
+    let lastTime = -1;
+    let stallTicks = 0;
+    let ticker = null;
+    let labelObserver = null;
+    const readRate = () => {
+      try {
+        const raw = typeof opts.getRate === "function" ? opts.getRate() : opts.rate;
+        const num = Number(raw);
+        return Number.isFinite(num) && num > 0 ? num : 1;
+      } catch (e) {
+        return 1;
+      }
+    };
+    let currentRate = readRate();
+    const syncSpeedLabel = () => {
+      try {
+        const label = document.querySelector("xt-speedvalue");
+        if (!label) return;
+        const want = `${currentRate.toFixed(2)}X`;
+        if ((label.textContent || "").trim() !== want) label.textContent = want;
+      } catch (e) {}
+    };
+    const finish = (reason) => {
+      if (settled) return;
+      settled = true;
+      if (ticker) ticker.stop();
+      if (labelObserver) {
+        try { labelObserver.disconnect(); } catch (e) {}
+        labelObserver = null;
+      }
+      try { media.onended = null; media.onpause = null; } catch (e) {}
+      resolve(reason);
+    };
+    forceMediaRate(media, currentRate);
+    const muteMedia = () => {
+      forceMediaMute(media);
+    };
+    muteMedia();
+    const verifyRate = () => {
+      try {
+        const actual = Number(media.playbackRate) || 1;
+        const ok = Math.abs(actual - currentRate) < 0.05;
+        useLogStore().addLog(
+          ok ? `倍速校验通过：实际 ${actual}x` : `倍速校验失败：期望 ${currentRate}x，实际 ${actual}x`,
+          ok ? "success" : "warning",
+        );
+      } catch (e) {}
+    };
+    try { setTimeout(() => { if (!settled) verifyRate(); }, 1500); } catch (e) {}
+    try {
+      const label = document.querySelector("xt-speedvalue");
+      if (label) {
+        labelObserver = new MutationObserver(() => syncSpeedLabel());
+        labelObserver.observe(label, { childList: true, characterData: true, subtree: true });
+      }
+    } catch (e) {}
+    syncSpeedLabel();
+    try { if (!media.currentTime || media.currentTime < 1) media.currentTime = 1; } catch (e) {}
+    media.onended = () => finish("ended");
+    media.onpause = () => {
+      if (!media.ended && !settled) setTimeout(() => { try { media.play(); } catch (e) {} }, 800);
+    };
+    const tick = () => {
+      try {
+        if (!media.isConnected) return finish("switched");
+        if (media.ended) return finish("ended");
+        const nextRate = readRate();
+        if (Math.abs(nextRate - currentRate) > 0.05) {
+          currentRate = nextRate;
+          try { useLogStore().addLog(`倍速已更新：${currentRate}x`, "info"); } catch (e) {}
+        }
+        forceMediaRate(media, currentRate);
+        muteMedia();
+        syncSpeedLabel();
+        if (media.paused && !media.ended) media.play().catch(() => {});
+        if (media.currentTime !== lastTime) {
+          lastTime = media.currentTime;
+          stallTicks = 0;
+        } else {
+          stallTicks++;
+        }
+        if (stallTicks > 60) return finish("stalled");
+      } catch (e) {}
+    };
+    ticker = afkIntervalHandle(tick, 1000);
+    Promise.resolve(media.play()).catch(() => {});
+  });
+
+  const yktWaitFor = async (getter, timeoutSeconds = 20, periodMs = 500) => {
+    const deadline = Date.now() + timeoutSeconds * 1000;
+    while (Date.now() < deadline) {
+      const value = getter();
+      if (value) return value;
+      await afkWait(periodMs);
+    }
+    return null;
+  };
+
+  const yktPostComment = async (forum, logStore) => {
+    const statusText = (forum.querySelector(YKT_SEL.forumStatus)?.textContent || "").trim();
+    if (statusText.includes("已发言")) {
+      logStore.addLog("当前讨论已发言，跳过评论", "success");
+      return "skipped";
+    }
+    const input = await yktWaitFor(() => forum.querySelector(YKT_SEL.forumInput), 20, 500);
+    if (!input) throw new Error("讨论区输入框加载超时");
+
+    const samples = Array.from(forum.querySelectorAll(YKT_SEL.forumComment))
+      .map((el) => (el.textContent || "").trim())
+      .filter(Boolean);
+    if (!samples.length) throw new Error("讨论区暂无他人发言可参考，已跳过");
+
+    input.value = samples[Math.floor(Math.random() * samples.length)];
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+
+    const sendBtn = await yktWaitFor(() => forum.querySelector(YKT_SEL.forumSend), 10, 500);
+    if (!sendBtn) throw new Error("发送按钮未解除禁用，评论未提交");
+    sendBtn.click();
+    await delay(1.5);
+    logStore.addLog("讨论评论已提交", "success");
+    return "posted";
+  };
+
+  const useYktPptRead = async (logStore) => {
+    let switched = 0;
+    for (let guard = 0; guard < 500; guard++) {
+      const pending = Array.from(document.querySelectorAll(YKT_SEL.pptSlide)).filter((el) => el.querySelector(YKT_SEL.pptUnread));
+      if (!pending.length) break;
+      pending[0].click();
+      switched++;
+      await delay(1.2);
+    }
+    logStore.addLog(`课件阅读完成，共切换 ${switched} 页`, "success");
+    return switched;
+  };
+
+  const useYktCourseLogic = async () => {
+    const logStore = useLogStore();
+    const autoPlay = readYktParam("视频设置", "自动播放", true);
+    const restudy = readYktParam("模式设置", "复习模式", false);
+    const autoComment = readYktParam("任务设置", "自动评论", false);
+    const autoSwitch = readYktParam("任务设置", "自动切换", true);
+    const readYktMaxRate = () => {
+      try {
+        const listEl = document.querySelector("xt-speedlist");
+        const text = listEl ? listEl.textContent || "" : "";
+        const rates = (text.match(/(\d+(?:\.\d+)?)\s*X/gi) || []).map((s) => parseFloat(s));
+        if (rates.length) return Math.max(...rates);
+      } catch (e) {}
+      return 2;
+    };
+    const computeEffectiveRate = () => {
+      const autoRate = readYktParam("视频设置", "自动倍速", false);
+      const breakRate = readYktParam("视频设置", "突破倍速", false);
+      const userRate = Number(readYktParam("视频设置", "播放倍速", 1.5)) || 1;
+      const menuMax = readYktMaxRate();
+      if (autoRate) return menuMax;
+      if (breakRate) return Math.min(8, Math.max(1, userRate));
+      return Math.min(menuMax, Math.max(1, userRate));
+    };
+    const studyTags = autoComment ? ["视频", "讨论"] : ["视频"];
+    if (restudy) {
+      logStore.addLog("复习模式：已完成的任务点也会重新学习", "primary");
+    }
+
+    if (location.pathname.includes("/v2/web/student-lesson-report")) {
+      logStore.addLog("课堂互动任务不支持自动学习，请切换到视频、课件等任务", "warning");
+      return;
+    }
+
+    logStore.addLog("检测到用户进入到雨课堂页面", "primary");
+    logStore.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
+    let ready = false;
+    for (let i = 0; i < 40; i++) {
+      if (document.querySelector(YKT_SEL.detail) || document.querySelector(YKT_SEL.pptSlide)) {
+        ready = true;
+        break;
+      }
+      await delay(0.5);
+    }
+    if (!ready) {
+      logStore.addLog("未检测到任务内容，请手动点击左侧章节后重试", "warning");
+      return;
+    }
+    logStore.addLog("等待页面加载完成，开始扫描任务点", "info");
+    await delay(1.5);
+    await yktExpandTree();
+
+    const pickNext = () => {
+      const list = yktJobs();
+      const activeIndex = list.findIndex((el) => el.classList.contains("is-active"));
+      const from = activeIndex < 0 ? 0 : activeIndex + 1;
+      for (let i = from; i < list.length; i++) {
+        const el = list[i];
+        if (!studyTags.includes(yktJobTag(el))) continue;
+        if (!restudy && yktJobDone(el)) continue;
+        return el;
+      }
+      return null;
+    };
+
+    for (let guard = 0; guard < 200; guard++) {
+      const forum = document.querySelector(YKT_SEL.forum);
+      if (forum && autoComment) {
+        logStore.addLog("发现任务点：讨论，开始自动评论", "primary");
+        try {
+          await yktPostComment(forum, logStore);
+        } catch (e) {
+          logStore.addLog(`自动评论失败：${e.message}`, "warning");
+        }
+      } else if (document.querySelector(YKT_SEL.pptSlide)) {
+        logStore.addLog("发现任务点：课件，开始自动阅读", "primary");
+        await useYktPptRead(logStore);
+      } else {
+        const media = document.querySelector(YKT_SEL.media);
+        if (!media) {
+          logStore.addLog("当前任务点不是视频，跳过", "warning");
+        } else if (!autoPlay) {
+          logStore.addLog("自动播放已关闭，跳过视频任务", "warning");
+        } else {
+          const active = yktJobs().find((el) => el.classList.contains("is-active"));
+          logStore.addLog(`发现任务点：${active ? yktJobTitle(active) : "当前视频"}（视频），开始学习`, "primary");
+          const initialRate = computeEffectiveRate();
+          if (readYktParam("视频设置", "自动倍速", false)) {
+            logStore.addLog(`自动倍速：使用播放器最大倍速 ${initialRate}x`, "info");
+          } else if (readYktParam("视频设置", "突破倍速", false)) {
+            logStore.addLog(`突破倍速：强制 ${initialRate}x（上限 8x）`, "info");
+          } else if (readYktParam("视频设置", "手动倍速", false)) {
+            logStore.addLog(`手动倍速：${initialRate}x（最大 ${readYktMaxRate()}x）`, "info");
+          }
+          const reason = await yktPlayMedia(media, { getRate: computeEffectiveRate });
+          logStore.addLog(
+            reason === "ended" ? "任务点已完成：视频播放完毕" : reason === "stalled" ? "任务点超时，跳过" : "任务点切换，继续下一节",
+            reason === "stalled" ? "warning" : "success",
+          );
+        }
+      }
+
+      const next = pickNext();
+      if (!next) {
+        const rest = yktJobs().filter((el) => !yktJobDone(el));
+        if (rest.length) {
+          const brief = rest.slice(0, 3).map((el) => `${yktJobTag(el) || "其他"}·${yktJobTitle(el)}`).join("、");
+          logStore.addLog(
+            `视频任务已处理完，剩余 ${rest.length} 个非视频任务需手动完成：${brief}${rest.length > 3 ? " 等" : ""}`,
+            "warning",
+          );
+        } else {
+          logStore.addLog("本页任务点已全部完成", "success");
+        }
+        break;
+      }
+      if (!autoSwitch) {
+        logStore.addLog(`自动切换已关闭，请手动切换任务：${yktJobTitle(next)}`, "warning");
+        break;
+      }
+      next.scrollIntoView({ block: "center" });
+      next.click();
+      logStore.addLog(`切换到下一节：${yktJobTitle(next)}`, "primary");
+      await afkWait(3000);
+    }
+  };
 
   const _sfc_main$3 =  vue.defineComponent({
     __name: "Index",
@@ -9215,6 +10326,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       
       
       const urlLogicPairs = [
+        { keyword: "/v2/web/studentLog", logic: useYktCourseLogic },
+        { keyword: "/v2/web/student-lesson-report", logic: useYktCourseLogic },
+        { keyword: "/ai-workspace/lms-graph", logic: useYktCourseLogic },
+        { keyword: "/m/v2/course/normalcourse/logs", logic: useYktCourseLogic },
         { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },   
         { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },          
         { keyword: "exam/preview", logic: useCxExamPreviewLogic },         
@@ -9252,7 +10367,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         for (const { keyword, logic } of urlLogicPairs) {
           if (url22.includes(keyword)) {
             isShow.value = true;
-            logStore.addLog(getCxModeLabel(), "info");
+            const modeLabel = getCxModeLabel();
+            if (modeLabel) logStore.addLog(modeLabel, "info");
+            startAfkHeartbeat();
             const _ppRunLogic = () => {
               logic();
             };
@@ -9629,11 +10746,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   }),
                   vue.createVNode(_component_el_tag, {
                     size: "small",
-                    type: vue.unref(configStore).platformName === "cx" ? "primary" : "success",
+                    type: vue.unref(configStore).platformName === "cx" ? "primary" : vue.unref(configStore).platformName === "ykt" ? "warning" : "success",
                     style: { "margin-left": "10px" }
                   }, {
                     default: vue.withCtx(() => [
-                      vue.createTextVNode(vue.toDisplayString(vue.unref(configStore).platformName === "cx" ? "学习通" : vue.unref(configStore).platformName === "zhs" ? "智慧树" : "未知"), 1)
+                      vue.createTextVNode(vue.toDisplayString(vue.unref(configStore).platformName === "cx" ? "学习通" : vue.unref(configStore).platformName === "zhs" ? "智慧树" : vue.unref(configStore).platformName === "ykt" ? "雨课堂" : "未知"), 1)
                     ]),
                     _: 1
                   }, 8, ["type"])
@@ -9715,6 +10832,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         configStore.platformName = "cx";  
       else if (url2.includes("zhihuishu"))
         configStore.platformName = "zhs";
+      else if (url2.includes("yuketang") || url2.includes("gdufemooc"))
+        configStore.platformName = "ykt";
       return (_ctx, _cache) => {
         return vue.openBlock(), vue.createBlock(_sfc_main$1);
       };
@@ -9781,6 +10900,169 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       return result;
     };
   };
+  const _ppShadowRoots = new WeakMap();
+  const hookAttachShadow = () => {
+    try {
+      const proto = _unsafeWindow.Element && _unsafeWindow.Element.prototype;
+      if (!proto || proto.__ppShadowHooked) return;
+      const origin = proto.attachShadow;
+      proto.attachShadow = function(init) {
+        const root = origin.apply(this, [init]);
+        try {
+          _ppShadowRoots.set(this, root);
+          this.__ppShadowRoot = root;
+        } catch (e) {}
+        return root;
+      };
+      proto.__ppShadowHooked = true;
+    } catch (e) {}
+  };
+  const readRecordedShadow = (scopeEl) => {
+    if (!scopeEl) return null;
+    try {
+      const list = [scopeEl, ...scopeEl.querySelectorAll("*")];
+      for (const el of list) {
+        const root = _ppShadowRoots.get(el);
+        if (root) return root;
+      }
+    } catch (e) {}
+    return null;
+  };
+  const ZHS_BRIDGE_SOURCE = `(function () {
+    if (window.__ppZhsBridge) return;
+    window.__ppZhsBridge = true;
+
+    try {
+      var originCall = Function.prototype.call;
+      Function.prototype.call = function () {
+        var args = arguments;
+        var result = originCall.apply(this, args);
+        try {
+          var mod = args[0];
+          var exp = args[1];
+          if (mod && mod.a && mod.a.version === "2.5.0" && exp && exp.exports && exp.exports.a &&
+              typeof exp.exports.a.install === "function" && !exp.exports.a.__ppWrapped) {
+            var install = exp.exports.a.install;
+            exp.exports.a.install = function () {
+              var a = arguments;
+              try {
+                a[0].mixin({
+                  mounted: function () {
+                    try { this.$el.__Ivue__ = this; } catch (e) {}
+                  }
+                });
+              } catch (e) {}
+              return install.apply(this, a);
+            };
+            exp.exports.a.__ppWrapped = true;
+          }
+        } catch (e) {}
+        return result;
+      };
+    } catch (e) {}
+
+    var roots = (window.__ppShadowRoots = []);
+    var wrapAttach = function (holder) {
+      try {
+        if (!holder || typeof holder.AttachShadow !== "function" || holder.__ppWrapped) return holder;
+        var orig = holder.AttachShadow;
+        holder.AttachShadow = function (init) {
+          var root = orig.apply(this, arguments);
+          try {
+            roots.push({ host: this, root: root });
+            this.__ppShadowRoot = root;
+          } catch (e) {}
+          return root;
+        };
+        holder.__ppWrapped = true;
+      } catch (e) {}
+      return holder;
+    };
+    try {
+      var cur = window.originFunction;
+      cur = wrapAttach(cur);
+      Object.defineProperty(window, "originFunction", {
+        configurable: true,
+        get: function () { return cur; },
+        set: function (v) { cur = wrapAttach(v); }
+      });
+    } catch (e) {}
+    try { wrapAttach(window.originFunction); } catch (e) {}
+    try {
+      var proto = Element.prototype;
+      var protoAttach = proto.attachShadow;
+      proto.attachShadow = function () {
+        var root = protoAttach.apply(this, arguments);
+        try { roots.push({ host: this, root: root }); this.__ppShadowRoot = root; } catch (e) {}
+        return root;
+      };
+    } catch (e) {}
+
+    setInterval(function () {
+      try {
+        var qs = document.querySelectorAll(".examPaper_subject");
+        for (var i = 0; i < qs.length; i++) {
+          var q = qs[i];
+          var scope = q.querySelector(".subject_describe") || q.querySelector(".smallStem_describe");
+          var sd = null;
+          if (scope) {
+            var all = [scope].concat([].slice.call(scope.querySelectorAll("*")));
+            for (var j = 0; j < all.length; j++) {
+              var el = all[j];
+              if (el.__ppShadowRoot) { sd = el.__ppShadowRoot; break; }
+              var vm = el.__Ivue__;
+              var vmSd = vm && vm._data && vm._data.shadowDom;
+              if (vmSd && vmSd.innerHTML) { sd = vmSd; break; }
+            }
+          }
+          if (!sd || !sd.innerHTML) continue;
+          var html = sd.innerHTML;
+          if (q.getAttribute("data-pp-stem") !== html) q.setAttribute("data-pp-stem", html);
+        }
+      } catch (e) {}
+    }, 400);
+  })();`;
+  const installZhsPageBridge = () => {
+    try {
+      if (document.documentElement.hasAttribute("data-pp-zhs-bridge")) return;
+      document.documentElement.setAttribute("data-pp-zhs-bridge", "1");
+      const script = document.createElement("script");
+      script.textContent = ZHS_BRIDGE_SOURCE;
+      (document.head || document.documentElement).appendChild(script);
+      script.remove();
+    } catch (e) {}
+  };
+  const hookOriginFunction = () => {
+    try {
+      const win = _unsafeWindow;
+      let current = win.originFunction;
+      const wrap = (holder) => {
+        try {
+          if (!holder || typeof holder.AttachShadow !== "function" || holder.__ppAttachWrapped) return holder;
+          const origin = holder.AttachShadow;
+          holder.AttachShadow = function(init) {
+            const root = origin.apply(this, [init]);
+            try {
+              _ppShadowRoots.set(this, root);
+              this.__ppShadowRoot = root;
+            } catch (e) {}
+            return root;
+          };
+          holder.__ppAttachWrapped = true;
+        } catch (e) {}
+        return holder;
+      };
+      current = wrap(current);
+      try {
+        Object.defineProperty(win, "originFunction", {
+          configurable: true,
+          enumerable: true,
+          get() { return current; },
+          set(value) { current = wrap(value); }
+        });
+      } catch (e) {}
+    } catch (e) {}
+  };
   const url = _unsafeWindow.location.href;
   
   
@@ -9796,6 +11078,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   if (url.includes("zhihuishu.com")) {
     hookWebpack();
     hookError();
+    hookAttachShadow();
+    hookOriginFunction();
+    installZhsPageBridge();
   }
 
   
