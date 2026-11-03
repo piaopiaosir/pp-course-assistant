@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.7.3
+// @version      3.7.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -15,6 +15,8 @@
 // @match        *://*.gdhkmooc.com/*
 // @match        *://*.sslibrary.com/*
 // @match        *://onlineexamh5new.zhihuishu.com/*
+// @match        *://*.zhihuishu.com/*
+// @match        *://*.hike-teaching-center.polymas.com/*
 // @match        *://*.yuketang.cn/*
 // @match        *://*.gdufemooc.cn/*
 // @require      https://lib.baomitu.com/vue/3.5.0/vue.global.prod.js
@@ -849,7 +851,20 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               {
                 name: "模式设置",
                 params: [
-                  { name: "答题", value: true, type: "boolean", exclusiveGroup: "zhs_mode" }
+                  { name: "正常模式", value: true, type: "boolean", exclusiveGroup: "zhs_mode" },
+                  { name: "仅答题", value: false, type: "boolean", exclusiveGroup: "zhs_mode" },
+                  { name: "仅视频", value: false, type: "boolean", exclusiveGroup: "zhs_mode" }
+                ]
+              },
+              {
+                name: "视频设置",
+                params: [
+                  { name: "正常播放", value: true, type: "boolean", locked: true },
+                  { name: "自动倍速", value: false, type: "boolean", breakBefore: true },
+                  { name: "自动切换", value: true, type: "boolean" },
+                  { name: "弹题作答", value: true, type: "boolean" },
+                  { name: "忽略习惯弹窗", value: false, type: "boolean" },
+                  { name: "播放倍速", value: 1, type: "number", min: 1, max: 1.5, step: 0.5 }
                 ]
               },
               {
@@ -2907,12 +2922,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                             triggerUiUpdate();
                           },
                           label: param.name,
-                          disabled: param.dependsOn ? (() => {
+                          disabled: param.locked === true ? true : (param.dependsOn ? (() => {
                             watchUiUpdate();
                             const parentPart = item;
                             const parentParam = parentPart.params.find(p => p.name === param.dependsOn.param);
                             return !parentParam || parentParam.value !== param.dependsOn.value;
-                          })() : false
+                          })() : false)
                         }, null, 8, ["modelValue", "onUpdate:modelValue", "label", "disabled"]);
                       }), 128))
                     ]),
@@ -3007,7 +3022,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                       return vue.openBlock(), vue.createElementBlock(vue.Fragment, {
                         key: index2
                       }, [
-                        (item.name === "视频设置" && (param.name === "规避检测" || param.name === "播放倍速" || param.name === "手动倍速")) || (item.name === "模式设置" && param.name === "正常模式") || (item.name === "模式设置" && param.name === "激活挂机") ? (vue.openBlock(), vue.createElementBlock("div", {
+                        param.breakBefore === true || (item.name === "视频设置" && (param.name === "规避检测" || param.name === "播放倍速" || param.name === "手动倍速")) || (item.name === "模式设置" && param.name === "正常模式") || (item.name === "模式设置" && param.name === "激活挂机") ? (vue.openBlock(), vue.createElementBlock("div", {
                           key: "br-" + index2,
                           style: { "width": "100%", "height": "0" }
                         })) : vue.createCommentVNode("", true),
@@ -3189,12 +3204,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                             }
                           },
                           label: param.name,
-                          disabled: param.dependsOn ? (() => {
+                          disabled: param.locked === true ? true : (param.dependsOn ? (() => {
                             watchUiUpdate();
                             const parentPart = item;
                             const parentParam = parentPart.params.find(p => p.name === param.dependsOn.param);
                             return !parentParam || parentParam.value !== param.dependsOn.value;
-                          })() : false
+                          })() : false)
                         }, null, 8, ["modelValue", "onUpdate:modelValue", "label", "disabled"])) : (vue.openBlock(), vue.createBlock(_component_el_form_item, {
                           key: 1,
                           label: param.name,
@@ -3270,8 +3285,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                         }
                       }, "💡 模拟播放倍速与正常播放一致，使用播放器允许的最大值")) : vue.createCommentVNode("", true),
                       
-                      !item.params.some(p => p.name === "模拟播放" && p.value) && !(item.params.some(p => p.name === "突破倍速") && (item.params.some(p => p.name === "自动倍速" && p.value) || item.params.some(p => p.name === "突破倍速" && p.value) || item.params.some(p => p.name === "手动倍速" && p.value))) ? (vue.openBlock(), vue.createElementBlock("div", {
-                        key: 1,
+                      item.params.some(p => p.name === "自动倍速" && p.value) && !item.params.some(p => p.name === "突破倍速") ? (vue.openBlock(), vue.createElementBlock("div", {
+                        key: 2,
                         style: {
                           "font-size": "11px",
                           "color": "#4caf50",
@@ -3281,8 +3296,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                           "border-radius": "6px",
                           "line-height": "1.5"
                         }
-                      }, "ℹ️ 普通播放倍速受播放器限制，使用播放器允许的最大值")) : vue.createCommentVNode("", true),
+                      }, "ℹ️ 自动倍速已经开启，自动倍速受播放器限制，自动使用视频允许的最大值")) : vue.createCommentVNode("", true),
                       
+                      vue.createCommentVNode("", true),
                     ])) : vue.createCommentVNode("", true),
                     
                     item.params.some(p => p.name === "答案校验" && p.value) ? (vue.openBlock(), vue.createElementBlock("div", {
@@ -4719,6 +4735,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             if (Array.isArray(sub.blanks) && sub.blanks.length > 0) {
               return sub.blanks.every((blankEl) => this.isBlankFilled(blankEl));
             }
+            if (sub.el && sub.el.querySelector("textarea, iframe, .InpDIV")) {
+              return this.isBlankFilled(sub.el);
+            }
             return (sub.elements || []).some((el) =>
               el.querySelector(".check_answer, .onChecked") ||
               (el.classList && el.classList.contains("check_answer"))
@@ -5816,7 +5835,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       let type = String(question.type);
       const isZhs = String(question.workType) === "zhs";
       const supportedTypes = isZhs
-        ? ["0", "1", "2", "3", "8", "9", "11", "13", "14"]
+        ? ["0", "1", "2", "3"]
         : ["0", "1", "2", "3", "8", "9", "10", "11", "13", "14", "20", "24"];
       if (!supportedTypes.includes(type)) {
         if (type === "999" || !type || type === "undefined" || type === "null") {
@@ -6368,6 +6387,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               title: subTitle,
               options: optionTexts,
               elements: liList,
+              el: subItem,
               blanks: Array.from(subItem.querySelectorAll(".blankItemDiv"))
             };
           });
@@ -8300,7 +8320,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     
     const playMediaDirectly = async (mediaType, iframeDocument) => {
       return new Promise((resolve) => {
-        logStore.addLog(`正在尝试播放${mediaType}，请稍等5s`, "primary");
+        const mediaName = (() => {
+          try {
+            const el = (iframeDocument && iframeDocument.querySelector(".prev_title")) || document.querySelector(".prev_title");
+            const val = el ? String(el.textContent || "").trim().replace(/\s+/g, " ") : "";
+            return val.slice(0, 40);
+          } catch (e) {
+            return "";
+          }
+        })();
+        logStore.addLog(`正在尝试播放${mediaName || mediaType}，请稍等5s`, "primary");
         
         const autoMaxRate = cxVideoParamValue("自动倍速", false);
         const playbackRateParam = cxVideoParam("播放倍速");
@@ -8378,6 +8407,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (mediaElement && !isExecuted) {
             await mediaElement.pause();
             mediaElement.muted = true;
+            ppMuteOnce(mediaElement);
             await mediaElement.play();
             
             mediaElement.playbackRate = playbackRate;
@@ -9906,6 +9936,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     hookError();
     const logStore = useLogStore();
     useConfigStore();
+    if (!zhStudyTuning().answerOn) {
+      logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
+      return;
+    }
     logStore.addLog(`检测到用户进入到答题页面`, "primary");
     logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     
@@ -9944,6 +9978,1033 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       }
     }, 500);
   };
+
+  const ZH_SPEED_CEILING = 1.5;
+
+  let _zhSpeedCeilingCache = 0;
+  const zhSpeedCeiling = () => {
+    try {
+      const scope = document.querySelector(".controlsBar") || document;
+      let max = 0;
+      scope.querySelectorAll("span, div, li, button").forEach((el) => {
+        if (el.children.length) return;
+        const label = (el.textContent || "").trim();
+        if (!/^\d+(\.\d+)?x$/i.test(label)) return;
+        const val = parseFloat(label);
+        if (Number.isFinite(val) && val > max) max = val;
+      });
+      if (max > 0 && max > _zhSpeedCeilingCache) _zhSpeedCeilingCache = max;
+    } catch (e) {}
+    return _zhSpeedCeilingCache || ZH_SPEED_CEILING;
+  };
+  const ZH_STUDY_PART = "视频设置";
+
+  const zhSleep = (sec) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(sec) || 0) * 1e3));
+  const zhPick = (sel, root) => {
+    try {
+      return (root || document).querySelector(sel);
+    } catch (e) {
+      return null;
+    }
+  };
+  const zhPickAll = (sel, root) => {
+    try {
+      return Array.prototype.slice.call((root || document).querySelectorAll(sel));
+    } catch (e) {
+      return [];
+    }
+  };
+  const zhTxtOf = (el, fallback) => {
+    const text = el && el.textContent ? el.textContent.replace(/\s+/g, " ").trim() : "";
+    if (text) return text;
+    return fallback === undefined ? "" : fallback;
+  };
+  const zhVisible = (el) => {
+    try {
+      if (!el || !el.isConnected) return false;
+      const box = el.getBoundingClientRect();
+      if (!box.width && !box.height) return false;
+      const style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+  const zhTapNode = (el) => {
+    if (!el) return false;
+    try {
+      el.scrollIntoView({ block: "center", inline: "nearest" });
+    } catch (e) {}
+    const box = (() => {
+      try {
+        return el.getBoundingClientRect();
+      } catch (e) {
+        return { left: 0, top: 0, width: 1, height: 1 };
+      }
+    })();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    let hit = el;
+    try {
+      hit = document.elementFromPoint(x, y) || el;
+    } catch (e) {
+      hit = el;
+    }
+    const atom = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: 1 };
+    const fire = (node, type, extra) => {
+      try {
+        node.dispatchEvent(new MouseEvent(type, Object.assign({}, atom, extra)));
+      } catch (e) {}
+    };
+    fire(hit, "mousedown");
+    fire(hit, "mouseup", { buttons: 0 });
+    fire(hit, "click", { buttons: 0 });
+    return true;
+  };
+
+  const zhRuntime = {
+    epoch: 0,
+    idle: 0,
+    notice: {},
+    lastQuizAt: 0,
+    lastAdvanceAt: 0,
+    quizSignature: "",
+    booted: false
+  };
+
+  const zhLogCadence = (log, key, message, type, gapSec) => {
+    const now = Date.now();
+    const last = zhRuntime.notice[key] || 0;
+    if (now - last < (gapSec === undefined ? 30 : gapSec) * 1e3) return;
+    zhRuntime.notice[key] = now;
+    log.addLog(message, type || "primary");
+  };
+
+  const zhStudyTuning = () => {
+    const readParam = (partName, paramName, fallback) => {
+      try {
+        const parts = useConfigStore().platformParams?.zhs?.parts || [];
+        const part = parts.find((p) => p.name === partName);
+        const param = (part?.params || []).find((p) => p.name === paramName);
+        if (!param) return fallback;
+        return param.value === undefined || param.value === null ? fallback : param.value;
+      } catch (e) {
+        return fallback;
+      }
+    };
+    const speedRaw = Number(readParam(ZH_STUDY_PART, "播放倍速", zhSpeedCeiling())) || zhSpeedCeiling();
+    const onlyAnswer = readParam("模式设置", "仅答题", false) === true;
+    const onlyVideo = readParam("模式设置", "仅视频", false) === true;
+    return {
+      modeOn: !onlyAnswer,
+      answerOn: !onlyVideo,
+      autoPlay: readParam(ZH_STUDY_PART, "正常播放", true) !== false,
+      autoSpeed: readParam(ZH_STUDY_PART, "自动倍速", true) !== false,
+      speed: Math.min(Math.max(1, speedRaw), zhSpeedCeiling()),
+      autoNext: readParam(ZH_STUDY_PART, "自动切换", true) !== false,
+      quizAuto: readParam(ZH_STUDY_PART, "弹题作答", true) !== false,
+      ignoreHabit: readParam(ZH_STUDY_PART, "忽略习惯弹窗", false) === true,
+      captchaNotify: true
+    };
+  };
+
+
+  const zhNativeRateSetter = (() => {
+    try {
+      const desc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "playbackRate");
+      return desc && typeof desc.set === "function" ? desc.set : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const zhWriteRate = (media, rate) => {
+    try {
+      if (media.__ppZhRateSet) {
+        media.__ppZhRateSet.call(media, rate);
+      } else if (zhNativeRateSetter) {
+        media.__ppZhRateSet = zhNativeRateSetter;
+        zhNativeRateSetter.call(media, rate);
+      } else {
+        media.playbackRate = rate;
+      }
+    } catch (e) {}
+  };
+
+  const zhPinSpeed = (media, wanted) => {
+    if (!media) return 1;
+    const rate = Math.min(Math.max(1, Number(wanted) || 1), zhSpeedCeiling());
+    try {
+      if (!media.__ppZhSpeedHeld) {
+        media.__ppZhSpeedHeld = true;
+        zhWriteRate(media, rate);
+        Object.defineProperty(media, "playbackRate", {
+          configurable: true,
+          enumerable: true,
+          get() {
+            return media.__ppZhSpeed || rate;
+          },
+          set() {}
+        });
+      } else {
+        zhWriteRate(media, rate);
+      }
+      media.__ppZhSpeed = rate;
+    } catch (e) {}
+    return rate;
+  };
+
+  const zhFindMedia = async (selectors, timeoutSec) => {
+    const list = Array.isArray(selectors) ? selectors : [selectors];
+    const deadline = Date.now() + (timeoutSec === undefined ? 8 : timeoutSec) * 1e3;
+    while (Date.now() < deadline) {
+      for (const sel of list) {
+        const media = zhPick(sel);
+        if (media && (media.currentSrc || media.src || media.readyState > 0)) return media;
+      }
+      await zhSleep(0.4);
+    }
+    return null;
+  };
+
+  const zhKeepPlaying = async (media, tune) => {
+    if (!media) return false;
+    const log = useLogStore();
+    ppMuteOnce(media);
+    if (tune) zhPinSpeed(media, tune.autoSpeed ? zhSpeedCeiling() : tune.speed);
+    const markPlayed = () => {
+      if (media.__ppZhPlayLogged) return;
+      media.__ppZhPlayLogged = true;
+      try {
+        log.addLog(`video播放成功，倍速: ${Number(media.playbackRate) || 1}x`, "primary");
+      } catch (e) {}
+    };
+    if (!media.paused && !media.ended) {
+      markPlayed();
+      return true;
+    }
+    if (!media.__ppZhPlayAnnounced) {
+      media.__ppZhPlayAnnounced = true;
+      try {
+        const holder =
+          zhPick(".chapter-content-second.current") ||
+          zhPick(".chapter-item.current") ||
+          zhPick(".child-main.current") ||
+          zhPick(".video.current_play");
+        const mediaName = holder ? String(zhTxtOf(holder) || "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+        log.addLog(`正在尝试播放${mediaName || "video"}，请稍等5s`, "primary");
+      } catch (e) {}
+    }
+    try {
+      await media.play();
+      markPlayed();
+      return true;
+    } catch (e) {
+      try {
+        media.muted = true;
+        await media.play();
+        markPlayed();
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    }
+  };
+
+
+  const zhVmChainOf = (node) => {
+    const chain = [];
+    let cursor = node;
+    let depth = 0;
+    while (cursor && depth < 14 && !chain.length) {
+      const vm = cursor.__vue__;
+      if (vm) {
+        let up = vm;
+        let guard = 0;
+        while (up && guard < 8) {
+          chain.push(up);
+          up = up.$parent;
+          guard += 1;
+        }
+      }
+      cursor = cursor.parentElement;
+      depth += 1;
+    }
+    return chain;
+  };
+
+  const zhVmAnswerQuiz = async (root, log) => {
+    const chain = zhVmChainOf(root);
+    if (!chain.length) return false;
+    const holder = chain.find((vm) => vm && (vm.topicInfo || vm.testDialog !== undefined));
+    if (!holder) return false;
+    const payload = holder.topicInfo || {};
+    const groups = payload.lessonTestQuestionUseInterfaceDtos || payload.testQuestionUseInterfaceDtos || payload.topicDtos || [];
+    const bucket = (groups && groups[0]) || {};
+    const question = bucket.testQuestion || bucket;
+    const options = (question && (question.questionOptions || question.questionOption)) || [];
+    const keys = bucket.answerUs || (question && question.answerUs) || [];
+    const invokers = ["topicClickQot", "topicClickOption", "chooseTopicOption", "clickTopicOption", "selectQuestionOption"]
+      .map((name) => holder[name])
+      .filter((fn) => typeof fn === "function");
+    if (!options.length || !keys.length || !invokers.length) return false;
+    let answered = 0;
+    for (const option of options) {
+      const key = option.sortUs !== undefined ? option.sortUs : option.sort;
+      if (keys.indexOf(key) === -1) continue;
+      try {
+        invokers[0].call(holder, option);
+        answered += 1;
+      } catch (e) {}
+      await zhSleep(0.6);
+    }
+    if (!answered) return false;
+    log.addLog(`弹题已按页面数据作答（${answered} 个选项）`, "success");
+    await zhSleep(1.2);
+    if (holder.testDialog !== undefined) {
+      try {
+        holder.testDialog = false;
+      } catch (e) {}
+    }
+    return true;
+  };
+
+
+  const zhQuizRoot = () => {
+    const legacy = zhPick("#playTopic-dialog");
+    if (zhVisible(legacy)) return legacy;
+    const modern = zhPick(".ai-test-question-wrapper");
+    if (zhVisible(modern)) return modern;
+    const wisdom = zhPick(".ai-class-exercise-dialog");
+    if (zhVisible(wisdom)) return wisdom;
+    return null;
+  };
+
+  const zhQuizStep = async (tune, log) => {
+    const root = zhQuizRoot();
+    if (!root) {
+      zhRuntime.quizSignature = "";
+      return false;
+    }
+    const signature = zhTxtOf(root).slice(0, 80);
+    const now = Date.now();
+    if (signature && signature === zhRuntime.quizSignature && now - zhRuntime.lastQuizAt < 15000) return false;
+    if (now - zhRuntime.lastQuizAt < 3000) return false;
+    zhRuntime.quizSignature = signature;
+    const handled = await zhHandleQuiz(root, tune, log);
+    zhRuntime.lastQuizAt = Date.now();
+    return handled;
+  };
+
+  const zhHandleQuiz = async (root, tune, log) => {
+    if (await zhVmAnswerQuiz(root, log)) return true;
+    if (!tune.quizAuto) {
+      zhLogCadence(log, "quiz-off", "出现弹题，但「弹题作答」已关闭，请手动处理后继续", "warning", 20);
+      return true;
+    }
+    zhLogCadence(log, "quiz-guess", "弹题未取到答案，按配置随机作答后关闭", "warning", 8);
+    if (root.id === "playTopic-dialog") {
+      const pages = zhPickAll("#playTopic-dialog .el-pager .number");
+      for (const page of pages) {
+        if (!page.isConnected) continue;
+        if (!/(^|\s)active(\s|$)/.test(page.className || "")) {
+          zhTapNode(page);
+          await zhSleep(0.5);
+        }
+        const items = zhPickAll("#playTopic-dialog ul .topic-item");
+        if (!items.length) continue;
+        zhTapNode(items[Math.floor(Math.random() * items.length)]);
+        await zhSleep(0.8);
+      }
+      await zhSleep(0.6);
+      zhTapNode(zhPick("#playTopic-dialog .close-btn") || zhPick("#playTopic-dialog .btn"));
+      return true;
+    }
+    if (root.classList.contains("ai-test-question-wrapper")) {
+      if (zhPick(".done", root)) {
+        zhTapNode(zhPick(".close-box", root));
+        return true;
+      }
+      const options = zhPickAll(".options .option", root);
+      if (options.length) {
+        zhTapNode(options[Math.floor(Math.random() * options.length)]);
+        await zhSleep(0.8);
+      }
+      zhTapNode(zhPick(".submit-btn .submits", root) || zhPick(".submit-btn", root));
+      await zhSleep(0.8);
+      zhTapNode(zhPick(".close-box", root));
+      return true;
+    }
+    const items = zhPickAll(".ques-list .item", root);
+    for (const item of items) {
+      const options = zhPickAll(".option", item).filter(zhVisible);
+      if (!options.length) continue;
+      zhTapNode(options[Math.floor(Math.random() * options.length)]);
+      await zhSleep(0.8);
+    }
+    const footer = zhPick(".el-dialog__footer .el-button.btn", root) || zhPick(".el-dialog__footer .el-button", root);
+    zhTapNode(footer);
+    await zhSleep(0.8);
+    zhTapNode(zhPick(".header-icon", root) || zhPick(".header-box .close-box", root));
+    return true;
+  };
+
+
+  const zhCaptchaNode = () => {
+    const onScreen = (el) => {
+      if (!el || !zhVisible(el)) return false;
+      try {
+        const box = el.getBoundingClientRect();
+        const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+        return box.bottom > 0 && box.right > 0 && box.top < vh && box.left < vw;
+      } catch (e) {
+        return false;
+      }
+    };
+    const legacy = zhPick(".yidun_popup, .yidun_modal, .yidun_intellisense, .geetest_panel, .verify-wrap");
+    if (onScreen(legacy)) return legacy;
+    const tcaptcha = zhPick("#tcaptcha_transform_dy, .tcaptcha-transform");
+    if (onScreen(tcaptcha)) return tcaptcha;
+    const yidunBox = zhPick("#captchaYidun");
+    if (yidunBox) {
+      let height = 0;
+      try {
+        height = yidunBox.getBoundingClientRect().height;
+      } catch (e) {}
+      if (height >= 50 && onScreen(yidunBox)) return yidunBox;
+    }
+    return null;
+  };
+
+  const zhCaptchaHold = async (tune, log) => {
+    if (!zhCaptchaNode()) return false;
+    log.addLog("检测到平台验证码，已暂停学习流程；验证完成后会自动继续", "danger");
+    const originTitle = document.title;
+    let flasher = null;
+    if (tune.captchaNotify) {
+      let flip = false;
+      flasher = setInterval(() => {
+        flip = !flip;
+        try {
+          document.title = flip ? "【需验证】" + originTitle : originTitle;
+        } catch (e) {}
+      }, 900);
+    }
+    const startedAt = Date.now();
+    while (zhCaptchaNode()) await zhSleep(1.5);
+    if (flasher) clearInterval(flasher);
+    try {
+      document.title = originTitle;
+    } catch (e) {}
+    log.addLog(`验证码已通过（等待 ${Math.round((Date.now() - startedAt) / 1e3)} 秒），继续学习`, "success");
+    return true;
+  };
+
+
+  const zhHabitNode = () =>
+    zhPickAll(".el-overlay, .el-dialog__wrapper, .el-message-box__wrapper").find(
+      (el) => zhVisible(el) && zhTxtOf(el).indexOf("保持良好的学习习惯") >= 0
+    );
+
+  const zhHabitStep = async (tune, log) => {
+    const node = zhHabitNode();
+    if (!node) return false;
+    if (!tune.ignoreHabit) {
+      zhLogCadence(
+        log,
+        "habit-pause",
+        "检测到习惯分提示（当天学习时长已满），已暂停自动切换；可在「学习设置」开启忽略",
+        "warning",
+        60
+      );
+      return true;
+    }
+    zhTapNode(zhPick(".el-dialog__header img", node) || zhPick(".el-dialog__headerbtn", node) || zhPick("img", node));
+    log.addLog("已忽略习惯分提示并继续（该课程的平时习惯分可能受影响）", "warning");
+    await zhSleep(1);
+    return true;
+  };
+
+
+  const zhClearNoise = () => {
+    zhPickAll(".v-modal, .brush-warning").forEach((el) => {
+      try {
+        el.remove();
+      } catch (e) {}
+    });
+    const tip = zhPickAll(".el-dialog").find((d) => zhVisible(d) && zhTxtOf(d).indexOf("温馨提示") >= 0);
+    if (tip) {
+      const btn = zhPick(".el-button.btn", tip);
+      if (btn && zhTxtOf(btn).indexOf("我知道了") >= 0) zhTapNode(btn);
+    }
+    const readTip = zhPick(".dialog-read .iconguanbi");
+    if (readTip && zhVisible(readTip.closest ? readTip.closest(".dialog-read") : readTip)) zhTapNode(readTip);
+  };
+
+  const zhPptSweep = async (boxSelector, log) => {
+    const boxes = Array.isArray(boxSelector) ? boxSelector : [boxSelector];
+    const find = (sel) => {
+      for (const one of boxes) {
+        const node = zhPick(one);
+        const hit = node && zhPick(sel, node);
+        if (hit) return hit;
+      }
+      return zhPick(sel);
+    };
+    const readPage = (sel) => parseInt(zhTxtOf(find(sel)), 10) || 0;
+    const current = readPage(".page-current");
+    const total = readPage(".page-total");
+    if (!total) return false;
+    if (current >= total) return true;
+    log.addLog(`发现 PPT 资源，共 ${total} 页，开始自动翻页`, "primary");
+    let guard = 0;
+    while (guard < total + 6) {
+      const nowCurrent = readPage(".page-current");
+      const nowTotal = readPage(".page-total");
+      if (!nowTotal || nowCurrent >= nowTotal) break;
+      zhTapNode(find(".next-page-btn"));
+      await zhSleep(1.1);
+      guard += 1;
+    }
+    log.addLog("PPT 翻页完成", "success");
+    return true;
+  };
+
+  const zhBookSweep = async (boxSelector, log) => {
+    const box = zhPick(boxSelector);
+    if (!box) return false;
+    const pages = zhPickAll(".book-mark .canvas-wrapper");
+    const pageHeight = (pages[0] && pages[0].getBoundingClientRect().height) || 420;
+    log.addLog("发现电子书资源，开始自动翻阅", "primary");
+    let guard = 0;
+    while (guard < 400 && box.scrollTop + box.clientHeight < box.scrollHeight - 4) {
+      box.scrollTo({ top: Math.min(box.scrollTop + Math.max(pageHeight * 0.9, 200), box.scrollHeight), behavior: "smooth" });
+      await zhSleep(0.9);
+      guard += 1;
+    }
+    log.addLog("电子书翻阅完成", "success");
+    return true;
+  };
+
+  const zhSectionProgress = (el) => {
+    const text = zhTxtOf(zhPick(".collapse-info-progress .progress-text", el));
+    const matched = text.replace(/\s/g, "").match(/(\d+)\/(\d+)/);
+    if (!matched) return null;
+    const done = parseInt(matched[1], 10);
+    const total = parseInt(matched[2], 10);
+    if (Number.isNaN(done) || Number.isNaN(total)) return null;
+    return { done, total };
+  };
+
+
+  const zhStageLegacyShare = {
+    id: "legacy-share",
+    label: "共享课",
+    match: (host) => /studyvideoh5\.zhihuishu\.com/.test(host),
+    chapters: () => zhPickAll("li.video, .clearfix.video"),
+    current: () => zhPick(".video.current_play") || zhPick(".current_play"),
+    isDone: (el) => !!(el && zhPick(".time_icofinish", el)),
+    async step(tune, log) {
+      zhClearNoise();
+      const media = await zhFindMedia(["#vjs_container_html5_api", "#vjs_container video", "video"], 6);
+      if (media) {
+        if (media.ended) {
+          const current = this.current();
+          if (current && this.isDone(current)) return await this.advance(tune, log);
+          zhLogCadence(log, "legacy-replay", "视频播放结束但未计入完成，重播补齐时长", "warning", 25);
+          try {
+            media.currentTime = 1;
+          } catch (e) {}
+        }
+        await zhKeepPlaying(media, tune);
+        return true;
+      }
+      const pendingCurrent = this.current();
+      if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
+      return false;
+    },
+    async advance(tune, log) {
+      if (!tune.autoNext) return false;
+      const list = this.chapters();
+      const pending = list.filter((el) => !this.isDone(el));
+      if (!pending.length) {
+        zhLogCadence(log, "legacy-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const current = this.current();
+      const index = pending.indexOf(current);
+      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
+      log.addLog(`切换到下一节：${zhTxtOf(zhPick(".catalogue_title", target), "下一个视频")}`, "primary");
+      zhTapNode(target);
+      await zhSleep(2.4);
+      return true;
+    }
+  };
+
+  const zhStageNewShare = {
+    id: "new-share",
+    label: "新共享课",
+    match: (host) => /studyplush5\.zhihuishu\.com|studywisdomh5\.zhihuishu\.com/.test(host),
+    chapters: () => zhPickAll(".child-main").filter((el) => el.parentElement && zhPick(".child-time", el.parentElement)),
+    current: () => zhPick(".child-main.current"),
+    isDone: (el) => !!(el && el.parentElement && zhPick(".finish-icon", el.parentElement)),
+    async step(tune, log) {
+      zhClearNoise();
+      const media = await zhFindMedia(["video", "audio"], 6);
+      if (media) {
+        if (media.ended) {
+          const current = this.current();
+          if (current && this.isDone(current)) return await this.advance(tune, log);
+          try {
+            media.currentTime = 1;
+          } catch (e) {}
+        }
+        await zhKeepPlaying(media, tune);
+        return true;
+      }
+      const pendingCurrent = this.current();
+      if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
+      return false;
+    },
+    async advance(tune, log) {
+      if (!tune.autoNext) return false;
+      const list = this.chapters();
+      const pending = list.filter((el) => !this.isDone(el));
+      if (!pending.length) {
+        zhLogCadence(log, "newshare-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const current = this.current();
+      const index = pending.indexOf(current);
+      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
+      log.addLog(`切换到下一节：${zhTxtOf(target.parentElement, "下一节")}`, "primary");
+      zhTapNode(target);
+      await zhSleep(2.4);
+      return true;
+    }
+  };
+
+  const zhStageWisdomMooc = {
+    id: "wisdom-mooc",
+    label: "新智慧共享课",
+    match: (host) => /wisdom-mooc\.zhihuishu\.com/.test(host),
+    chapters: () => {
+      const flat = [];
+      zhPickAll(".chapter-content .chapter-item").forEach((item) => {
+        const children = zhPickAll(".chapter-content-second", item);
+        if (children.length) flat.push.apply(flat, children);
+        else flat.push(item);
+      });
+      return flat;
+    },
+    current: () => zhPick(".chapter-content-second.current") || zhPick(".chapter-item.current"),
+    isDone: (el) => !!(el && zhPick(".finish-icon", el)),
+    async step(tune, log) {
+      zhClearNoise();
+      const mastery = zhPick(".masterylevel-body");
+      if (zhVisible(mastery)) {
+        zhTapNode(zhPick(".header-box .close-box") || zhPick(".header-icon"));
+        log.addLog("已关闭掌握度弹窗", "primary");
+        await zhSleep(1);
+        return true;
+      }
+      const media = await zhFindMedia(["video", "audio"], 6);
+      if (media) {
+        if (media.ended) {
+          const current = this.current();
+          if (!current || !this.isDone(current)) {
+            zhLogCadence(log, "wisdom-replay", "当前节点未出现完成标记，重新播放补齐时长", "warning", 25);
+            try {
+              media.currentTime = 1;
+            } catch (e) {}
+          } else {
+            return await this.advance(tune, log);
+          }
+        }
+        await zhKeepPlaying(media, tune);
+        return true;
+      }
+      const pendingCurrent = this.current();
+      if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
+      return false;
+    },
+    async advance(tune, log) {
+      if (!tune.autoNext) return false;
+      const list = this.chapters();
+      const pending = list.filter((el) => !this.isDone(el));
+      if (!pending.length) {
+        zhLogCadence(log, "wisdom-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const current = this.current();
+      const index = pending.indexOf(current);
+      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
+      log.addLog(`切换到下一节：${zhTxtOf(target, "下一节")}`, "primary");
+      zhTapNode(target);
+      await zhSleep(2.6);
+      return true;
+    }
+  };
+
+  const ZH_CARD_SELECTORS = ["[class*=\"card-container\"]", ".resources-list .resources-item"];
+  const zhCardList = () => {
+    for (const sel of ZH_CARD_SELECTORS) {
+      const found = zhPickAll(sel);
+      if (found.length) return found;
+    }
+    return [];
+  };
+  const zhCardKind = (card) => {
+    const icon = (card && zhPick(".icon-box", card)) || (card && zhPick(".file-type", card));
+    const cls = (icon && icon.className) || "";
+    if (/video/.test(cls)) return "video";
+    if (/book/.test(cls)) return "book";
+    if (/ppt|other/.test(cls)) return "ppt";
+    if (/text/.test(cls)) return "text";
+    if (/link/.test(cls)) return "link";
+    return "unknown";
+  };
+  const zhCardDone = (card) => {
+    const flag = card && zhPick(".finished-icon", card);
+    if (!flag) return false;
+    const text = zhTxtOf(flag);
+    return !text || text.indexOf("已完成") >= 0;
+  };
+
+  const zhStageCard = {
+    id: "card",
+    label: "新形态课程",
+    match: (host) => /ai-smart-course-student-pro\.zhihuishu\.com|smartcoursestudent\.zhihuishu\.com|fusioncourseh5\.zhihuishu\.com/.test(host),
+    chapters: () => zhPickAll(".clearfix.video"),
+    chapterDone: (el) => !!(el && (zhPick(".finish-icon", el) || zhPick(".time_icofinish", el))),
+    activeCard() {
+      return zhCardList().find((card) => /(^|\s)active(\s|$)/.test(card.className || "")) || zhCardList()[0] || null;
+    },
+    async chapterStep(tune, log) {
+      const media = await zhFindMedia(["#vjs_container video", "#vjs_container_html5_api", "video", "audio"], 6);
+      if (media) {
+        if (media.ended) {
+          const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
+          if (current && this.chapterDone(current)) return await this.chapterAdvance(tune, log);
+          try {
+            media.currentTime = 1;
+          } catch (e) {}
+        }
+        await zhKeepPlaying(media, tune);
+        return true;
+      }
+      return await this.chapterAdvance(tune, log);
+    },
+    async chapterAdvance(tune, log) {
+      if (!tune.autoNext) return false;
+      const list = this.chapters();
+      const pending = list.filter((el) => !this.chapterDone(el));
+      if (!pending.length) {
+        zhLogCadence(log, "fusion-chapter-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
+      const index = pending.indexOf(current);
+      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
+      log.addLog(`切换到下一节：${zhTxtOf(zhPick(".title", target) || zhPick(".catalogue_title", target) || target, "下一个视频")}`, "primary");
+      zhTapNode(target);
+      await zhSleep(2.4);
+      return true;
+    },
+    async step(tune, log) {
+      zhClearNoise();
+      const popup = zhPick(".courseRemind.khfaPop");
+      if (popup && zhVisible(popup)) {
+        zhTapNode(zhPick(".header-slot-box .el-icon-error", popup));
+        log.addLog("已关闭课程提醒弹窗", "primary");
+      }
+      if (!zhCardList().length) return await this.chapterStep(tune, log);
+      const card = this.activeCard();
+      const kind = card ? zhCardKind(card) : "unknown";
+      if (kind === "video") {
+        const media = await zhFindMedia(["#vjs_container video", ".video-player-wrapper video", "video"], 6);
+        if (media) {
+          if (media.ended) {
+            if (card && zhCardDone(card)) return await this.advance(tune, log);
+            try {
+              media.currentTime = 1;
+            } catch (e) {}
+          }
+          await zhKeepPlaying(media, tune);
+          return true;
+        }
+      }
+      if (kind === "ppt") {
+        if (await zhPptSweep([".ppt-preview-container", ".ppt-btn-container"], log)) return true;
+      }
+      if (kind === "book") {
+        if (await zhBookSweep(".preview-section .book-mark .book-container, .book-container", log)) return true;
+      }
+      if (kind === "text" || kind === "link") {
+        zhLogCadence(log, "card-passive", "文本/链接类资源无法自动完成，已跳过", "warning", 120);
+        return await this.advance(tune, log);
+      }
+      return await this.advance(tune, log);
+    },
+    async advance(tune, log) {
+      if (!tune.autoNext) return false;
+      if (!zhCardList().length) return await this.chapterAdvance(tune, log);
+      const cards = zhCardList();
+      const activeIndex = cards.findIndex((card) => /(^|\s)active(\s|$)/.test(card.className || ""));
+      const pending = cards.filter((card) => !zhCardDone(card));
+      if (pending.length) {
+        const after = pending.find((card) => cards.indexOf(card) > activeIndex);
+        const target = after || pending[0];
+        log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(".common-text, .video-title, .basic-info-video-card-container")) || "下一个资源"}`, "primary");
+        zhTapNode(zhPick(".basic-info-video-card-container", target) || zhPick(".common-text", target) || target);
+        await zhSleep(2.4);
+        return true;
+      }
+      const sections = zhPickAll(".section-item-collapse-info");
+      if (!sections.length) {
+        zhLogCadence(log, "card-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const activeSection = sections.find((el) => /(^|\s)active(\s|$)/.test(el.className || ""));
+      const unfinished = sections.filter((el) => {
+        const progress = zhSectionProgress(el);
+        return !progress || progress.done < progress.total;
+      });
+      if (!unfinished.length) {
+        zhLogCadence(log, "card-section-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const activePos = unfinished.indexOf(activeSection);
+      const nextSection = activePos >= 0 && unfinished[activePos + 1] ? unfinished[activePos + 1] : unfinished[0];
+      log.addLog(`切换到下一节：${zhTxtOf(zhPick(".section-item-collapse-title", nextSection), "下一章")}`, "primary");
+      zhTapNode(nextSection);
+      await zhSleep(2.8);
+      return true;
+    }
+  };
+
+  const zhStagePractice = {
+    id: "practice",
+    label: "校内课 / 翻转课",
+    match: (host) => /hike\.zhihuishu\.com|wenda\.zhihuishu\.com|hike-teaching-center\.polymas\.com/.test(host),
+    profiles: [
+      {
+        list: ".file-item",
+        current: ".file-item.active",
+        title: "#sourceTit",
+        done: ".icon-finish",
+        media: "#mediaPlayer, video, audio",
+        rate: ".rate"
+      },
+      {
+        list: ".el-tree-node",
+        current: ".el-tree-node.is-current",
+        title: ".file-name",
+        done: "label.success",
+        media: "video, audio",
+        leafOnly: true
+      },
+      {
+        list: ".source-icon",
+        current: ".active-file",
+        title: ".file-name",
+        done: "i.select",
+        media: "video, audio"
+      }
+    ],
+    profile() {
+      return this.profiles.find((p) => zhPickAll(p.list).length) || null;
+    },
+    items(profile) {
+      const list = zhPickAll(profile.list);
+      if (profile.leafOnly) return list.filter((el) => !(el.querySelector(".el-tree-node__children") || { children: [] }).children.length);
+      return list;
+    },
+    current(profile) {
+      const node = zhPick(profile.current);
+      if (!node) return null;
+      return node.closest ? node.closest(profile.list) : node;
+    },
+    isDone(profile, item) {
+      return !!(item && zhPick(profile.done, item));
+    },
+    findMediaDeep(selectors) {
+      const docs = [document];
+      zhPickAll("iframe").forEach((frame) => {
+        try {
+          if (frame.contentDocument) docs.push(frame.contentDocument);
+        } catch (e) {}
+      });
+      for (const doc of docs) {
+        for (const sel of selectors.split(",").map((s) => s.trim())) {
+          if (!sel) continue;
+          const nodes = zhPickAll(sel, doc);
+          for (const node of nodes) {
+            if (node.tagName === "VIDEO" || node.tagName === "AUDIO") return node;
+            const inner = zhPick("video, audio", node);
+            if (inner) return inner;
+          }
+        }
+        const fallback = zhPick("video, audio", doc);
+        if (fallback) return fallback;
+      }
+      return null;
+    },
+    async step(tune, log) {
+      zhClearNoise();
+      const profile = this.profile();
+      if (!profile) {
+        zhLogCadence(log, "practice-nolist", "未识别到章节列表，请确认已进入具体学习资源页", "warning", 90);
+        return false;
+      }
+      const media = this.findMediaDeep(profile.media);
+      if (media) {
+        if (media.ended) {
+          const current = this.current(profile);
+          const progress = zhTxtOf(zhPick(profile.rate, current));
+          if (current && !this.isDone(profile, current)) {
+            zhLogCadence(log, "practice-replay", `播放结束但未计入完成${progress ? `（当前进度 ${progress}）` : ""}，重播补齐`, "warning", 25);
+            try {
+              media.currentTime = 1;
+            } catch (e) {}
+          } else {
+            return await this.advance(profile, tune, log);
+          }
+        }
+        await zhKeepPlaying(media, tune);
+        return true;
+      }
+      return await this.advance(profile, tune, log);
+    },
+    async advance(profile, tune, log) {
+      if (!tune.autoNext) return false;
+      const list = this.items(profile);
+      const pending = list.filter((item) => !this.isDone(profile, item));
+      if (!pending.length) {
+        zhLogCadence(log, "practice-all", "本页任务点已全部完成", "success", 300);
+        return false;
+      }
+      const current = this.current(profile);
+      const index = pending.indexOf(current);
+      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
+      log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(profile.title) || target, "下一个资源")}`, "primary");
+      zhTapNode(target);
+      await zhSleep(2.6);
+      return true;
+    }
+  };
+
+  const ZH_CLASSROOM_STAGES = [zhStageLegacyShare, zhStageNewShare, zhStageCard, zhStageWisdomMooc, zhStagePractice];
+
+  const zhStageLooksDone = (stage) => {
+    try {
+      if (stage.id === "practice") {
+        const profile = stage.profile();
+        if (!profile) return false;
+        const current = stage.current(profile);
+        return !!(current && stage.isDone(profile, current));
+      }
+      if (stage.id === "card") {
+        const card = stage.activeCard();
+        return !!(card && zhCardDone(card));
+      }
+      const current = stage.current && stage.current();
+      return !!(current && stage.isDone && stage.isDone(current));
+    } catch (e) {
+      return false;
+    }
+  };
+
+
+  const zhEntryHint = () => {
+    const host = location.hostname;
+    const path = location.pathname + location.hash;
+    if (/\/singleCourse\//.test(path) || /ai-course-center/.test(path)) {
+      return "当前是课程主页，请点击任意章节进入学习页后再使用";
+    }
+    if (/wenda\./.test(host) && /studyResource/.test(path)) {
+      return "当前是资源列表页，请点击具体资源进入学习页后再使用";
+    }
+    if (/fusioncourseh5/.test(host) && /\/exam/.test(path)) {
+      return "当前是考试页面，答题请使用答题功能";
+    }
+    return "";
+  };
+
+  const zhBootClassroom = async (stage, log) => {
+    if (zhRuntime.booted) return;
+    zhRuntime.booted = true;
+    zhRuntime.epoch += 1;
+    const epoch = zhRuntime.epoch;
+    log.addLog(`检测到用户进入到${stage.label}学习页面`, "primary");
+    log.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
+    log.addLog(`播放器最大倍速: ${zhSpeedCeiling()}x`, "info");
+    while (zhRuntime.epoch === epoch) {
+      await zhSleep(1.1);
+      const tune = zhStudyTuning();
+      if (!tune.modeOn) {
+        log.addLog("智慧树「学习」已关闭，停止本页任务", "warning");
+        break;
+      }
+      try {
+        if (await zhCaptchaHold(tune, log)) continue;
+        if (await zhHabitStep(tune, log)) continue;
+        if (await zhQuizStep(tune, log)) continue;
+        if (zhStageLooksDone(stage)) {
+          if (Date.now() - zhRuntime.lastAdvanceAt > 2200 && (await stage.advance(tune, log))) {
+            zhRuntime.lastAdvanceAt = Date.now();
+            continue;
+          }
+        }
+        const acted = await stage.step(tune, log);
+        if (acted) {
+          zhRuntime.idle = 0;
+        } else {
+          zhRuntime.idle += 1;
+          if (zhRuntime.idle % 15 === 0) log.addLog("当前没有可推进的内容，等待页面状态刷新…", "primary");
+        }
+      } catch (error) {
+        zhLogCadence(log, "stage-error", `页面处理出现异常：${error && error.message ? error.message : error}`, "warning", 20);
+      }
+    }
+  };
+
+  const useZhClassroomStudy = async () => {
+    const log = useLogStore();
+    if (zhRuntime.booted) return;
+    const host = location.hostname;
+    const stage = ZH_CLASSROOM_STAGES.find((item) => item.match(host));
+    if (!stage) {
+      log.addLog("当前智慧树页面暂不支持自动学习", "warning");
+      return;
+    }
+    const hint = zhEntryHint();
+    if (hint) {
+      log.addLog(hint, "warning");
+      const waiter = setInterval(() => {
+        if (zhRuntime.booted) {
+          clearInterval(waiter);
+          return;
+        }
+        if (!zhEntryHint()) {
+          clearInterval(waiter);
+          if (zhStudyTuning().modeOn) zhBootClassroom(stage, log);
+        }
+      }, 2e3);
+      return;
+    }
+    if (!zhStudyTuning().modeOn) {
+      log.addLog("智慧树「学习」已关闭，当前页面不做处理", "warning");
+      return;
+    }
+    zhBootClassroom(stage, log);
+  };
+
 
   
 
@@ -10007,6 +11068,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       media.__ppForcedRate = rate;
       desc.set.call(media, rate);
       try {
+        const defDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "defaultPlaybackRate");
+        if (defDesc && typeof defDesc.set === "function") defDesc.set.call(media, rate);
+      } catch (e) {}
+      try {
         const label = document.querySelector("xt-speedvalue");
         if (label) label.textContent = `${Number(rate).toFixed(2)}X`;
       } catch (e) {}
@@ -10017,29 +11082,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   };
 
   const forceMediaMute = (media) => {
-    try {
-      const dm = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "muted");
-      const dv = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "volume");
-      if (!dm || !dv || typeof dm.set !== "function" || typeof dv.set !== "function") return false;
-      if (!media.__ppMuteLocked) {
-        Object.defineProperty(media, "muted", {
-          configurable: true,
-          get() { return true; },
-          set() {}
-        });
-        Object.defineProperty(media, "volume", {
-          configurable: true,
-          get() { return 0; },
-          set() {}
-        });
-        media.__ppMuteLocked = true;
-      }
-      dm.set.call(media, true);
-      dv.set.call(media, 0);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    if (!media || media.__ppMutedOnce) return false;
+    media.__ppMutedOnce = true;
+    try { media.muted = true; } catch (e) {}
+    return true;
+  };
+
+  const yktMediaFinished = (media, epsilon = 0.75) => {
+    if (!media) return false;
+    if (media.ended) return true;
+    const duration = Number(media.duration);
+    const current = Number(media.currentTime);
+    return Number.isFinite(duration) && duration > 0 && Number.isFinite(current) && current >= duration - epsilon;
   };
 
   const yktPlayMedia = (media, opts) => new Promise((resolve) => {
@@ -10078,6 +11132,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       resolve(reason);
     };
     forceMediaRate(media, currentRate);
+    try { media.loop = false; } catch (e) {}
     const muteMedia = () => {
       forceMediaMute(media);
     };
@@ -10109,7 +11164,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const tick = () => {
       try {
         if (!media.isConnected) return finish("switched");
-        if (media.ended) return finish("ended");
+        if (yktMediaFinished(media)) return finish("ended");
         const nextRate = readRate();
         if (Math.abs(nextRate - currentRate) > 0.05) {
           currentRate = nextRate;
@@ -10129,7 +11184,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       } catch (e) {}
     };
     ticker = afkIntervalHandle(tick, 1000);
-    Promise.resolve(media.play()).catch(() => {});
+    try {
+      useLogStore().addLog(`正在尝试播放${opts.title || "video"}，请稍等5s`, "primary");
+    } catch (e) {}
+    Promise.resolve(media.play())
+      .then(() => {
+        try {
+          useLogStore().addLog(`video播放成功，倍速: ${Number(media.playbackRate) || 1}x`, "primary");
+        } catch (e) {}
+      })
+      .catch(() => {});
   });
 
   const yktWaitFor = async (getter, timeoutSeconds = 20, periodMs = 500) => {
@@ -10274,7 +11338,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           } else if (readYktParam("视频设置", "手动倍速", false)) {
             logStore.addLog(`手动倍速：${initialRate}x（最大 ${readYktMaxRate()}x）`, "info");
           }
-          const reason = await yktPlayMedia(media, { getRate: computeEffectiveRate });
+          const reason = await yktPlayMedia(media, { getRate: computeEffectiveRate, title: (() => { try { const act = yktJobs().find((el) => el.classList.contains("is-active")); return act ? yktJobTitle(act) : ""; } catch (e) { return ""; } })() });
           logStore.addLog(
             reason === "ended" ? "任务点已完成：视频播放完毕" : reason === "stalled" ? "任务点超时，跳过" : "任务点切换，继续下一节",
             reason === "stalled" ? "warning" : "success",
@@ -10307,6 +11371,30 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   };
 
+  const PP_PAGE_READY_SELECTORS = [
+    ".chapter-content .chapter-item",   // 智慧树：章节列表（新智慧/共享课）
+    ".clearfix.video",                  // 智慧树：共享课视频列表
+    "#vjs_container_html5_api",         // 智慧树：播放器
+    ".detail-container",                // 雨课堂：内容区
+    ".leaf-item",                       // 雨课堂：任务树
+    ".prev_title",                      // 学习通：任务点名称
+    ".questionLi",                      // 学习通：题目容器
+    ".TiMu"                             // 学习通：题目容器（备用）
+  ];
+  const ppPageContentReady = () => {
+    try {
+      return PP_PAGE_READY_SELECTORS.some((sel) => !!document.querySelector(sel));
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const ppMuteOnce = (media) => {
+    if (!media || media.__ppMutedOnce) return;
+    media.__ppMutedOnce = true;
+    try { media.muted = true; } catch (e) {}
+  };
+
   const _sfc_main$3 =  vue.defineComponent({
     __name: "Index",
     emits: ["customEvent"],
@@ -10330,6 +11418,19 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         { keyword: "/v2/web/student-lesson-report", logic: useYktCourseLogic },
         { keyword: "/ai-workspace/lms-graph", logic: useYktCourseLogic },
         { keyword: "/m/v2/course/normalcourse/logs", logic: useYktCourseLogic },
+        { keyword: "/pro/lms", logic: useYktCourseLogic },
+        { keyword: "/v2/web/studentcards", logic: useYktCourseLogic },
+        { keyword: "/v2/web/studentcard/", logic: useYktCourseLogic },
+        { keyword: "studyvideoh5.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "studyplush5.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "studywisdomh5.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "wisdom-mooc.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "ai-smart-course-student-pro.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "smartcoursestudent.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "fusioncourseh5.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
+        { keyword: "hike-teaching-center.polymas.com", logic: useZhClassroomStudy },
         { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },   
         { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },          
         { keyword: "exam/preview", logic: useCxExamPreviewLogic },         
@@ -10373,16 +11474,24 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             const _ppRunLogic = () => {
               logic();
             };
-            if (document.readyState === "complete") {
+            const _ppWaitStart = Date.now();
+            if (document.readyState === "complete" && ppPageContentReady()) {
               _ppRunLogic();
             } else {
               logStore.addLog("⏳ 正在加载脚本功能...", "primary");
               const _ppWaitComplete = setInterval(() => {
-                if (document.readyState !== "complete") return;
-                clearInterval(_ppWaitComplete);
-                logStore.addLog("✅ 加载完成", "success");
-                _ppRunLogic();
-              }, 100);
+                if (document.readyState === "complete" && ppPageContentReady()) {
+                  clearInterval(_ppWaitComplete);
+                  logStore.addLog("✅ 加载完成", "success");
+                  _ppRunLogic();
+                  return;
+                }
+                if (Date.now() - _ppWaitStart > 20000) {
+                  clearInterval(_ppWaitComplete);
+                  logStore.addLog("⚠️ 页面内容加载超时，先继续执行", "warning");
+                  _ppRunLogic();
+                }
+              }, 200);
             }
             return;
           }
@@ -10830,7 +11939,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const url2 = window.location.href;
       if (url2.includes("chaoxing") || url2.includes("xuexitong") || url2.includes("xueyin"))
         configStore.platformName = "cx";  
-      else if (url2.includes("zhihuishu"))
+      else if (url2.includes("zhihuishu") || url2.includes("polymas"))
         configStore.platformName = "zhs";
       else if (url2.includes("yuketang") || url2.includes("gdufemooc"))
         configStore.platformName = "ykt";
