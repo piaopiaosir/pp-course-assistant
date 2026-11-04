@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.7.5
+// @version      3.7.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -4730,6 +4730,42 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           return selectElements.length > 0;
         }
         
+        if (question.type === "17") {
+          try {
+            const cmHost = question.element.querySelector(".CodeMirror");
+            const cm = cmHost && cmHost.CodeMirror;
+            if (cm && typeof cm.getValue === "function" && String(cm.getValue() || "").trim() !== "") return true;
+          } catch (e) {}
+          try {
+            const codeEditor = question.element.querySelector("textarea.code-editor");
+            if (codeEditor && String(codeEditor.value || "").trim() !== "") return true;
+          } catch (e) {}
+          return false;
+        }
+
+        if (question.type === "26") {
+          try {
+            const textareaElement = question.element.querySelector("textarea");
+            const UE = this._window && this._window.UE;
+            const ueditor =
+              UE && textareaElement && typeof UE.getEditor === "function"
+                ? UE.getEditor(textareaElement.id || textareaElement.name)
+                : null;
+            if (ueditor && typeof ueditor.getContent === "function" && this.stripTags(ueditor.getContent()).trim() !== "") {
+              return true;
+            }
+          } catch (e) {}
+          try {
+            const ueFrame = question.element.querySelector("iframe#ueditor_0");
+            if (ueFrame) {
+              const doc = ueFrame.contentDocument || (ueFrame.contentWindow && ueFrame.contentWindow.document);
+              const body = doc && doc.body;
+              if (body && String(body.textContent || "").trim() !== "") return true;
+            }
+          } catch (e) {}
+          return false;
+        }
+        
         if (Array.isArray(question._reading) && question._reading.length > 0) {
           return question._reading.every((sub) => {
             if (Array.isArray(sub.blanks) && sub.blanks.length > 0) {
@@ -4752,6 +4788,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         ["多选题", "1"], ["X型题", "1"],
         ["填空题", "2"], ["听力填空", "2"], ["听力对话填空", "2"], ["完形填空", "2"], ["短文填空", "2"], ["选词填空", "2"],
         ["填表题", "2"], ["阅读填空", "2"], ["阅读题", "2"], ["阅读理解", "2"],
+        ["程序题", "17"], ["写作题", "26"],
         ["判断题", "3"],
         ["简答题", "4"], ["名词解释", "5"],
         ["论述题", "6"], ["计算题", "7"],
@@ -5158,6 +5195,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     
     
     const isZhs = String(question.workType) === "zhs";
+    try {
+      if (question.element && question.element.ownerDocument) {
+        decodeCipherFont(question.element.ownerDocument);
+      }
+    } catch (e) {}
     const questionData = {
       questionData: question.element.outerHTML,
       workType: isZhs ? "zhs" : "cx",
@@ -5570,6 +5612,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       __publicField(this, "isBlankFilled", (blankEl) => {
         if (!blankEl) return false;
         try {
+          const cmHost = blankEl.querySelector(".CodeMirror");
+          const cm = cmHost && cmHost.CodeMirror;
+          if (cm && typeof cm.getValue === "function" && String(cm.getValue() || "").trim() !== "") return true;
+        } catch (e) {}
+        try {
           const iframe = blankEl.querySelector(".textDIV iframe") || blankEl.querySelector("iframe");
           if (iframe) {
             const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
@@ -5634,8 +5681,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             } catch (e) {}
           }
           if (!wrote) {
+            const cmHost = blankEl.querySelector(".CodeMirror");
+            const cm = cmHost && cmHost.CodeMirror;
+            if (cm && typeof cm.setValue === "function") {
+              try {
+                cm.setValue(String(value));
+                if (typeof cm.focus === "function") cm.focus();
+                wrote += 1;
+              } catch (e) {}
+            } else {
+              const codeEditor = blankEl.querySelector("textarea.code-editor");
+              if (codeEditor) {
+                try {
+                  codeEditor.value = String(value);
+                  codeEditor.dispatchEvent(new Event("input", { bubbles: true }));
+                  wrote += 1;
+                } catch (e) {}
+              }
+            }
+          }
+          if (!wrote) {
             const holder = blankEl.querySelector(".textDIV") || blankEl;
-            const iframe = holder.querySelector("iframe");
+            const iframe = holder.querySelector("iframe") || blankEl.querySelector("iframe#ueditor_0");
             if (iframe) {
               try {
                 const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
@@ -5803,6 +5870,105 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
           if (saveBtn) saveBtn.click();
         }
+          if (question.type === "17") {
+            const parts = Array.isArray(question.answer)
+              ? question.answer.map((item) => String(item == null ? "" : item))
+              : [String(question.answer == null ? "" : question.answer)];
+            const hasLang = parts.length >= 2;
+            const langName = hasLang ? parts[0].trim() : "";
+            const answerText = (hasLang ? parts.slice(1).join("\n") : parts[0]).replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, "");
+            if (!answerText.trim()) return false;
+            if (langName) {
+              try {
+                const items = Array.from(question.element.querySelectorAll("[codename]"));
+                const langItem = items.find((el) => String(el.getAttribute("codename") || "").trim() === langName);
+                if (langItem) langItem.click(); // 页面自己同步隐藏域/下拉文字/编辑器模式
+                const langSelect = question.element.querySelector('input[id^="languageSelect"]');
+                const langNum = langItem ? langItem.getAttribute("codenum") : "";
+                if (langSelect && langNum) langSelect.value = langNum;
+                const visible = question.element.querySelector("strong[codename]");
+                if (visible) {
+                  visible.textContent = langName;
+                  visible.setAttribute("codename", langName);
+                  if (langNum) visible.setAttribute("codenum", langNum);
+                }
+              } catch (e) {}
+            }
+            const cmHost = question.element.querySelector(".CodeMirror");
+            const cm = cmHost && cmHost.CodeMirror;
+            if (cm && typeof cm.setValue === "function") {
+              try {
+                cm.setValue(answerText);
+                if (typeof cm.save === "function") cm.save();
+                if (typeof cm.focus === "function") cm.focus();
+                const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
+                if (saveBtn) saveBtn.click();
+                return true;
+              } catch (e) {}
+            }
+            const codeEditor = question.element.querySelector("textarea.code-editor");
+            if (codeEditor) {
+              try {
+                codeEditor.value = answerText;
+                codeEditor.dispatchEvent(new Event("input", { bubbles: true }));
+                const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
+                if (saveBtn) saveBtn.click();
+                return true;
+              } catch (e) {}
+            }
+            return false;
+          }
+          if (question.type === "26") {
+            const answerText = Array.isArray(question.answer)
+              ? question.answer.map((item) => String(item == null ? "" : item)).join("\n")
+              : String(question.answer == null ? "" : question.answer);
+            if (!answerText.trim()) return false;
+            const textareaElement = question.element.querySelector("textarea");
+            const UE = this._window && this._window.UE;
+            const ueditor =
+              UE && textareaElement && typeof UE.getEditor === "function"
+                ? UE.getEditor(textareaElement.id || textareaElement.name)
+                : null;
+            if (ueditor && typeof ueditor.setContent === "function") {
+              try {
+                if (ueditor.body === null && typeof ueditor.addListener === "function") {
+                  await new Promise((resolve) => {
+                    ueditor.addListener("ready", () => resolve());
+                    setTimeout(resolve, 2000);
+                  });
+                }
+                ueditor.setContent(answerText);
+                if (typeof ueditor.fireEvent === "function") ueditor.fireEvent("contentChange");
+                if (typeof ueditor.sync === "function") ueditor.sync();
+                const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
+                if (saveBtn) saveBtn.click();
+                return true;
+              } catch (e) {}
+            }
+            const ueFrame = question.element.querySelector("iframe#ueditor_0");
+            if (ueFrame) {
+              try {
+                const doc = ueFrame.contentDocument || (ueFrame.contentWindow && ueFrame.contentWindow.document);
+                const body = doc && doc.body;
+                if (body) {
+                  body.innerHTML = String(answerText)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\n/g, "<br>");
+                  ["input", "keyup", "change"].forEach((name) => {
+                    try {
+                      body.dispatchEvent(new Event(name, { bubbles: true }));
+                    } catch (e) {}
+                  });
+                  const saveBtn = question.element.querySelector('[onclick*="saveQuestion"]');
+                  if (saveBtn) saveBtn.click();
+                  return true;
+                }
+              } catch (e) {}
+            }
+            return false;
+          }
         } catch (error) {
           this.addLog(`答题过程发生错误：${error.message}`, "danger");
         } finally {
@@ -5836,7 +6002,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const isZhs = String(question.workType) === "zhs";
       const supportedTypes = isZhs
         ? ["0", "1", "2", "3"]
-        : ["0", "1", "2", "3", "8", "9", "10", "11", "13", "14", "20", "24"];
+        : ["0", "1", "2", "3", "8", "9", "10", "11", "13", "14", "17", "20", "24", "26"];
       if (!supportedTypes.includes(type)) {
         if (type === "999" || !type || type === "undefined" || type === "null") {
           type = getOptionList(question).length > 0 ? "0" : "2";
