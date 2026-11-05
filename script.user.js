@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.4
+// @version      3.8.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -3432,6 +3432,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   });
   const ScriptSetting =  _export_sfc(_sfc_main$7, [["__scopeId", "data-v-9ea68a6a"]]);
+  const SOURCE_LABELS = {
+    tiku: "题库",
+    ai: "AI",
+    verify: "校验",
+    cache: "缓存"
+  };
   const _sfc_main$6 = vue.defineComponent({
     name: "QuestionTable",
     props: {
@@ -3484,12 +3490,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
         if (progress.isPlaying && progress.type === "答题" && index === rows.length) return "searching";
         return "pending";
-      };
-      const SOURCE_LABELS = {
-        tiku: "题库",
-        ai: "AI",
-        verify: "校验",
-        cache: "缓存"
       };
       const statusLabel = {
         searching: "搜索中",
@@ -3791,7 +3791,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const renderRecord = (row, index) => {
         const open = expandedRow.value === index;
         const detail = [];
-        if (row.source) detail.push("来源：" + (SOURCE_LABELS[row.source] || row.source));
+        if (row.source) detail.push("来源：" + (row.sourceName || SOURCE_LABELS[row.source] || row.source));
         if (row.models && Array.isArray(row.models) && row.models.length) detail.push(detailText(row));
         const modelText = modelLabel(row);
         const modelTitle = detailText(row);
@@ -4329,8 +4329,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return el.getClientRects().length > 0 || el.offsetWidth > 0 || el.offsetHeight > 0;
       };
 
-      const aiChatIsTokenError = (text, status) => status === 401 || status === 403 ||
-        /(?:token|令牌|密钥).{0,10}(?:无效|过期|错误|缺失|不存在|未授权|失效)|invalid[\s_-]*token|token[\s_-]*(?:invalid|expired|missing|unauthorized)|unauthori[sz]ed|未授权|请先登录|未登录|登录.{0,4}(?:失效|过期)|\b401\b|\b403\b/i.test(String(text || ""));
+      const aiChatIsTokenError = (text, status) => status === 401 ||
+        /(?:token|令牌|密钥).{0,10}(?:无效|过期|错误|缺失|不存在|未授权|失效)|invalid[\s_-]*token|token[\s_-]*(?:invalid|expired|missing|unauthorized)|unauthori[sz]ed|未授权|请先登录|未登录|登录.{0,4}(?:失效|过期)|\b401\b/i.test(String(text || ""));
 
       const aiChatIsSessionLimit = (text) => /session[\s_-]*(?:limit|max|full)|(?:limit|max)[\s_-]*session|会话.{0,10}(?:上限|达到|超过|已满|超限)|对话.{0,10}(?:上限|达到|超过|已满|超限)|最多.{0,6}(?:会话|对话)/i.test(String(text || ""));
 
@@ -7369,6 +7369,7 @@ const AuthorWords = _sfc_main$4;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
+              question.sourceName = answerData.data.sourceName || "";
               const filledOk = (await this.fillQuestion(question)) === true;
               if (filledOk) {
                 this.correctNum += 1;
@@ -11059,6 +11060,7 @@ const AuthorWords = _sfc_main$4;
       if (answerData.code === 200) {
         question.answer = answerData.data.answer;
         question.source = answerData.data.source;
+        question.sourceName = answerData.data.sourceName || "";
         let filledOk = false;
 
 
@@ -11664,6 +11666,7 @@ const AuthorWords = _sfc_main$4;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
+              question.sourceName = answerData.data.sourceName || "";
 
 
               this.addQuestion(question);
