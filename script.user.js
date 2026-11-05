@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.2
+// @version      3.8.3
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -808,7 +808,27 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   const _ppInstallClipboardUnlock = () => {
     const EVENTS = ["contextmenu", "selectstart", "copy", "cut", "paste"];
     const installed = new WeakSet();
+    const rewriteCipherCopy = (event) => {
+      try {
+        if (!event || event.type !== "copy") return;
+        const target = event.target;
+        const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+        if (path.some((node) => node && node.id === "chaoxing-helper-root")) return;
+        if (target && target.nodeType === 1 && target.closest("input,textarea,[contenteditable='true']")) return;
+        const doc = (target && target.ownerDocument) || document;
+        const selection = doc.getSelection ? doc.getSelection() : null;
+        const text = selection ? String(selection) : "";
+        if (!text) return;
+        decodeCipherFont(doc);
+        const decoded = _ppApplyCipherMap(text, doc);
+        if (decoded !== text && event.clipboardData) {
+          event.clipboardData.setData("text/plain", decoded);
+          event.preventDefault();
+        }
+      } catch (e) {}
+    };
     const stopPageHandler = (event) => {
+      rewriteCipherCopy(event);
       try { event.stopImmediatePropagation(); } catch (e) {}
     };
     const installDoc = (doc) => {
@@ -3471,6 +3491,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         verify: "校验",
         cache: "缓存"
       };
+      const SOURCE_NAME_LABELS = {
+        tiku: "题库海",
+        tiku_ai: "题库海",
+        "题库（AI）": "题库海",
+        hivenet: "Hive-Net",
+        yanxi: "言溪题库",
+        mujin: "木金题库",
+        ucuc: "木金题库"
+      };
+      const sourceNameText = (name) => SOURCE_NAME_LABELS[name] || name;
       const statusLabel = {
         searching: "搜索中",
         bank: "题库答案",
@@ -3771,7 +3801,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const renderRecord = (row, index) => {
         const open = expandedRow.value === index;
         const detail = [];
-        if (row.source) detail.push("来源：" + (row.sourceName || SOURCE_LABELS[row.source] || row.source));
+        if (row.source) detail.push("来源：" + (row.sourceName ? sourceNameText(row.sourceName) : SOURCE_LABELS[row.source] || row.source));
         if (row.models && Array.isArray(row.models) && row.models.length) detail.push(detailText(row));
         const modelText = modelLabel(row);
         const modelTitle = detailText(row);
@@ -3886,6 +3916,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     generating: "正在生成"
   });
   const AI_CHAT_MODEL_KEY = "pp_ai_model";
+  const AI_CHAT_DEEP_KEY = "pp_ai_deep_thinking";
+  const AI_CHAT_WEB_KEY = "pp_ai_web_search";
   const AI_CHAT_ICON_PATHS = Object.freeze({
     ai: "M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z",
     plus: "M12 5v14M5 12h14"
@@ -4006,8 +4038,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       });
       const hasToken = vue.computed(() => !!token.value);
       const draft = vue.ref("");
-      const deepThinking = vue.ref(false);
-      const webSearch = vue.ref(false);
+      const readStoredFlag = (key) => {
+        try {
+          const raw = typeof _GM_getValue === "function" ? _GM_getValue(key) : false;
+          return raw === true || raw === 1 || raw === "1" || raw === "true";
+        } catch (e) {
+          return false;
+        }
+      };
+      const deepThinking = vue.ref(readStoredFlag(AI_CHAT_DEEP_KEY));
+      const webSearch = vue.ref(readStoredFlag(AI_CHAT_WEB_KEY));
+      vue.watch(deepThinking, (value) => {
+        try { if (typeof _GM_setValue === "function") _GM_setValue(AI_CHAT_DEEP_KEY, !!value); } catch (e) {}
+      });
+      vue.watch(webSearch, (value) => {
+        try { if (typeof _GM_setValue === "function") _GM_setValue(AI_CHAT_WEB_KEY, !!value); } catch (e) {}
+      });
       const messages = vue.ref([]);
       const sessions = vue.ref([]);
       const currentSessionId = vue.ref(null);
@@ -6136,6 +6182,17 @@ const AuthorWords = _sfc_main$4;
     return _ppFontTableCache;
   }
 
+  function _ppApplyCipherMap(text, doc) {
+    const map = doc && doc.__ppCipherCharMap;
+    if (!map || !text) return text;
+    let out = "";
+    for (let i = 0; i < text.length; i++) {
+      const codePoint = text.charCodeAt(i);
+      out += map[codePoint] ? String.fromCharCode(map[codePoint]) : text[i];
+    }
+    return out;
+  }
+
   function decodeCipherFont(doc) {
     const styleNodes = doc.querySelectorAll("style");
     let cipherStyle = null;
@@ -6195,6 +6252,7 @@ const AuthorWords = _sfc_main$4;
       el.innerHTML = text;
       el.classList.remove("font-cxsecret");
     }
+    doc.__ppCipherCharMap = charMap;
   }
 
 
