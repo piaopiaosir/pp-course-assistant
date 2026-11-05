@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.5
+// @version      3.8.7
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -893,17 +893,38 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
   const _PP_LOADING_WINDOW = (() => {
     let el = null;
+    let dismissed = false;
+    let fallbackTimer = null;
+    const stopFallback = () => {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+    const armFallback = () => {
+      stopFallback();
+      fallbackTimer = setTimeout(() => hide(), 15000);
+    };
     const show = () => {
       try {
-        if (el || document.getElementById('pp-script-loading-window') || document.getElementById('cloud-script-loading-window')) return;
+        if (el) return;
+        const existing = document.getElementById('pp-script-loading-window');
+        if (existing) {
+          el = existing;
+          armFallback();
+          return;
+        }
+        if (dismissed) return;
+        if (document.getElementById('cloud-script-loading-window')) return;
         const create = () => {
-          if (el) return;
+          if (el || dismissed) return;
           _ppEnsurePublicStyles();
           el = document.createElement('div');
           el.id = 'pp-script-loading-window';
           el.innerHTML = '<div class="pp-public-loading"><span class="pp-public-spinner"></span><span class="pp-public-loading-text">正在加载网课小助手</span></div>';
           el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;animation:ppPublicIn .22s ease-out;';
           document.body.appendChild(el);
+          armFallback();
         };
         if (document.body) create();
         else document.addEventListener('DOMContentLoaded', create);
@@ -911,9 +932,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
     const hide = () => {
       try {
-        if (!el) return;
-        const node = el;
+        dismissed = true;
+        stopFallback();
+        const node = el || document.getElementById('pp-script-loading-window');
         el = null;
+        if (!node) return;
         node.style.transition = 'opacity 0.22s ease';
         node.style.opacity = '0';
         setTimeout(() => {
@@ -1340,10 +1363,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
   };
 
+  const PP_SCRIPT_UPDATE_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.user.js';
+
   const PP_UPDATE_STATE = vue.reactive({
     available: false,
     latestVersion: "",
-    updateUrl: "https://scriptcat.org/zh-CN/script-show-page/5597",
+    updateUrl: PP_SCRIPT_UPDATE_URL,
     message: ""
   });
   const checkScriptUpdate = () => {
@@ -1362,7 +1387,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             const latestVersion = versionMatch[1];
             if (compareVersion(currentVersion, latestVersion) < 0) {
               PP_UPDATE_STATE.latestVersion = latestVersion;
-              PP_UPDATE_STATE.updateUrl = "https://scriptcat.org/zh-CN/script-show-page/5597";
+              PP_UPDATE_STATE.updateUrl = PP_SCRIPT_UPDATE_URL;
               PP_UPDATE_STATE.message = "有新版本可用，点击更新";
               PP_UPDATE_STATE.available = true;
             } else {
@@ -2794,7 +2819,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               const versionMatch = response.responseText.match(/\/\/\s*@version\s+(\d+\.\d+\.\d+)/);
               if (versionMatch && versionMatch[1]) {
                 const latestVersion = versionMatch[1];
-                const updateUrl = 'https://scriptcat.org/zh-CN/script-show-page/5597';
+                const updateUrl = PP_SCRIPT_UPDATE_URL;
                 const updateMessage = '本次更新为重大版本更新，建议更新';
 
                 if (compareVersion(currentVersion, latestVersion) < 0) {
@@ -12145,6 +12170,309 @@ const AuthorWords = _sfc_main$4;
     }, 500);
   };
 
+  const PP_ZH_H5_SELECTORS = {
+    root: ".questionContent",
+    label: ".questionTitle",
+    stem: ".questionName .centent-pre",
+    singleOptions: "ul.radio-view > li.clearfix, .el-radio",
+    multiOptions: ".checkbox-view .el-checkbox, .checkbox-views .el-checkbox, .el-checkbox-group .el-checkbox",
+    next: ".pre-next .next-topic"
+  };
+
+  const ppZhH5Root = () => zhPick(PP_ZH_H5_SELECTORS.root);
+  const ppZhH5StemText = (root) => zhTxtOf(zhPick(PP_ZH_H5_SELECTORS.stem, root));
+  const ppZhH5NumberText = (root) => zhTxtOf(zhPick(".letterSortNum", root));
+  const ppZhH5Tag = (root) => (root ? `${ppZhH5NumberText(root)}|${ppZhH5StemText(root)}` : "");
+  const ppZhH5Total = () => {
+    const text = zhTxtOf(zhPick(".left-H")) || zhTxtOf(zhPick(".header-content"));
+    const matched = text.match(/[（(]\s*(\d+)\s*题\s*[)）]/);
+    return matched ? parseInt(matched[1], 10) : 0;
+  };
+
+  const ppZhH5TypeCode = (root) => {
+    const label = zhTxtOf(zhPick(PP_ZH_H5_SELECTORS.label, root)) || ppZhH5NumberText(root);
+    if (/多选|多项选择/.test(label)) return "1";
+    if (/判断/.test(label)) return "3";
+    if (/填空/.test(label)) return "2";
+    if (/简答/.test(label)) return "4";
+    if (/名词/.test(label)) return "5";
+    if (/论述/.test(label)) return "6";
+    if (/计算/.test(label)) return "7";
+    if (/单选|单项选择/.test(label)) return "0";
+    return "999";
+  };
+
+  const ppZhH5OptionText = (node) => {
+    const box = zhPick(".stem", node) || zhPick(".el-checkbox__label", node) || node;
+    try {
+      const copy = box.cloneNode(true);
+      copy.querySelectorAll(".letterSort").forEach((badge) => badge.remove());
+      return (copy.textContent || "").replace(/\s+/g, " ").trim();
+    } catch (e) {
+      return zhTxtOf(box);
+    }
+  };
+
+  const ppZhH5OptionNodes = (root, typeCode) => {
+    const readable = (node) => Boolean(zhTxtOf(node));
+    if (typeCode === "1") return zhPickAll(PP_ZH_H5_SELECTORS.multiOptions, root).filter(readable);
+    if (typeCode === "0" || typeCode === "3") return zhPickAll(PP_ZH_H5_SELECTORS.singleOptions, root).filter(readable);
+    const both = zhPickAll(
+      `${PP_ZH_H5_SELECTORS.singleOptions}, ${PP_ZH_H5_SELECTORS.multiOptions}`,
+      root
+    ).filter(readable);
+    return both;
+  };
+
+  const ppZhH5Picked = (node) => {
+    try {
+      if (node.classList.contains("is-checked") || node.classList.contains("checked")) return true;
+      if (node.querySelector("input:checked")) return true;
+      const tick = node.querySelector("i.checkIcon");
+      if (tick && String(tick.className).indexOf("checkedIcon") >= 0) return true;
+    } catch (e) {}
+    return false;
+  };
+
+  const ppZhH5Press = async (node) => {
+    if (!node) return false;
+    try { node.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
+    const before = ppZhH5Picked(node);
+    try { node.click(); } catch (e) {}
+    await afkWait(120);
+    if (ppZhH5Picked(node) !== before) return true;
+    try { node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } catch (e) {}
+    await afkWait(120);
+    return true;
+  };
+
+  const ppZhH5Indexes = (options, value, typeCode) => {
+    const raw = String(value == null ? "" : value).trim();
+    if (!raw) return [];
+    if (typeCode === "3") {
+      const want = ppJudgeKey(raw);
+      if (want) {
+        const at = options.findIndex((item) => ppJudgeKey(item.text) === want);
+        if (at >= 0) return [at];
+      }
+    }
+    const compact = raw.replace(/[\s,，、.。．;；:：/\\|]+/g, "");
+    if (/^[A-Ha-h]{1,8}$/.test(compact) && compact.length <= options.length) {
+      const picked = [];
+      for (const ch of compact.toUpperCase()) {
+        const idx = ch.charCodeAt(0) - 65;
+        if (idx >= 0 && idx < options.length) picked.push(idx);
+      }
+      if (picked.length) return Array.from(new Set(picked));
+    }
+    const hit = matchOptionIndex(options, raw);
+    return hit >= 0 ? [hit] : [];
+  };
+
+  const ppZhH5WriteText = (root, answers) => {
+    const fields = zhPickAll(".fillAnswer input, .fillAnswer textarea, textarea, input.el-input__inner, input[type='text']", root)
+      .filter((field) => !/checkbox|radio/i.test(String(field.type || "")));
+    if (!fields.length) return false;
+    let written = 0;
+    fields.forEach((field, index) => {
+      const text = String(answers[index] == null ? answers[0] : answers[index] == null ? "" : answers[index])
+        .replace(/<[^>]+>/g, "")
+        .trim();
+      if (!text) return;
+      try {
+        if (field.isContentEditable) {
+          field.textContent = text;
+        } else {
+          const proto = field.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+          if (setter) setter.call(field, text); else field.value = text;
+        }
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        written += 1;
+      } catch (e) {}
+    });
+    return written > 0;
+  };
+
+  const ppZhH5Next = async () => {
+    const btn = zhPick(PP_ZH_H5_SELECTORS.next);
+    if (!btn || /noNext|disabled|nopre/.test(String(btn.className))) return false;
+    const before = ppZhH5Tag(ppZhH5Root());
+    btn.click();
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 6000) {
+      await afkWait(200);
+      const after = ppZhH5Tag(ppZhH5Root());
+      if (after && after !== before) return true;
+    }
+    return false;
+  };
+
+  const useZhsExamH5Logic = async () => {
+    if (window.__ppZhH5Busy) return;
+    window.__ppZhH5Busy = true;
+    const logStore = useLogStore();
+    const progressStore = useProgressStore();
+    const questionStore = useQuestionStore();
+    try {
+      if (!zhStudyTuning().answerOn) {
+        logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
+        return;
+      }
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < 30000 && !ppZhH5Root()) await afkWait(250);
+      if (!ppZhH5Root()) {
+        logStore.addLog("未找到题目区域，请刷新页面重试", "danger");
+        return;
+      }
+      logStore.addLog("检测到智慧树作业/考试页面", "primary");
+
+      const configStore = useConfigStore();
+      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === "答题参数");
+      const skipAnswered = answerParams?.params.find((param) => param.name === "跳过已答")?.value || false;
+
+      const questionTotal = ppZhH5Total() || document.querySelectorAll(PP_ZH_H5_SELECTORS.root).length;
+      progressStore.update({
+        taskName: "智慧树答题",
+        type: "答题",
+        isPlaying: true,
+        questionTotal,
+        questionIndex: 0,
+        percent: 0,
+        currentTime: 0,
+        totalTime: 0,
+        detail: `第 0 / ${questionTotal} 题`
+      });
+
+      let handled = 0;
+      let filled = 0;
+      let skipped = 0;
+      let failed = 0;
+      let waiting = 0;
+      const seen = new Set();
+
+      for (let step = 0; step < 120; step += 1) {
+        const root = ppZhH5Root();
+        if (!root) {
+          await afkWait(300);
+          continue;
+        }
+        const typeCode = ppZhH5TypeCode(root);
+        const stem = ppZhH5StemText(root);
+        if (!stem && waiting < 20) {
+          waiting += 1;
+          await afkWait(200);
+          continue;
+        }
+        waiting = 0;
+        const optionNodes = ppZhH5OptionNodes(root, typeCode);
+        const key = [ppZhH5Tag(root), typeCode, optionNodes.map(ppZhH5OptionText).join("|")].join("#");
+        if (seen.has(key)) break;
+        seen.add(key);
+        handled += 1;
+
+        progressStore.update({
+          questionIndex: handled,
+          percent: Math.min(99, Math.round((handled - 1) / questionTotal * 100)),
+          detail: `第 ${handled} / ${questionTotal} 题`
+        });
+        logStore.addLog(`第${handled}题（${stem.slice(0, 26)}）`, "info");
+
+        if (skipAnswered && optionNodes.some(ppZhH5Picked)) {
+          skipped += 1;
+          logStore.addLog(`第${handled}题已作答，跳过`, "warning");
+          if (!(await ppZhH5Next())) break;
+          continue;
+        }
+
+        const question = {
+          element: root,
+          html: root.outerHTML,
+          workType: "zhs",
+          refer: location.href,
+          type: typeCode,
+          title: stem,
+          optionsText: optionNodes.map(ppZhH5OptionText)
+        };
+
+        let answerData = null;
+        try {
+          answerData = await queryAnswer(question);
+        } catch (error) {
+          answerData = null;
+        }
+
+        if (answerData && answerData.code === 200) {
+          const rawAnswers = answerData.data?.answer;
+          const answers = Array.isArray(rawAnswers) ? rawAnswers : [rawAnswers];
+          let ok = false;
+          if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
+            const list = optionNodes.map((node) => ({ text: ppZhH5OptionText(node), el: node }));
+            const wanted = new Set();
+            answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
+            if (wanted.size) {
+              if (typeCode === "1") {
+                for (let i = 0; i < optionNodes.length; i += 1) {
+                  const shouldPick = wanted.has(i);
+                  if (ppZhH5Picked(optionNodes[i]) !== shouldPick) {
+                    await ppZhH5Press(optionNodes[i]);
+                    await afkWait(150);
+                  }
+                }
+              } else {
+                const target = optionNodes[Array.from(wanted)[0]];
+                if (target && !ppZhH5Picked(target)) await ppZhH5Press(target);
+              }
+              ok = true;
+            }
+          } else {
+            ok = ppZhH5WriteText(root, answers.map((ans) => String(ans == null ? "" : ans)));
+          }
+          if (ok) {
+            filled += 1;
+            const sourceTag = answerData.data?.source === "ai" ? "（AI）" : "";
+            logStore.addLog(`第${handled}题已填涂${sourceTag}`, "success");
+            if (answerData.data?.cost !== undefined) {
+              logStore.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
+            }
+          } else {
+            failed += 1;
+            logStore.addLog(`第${handled}题未匹配到可点击选项`, "warning");
+          }
+          question.answer = answers;
+          question.source = answerData.data?.source || "";
+          questionStore.addQuestion(question);
+        } else {
+          failed += 1;
+          const msg = answerData && answerData.msg ? answerData.msg : "查询失败";
+          question.answer = [msg];
+          question.source = "error";
+          questionStore.addQuestion(question);
+          logStore.addLog(`第${handled}题搜索失败：${msg}`, "danger");
+        }
+
+        if (!(await ppZhH5Next())) break;
+        await afkWait(400);
+      }
+
+      progressStore.update({
+        filledCount: filled,
+        fillRate: Math.round((filled + skipped) / questionTotal * 100),
+        questionIndex: handled,
+        percent: 100,
+        isPlaying: false,
+        detail: `已完成 ${handled} / ${questionTotal} 题`
+      });
+      logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
+      logStore.addLog("智慧树作业页面不自动提交，请检查后手动提交", "primary");
+    } catch (error) {
+      logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
+    } finally {
+      window.__ppZhH5Busy = false;
+    }
+  };
+
   const ZH_SPEED_CEILING = 1.5;
 
   let _zhSpeedCeilingCache = 0;
@@ -13546,7 +13874,8 @@ const AuthorWords = _sfc_main$4;
     ".leaf-item",
     ".prev_title",
     ".questionLi",
-    ".TiMu"
+    ".TiMu",
+    ".questionName .centent-pre"
   ];
   const ppPageContentReady = () => {
     try {
@@ -13598,6 +13927,7 @@ const AuthorWords = _sfc_main$4;
         { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "hike-teaching-center.polymas.com", logic: useZhClassroomStudy },
+        { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsExamH5Logic },
         { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },
         { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },
         { keyword: "exam/preview", logic: useCxExamPreviewLogic },
