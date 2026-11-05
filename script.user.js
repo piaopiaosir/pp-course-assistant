@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.7
+// @version      3.8.8
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -325,6 +325,13 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-ai.pp-off{opacity:.55;}
 .pp-ai-row{display:flex;align-items:center;gap:7px;min-height:28px;}
 .pp-ai-row+.pp-ai-row{margin-top:4px;}
+.pp-cost-badge{flex:none;font-size:8px;line-height:1.5;padding:0 4px;border-radius:4px;background:#eef2f7;color:#64748b;font-weight:600;white-space:nowrap;}
+.pp-cost-badge.is-low{background:#ecfdf3;color:#067647;}
+.pp-cost-badge.is-mid{background:#eff6ff;color:#1d4ed8;}
+.pp-cost-badge.is-high{background:#fff7ed;color:#b45309;}
+.pp-cost-badge.is-ultra{background:#fef2f2;color:#b42318;}
+.pp-cfg-model-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;}
+.pp-cfg-model-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pp-ai-label{flex:none;width:38px;font-size:9.5px;color:#7c899d;}
 .pp-ai .el-select{flex:1;min-width:0;}
 .pp-ai-note{margin-left:auto;font-size:9px;color:var(--pp-text-4);white-space:nowrap;}
@@ -549,13 +556,14 @@ a.pp-ai-source:hover{background:#f4f8ff;color:var(--pp-brand);}
 .pp-ai-model-btn:disabled{opacity:.55;cursor:not-allowed;}
 .pp-ai-model-btn .pp-icon{color:var(--pp-brand);}
 .pp-ai-model-label{min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.pp-ai-model-menu{position:absolute;left:0;bottom:calc(100% + 4px);z-index:12;width:190px;max-height:236px;overflow-y:auto;padding:3px;border:1px solid var(--pp-line);border-radius:8px;background:#fff;box-shadow:0 12px 28px -10px rgba(15,23,42,.28);transform-origin:bottom center;animation:ppfxMenuUp .16s var(--ppfx-ease) both;}
+.pp-ai-model-menu{position:absolute;left:0;bottom:calc(100% + 4px);z-index:12;width:220px;max-height:236px;overflow-y:auto;padding:3px;border:1px solid var(--pp-line);border-radius:8px;background:#fff;box-shadow:0 12px 28px -10px rgba(15,23,42,.28);transform-origin:bottom center;animation:ppfxMenuUp .16s var(--ppfx-ease) both;}
 .pp-ai-model-group + .pp-ai-model-group{margin-top:2px;padding-top:2px;border-top:1px solid var(--pp-line-soft);}
 .pp-ai-model-group-title{padding:4px 6px 3px;border-radius:4px;background:var(--pp-surface);font-size:9px;font-weight:700;letter-spacing:.03em;color:var(--pp-text-3);}
 .pp-ai-model-option{width:100%;height:27px;display:flex;align-items:center;gap:5px;padding:0 6px 0 12px;border:0;border-radius:5px;background:transparent;color:var(--pp-text-2);font-size:10.5px;text-align:left;cursor:pointer;}
 .pp-ai-model-option:hover{background:var(--pp-surface);}
 .pp-ai-model-option.active{background:var(--pp-brand-weak);color:var(--pp-brand);font-weight:600;}
 .pp-ai-model-option span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-ai-model-option .pp-cost-badge{flex:none;max-width:none;overflow:visible;text-overflow:clip;}
 .pp-ai-enterhint{flex:none;margin-top:-3px;text-align:center;font-size:8.5px;line-height:1.35;color:var(--pp-text-4);user-select:none;pointer-events:none;}
 .pp-ai-send{flex:none;height:26px;padding:0 12px;border:0;border-radius:7px;background:var(--pp-brand);color:#fff;font-size:10.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:background .15s;}
 .pp-ai-send:hover:not(:disabled){background:var(--pp-brand-hover);}
@@ -726,7 +734,17 @@ a.pp-ai-source:hover{background:#f4f8ff;color:var(--pp-brand);}
 .main-page :focus-visible{outline:2px solid var(--pp-brand-ring);outline-offset:1px;}
 `;
 
-const LAYOUT_CSS_GLOBAL = `.high-z-index-select{z-index:200000 !important;}`;
+const LAYOUT_CSS_GLOBAL = `
+.high-z-index-select{z-index:200000 !important;min-width:200px !important;}
+.high-z-index-select .el-select-dropdown__item{height:28px;line-height:28px;padding:0 8px;font-size:11px;}
+.high-z-index-select .pp-cfg-model-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;}
+.high-z-index-select .pp-cfg-model-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.high-z-index-select .pp-cost-badge{flex:none;display:inline-flex;align-items:center;font-size:8px;line-height:1.5;padding:0 4px;border-radius:4px;background:#eef2f7;color:#64748b;font-weight:600;white-space:nowrap;}
+.high-z-index-select .pp-cost-badge.is-low{background:#ecfdf3;color:#067647;}
+.high-z-index-select .pp-cost-badge.is-mid{background:#eff6ff;color:#1d4ed8;}
+.high-z-index-select .pp-cost-badge.is-high{background:#fff7ed;color:#b45309;}
+.high-z-index-select .pp-cost-badge.is-ultra{background:#fef2f2;color:#b42318;}
+`;
 
 if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(function(){var s=document.createElement("style");s.textContent=LAYOUT_CSS_GLOBAL;document.head.append(s);})();}
 
@@ -3333,14 +3351,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const active = aiActive(part);
         const typeOptions = typeParam.options || [];
         const modelOptions = (globalModelConfig?.typeModelMap?.[typeParam.value]) || modelParam.options || [];
-        const select = (value, options, disabled, onChange) => vue.h(Select, {
+        const modelCostBadge = (option) => {
+          const id = getModelType(typeParam.value, option);
+          const raw = id ? String(modelCosts.value[id] || "") : "";
+          if (!/消耗/.test(raw)) return null;
+          const label = raw.replace(/模型$/, "");
+          const tone = /超高/.test(label) ? "is-ultra" : /高/.test(label) ? "is-high" : /中/.test(label) ? "is-mid" : "is-low";
+          return vue.h("span", { class: ["pp-cost-badge", tone] }, label);
+        };
+        const select = (value, options, disabled, onChange, renderOption) => vue.h(Select, {
           modelValue: value,
           size: "small",
           disabled,
           popperClass: "high-z-index-select",
           "onUpdate:modelValue": onChange
         }, {
-          default: () => options.map((option) => vue.h(Option, { key: option, value: option, label: option }))
+          default: () => options.map((option) => vue.h(Option, {
+            key: option,
+            value: option,
+            label: option
+          }, renderOption ? {
+            default: () => renderOption(option)
+          } : undefined))
         });
         return vue.h("div", { class: ["pp-ai", active ? "" : "pp-off"] }, [
           vue.h("div", { class: "pp-ai-row" }, [
@@ -3356,7 +3388,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             select(modelParam.value, modelOptions, !active, (value) => {
               modelParam.value = value;
               triggerUiUpdate();
-            })
+            }, (option) => vue.h("div", { class: "pp-cfg-model-option" }, [
+              vue.h("span", { class: "pp-cfg-model-name" }, option),
+              modelCostBadge(option)
+            ]))
           ]),
           webParam ? vue.h("div", { class: "pp-ai-row" }, [
             vue.h("span", { class: "pp-ai-label" }, "联网"),
@@ -5099,6 +5134,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const selectedModelEntry = vue.computed(() =>
         models.value.find((item) => item.id === selectedModelId.value) || null
       );
+      const modelCostLabel = (cost) => String(cost || "").replace(/模型$/, "");
+      const modelCostTone = (cost) => {
+        const label = modelCostLabel(cost);
+        return /超高/.test(label) ? "is-ultra" : /高/.test(label) ? "is-high" : /中/.test(label) ? "is-mid" : "is-low";
+      };
+      const renderModelCost = (cost) => {
+        const label = modelCostLabel(cost);
+        return label ? vue.h("span", { class: ["pp-cost-badge", modelCostTone(label)] }, label) : null;
+      };
       const selectedThinkingControl = vue.computed(() => {
         const control = selectedModelEntry.value && selectedModelEntry.value.thinkingControl;
         return ["toggle", "effort", "always", "none"].includes(control) ? control : "toggle";
@@ -5458,6 +5502,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             }
           }, [
             vue.h("span", { class: "pp-ai-model-label" }, selectedModelLabel.value),
+            renderModelCost(selectedModelEntry.value && selectedModelEntry.value.cost),
             ppIcon("chevronDown", 10)
           ]),
           showModels.value && groups.length ? vue.h("div", { class: "pp-ai-model-menu" }, [
@@ -5474,6 +5519,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 onClick: () => chooseModel(model.id)
               }, [
                 vue.h("span", null, model.label),
+                renderModelCost(model.cost),
                 selectedModelId.value === model.id ? ppIcon("check", 10) : null
               ]))
             ]))
