@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.3
+// @version      3.8.4
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -3491,16 +3491,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         verify: "校验",
         cache: "缓存"
       };
-      const SOURCE_NAME_LABELS = {
-        tiku: "题库海",
-        tiku_ai: "题库海",
-        "题库（AI）": "题库海",
-        hivenet: "Hive-Net",
-        yanxi: "言溪题库",
-        mujin: "木金题库",
-        ucuc: "木金题库"
-      };
-      const sourceNameText = (name) => SOURCE_NAME_LABELS[name] || name;
       const statusLabel = {
         searching: "搜索中",
         bank: "题库答案",
@@ -3801,7 +3791,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const renderRecord = (row, index) => {
         const open = expandedRow.value === index;
         const detail = [];
-        if (row.source) detail.push("来源：" + (row.sourceName ? sourceNameText(row.sourceName) : SOURCE_LABELS[row.source] || row.source));
+        if (row.source) detail.push("来源：" + (SOURCE_LABELS[row.source] || row.source));
         if (row.models && Array.isArray(row.models) && row.models.length) detail.push(detailText(row));
         const modelText = modelLabel(row);
         const modelTitle = detailText(row);
@@ -7379,7 +7369,6 @@ const AuthorWords = _sfc_main$4;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
-              question.sourceName = answerData.data.sourceName || "";
               const filledOk = (await this.fillQuestion(question)) === true;
               if (filledOk) {
                 this.correctNum += 1;
@@ -11070,7 +11059,6 @@ const AuthorWords = _sfc_main$4;
       if (answerData.code === 200) {
         question.answer = answerData.data.answer;
         question.source = answerData.data.source;
-              question.sourceName = answerData.data.sourceName || "";
         let filledOk = false;
 
 
@@ -11676,7 +11664,6 @@ const AuthorWords = _sfc_main$4;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
-              question.sourceName = answerData.data.sourceName || "";
 
 
               this.addQuestion(question);
