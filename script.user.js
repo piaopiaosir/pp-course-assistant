@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.1
+// @version      3.8.2
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -361,11 +361,15 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-legend-dot.is-searching{border-color:#93c5fd;background:#eff6ff;}
 .pp-legend-dot.is-bank{background:#3b82f6;border-color:#3b82f6;}
 .pp-legend-dot.is-ai{background:#22c55e;border-color:#22c55e;}
+.pp-legend-dot.is-verify{background:#8b5cf6;border-color:#8b5cf6;}
+.pp-legend-dot.is-cache{background:#06b6d4;border-color:#06b6d4;}
 .pp-legend-dot.is-error{background:#fff7ed;border-color:#f59e0b;}
 .pp-q-circles{flex:none;display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 4px;}
 .pp-q-circle{position:relative;width:21px;height:21px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;font-variant-numeric:tabular-nums;border:1px solid transparent;transition:background-color .2s var(--ppfx-ease-soft),color .2s var(--ppfx-ease-soft),border-color .2s var(--ppfx-ease-soft);}
 .pp-q-circle.is-bank{background:#3b82f6;color:#fff;border-color:#3b82f6;}
 .pp-q-circle.is-ai{background:#22c55e;color:#fff;border-color:#22c55e;}
+.pp-q-circle.is-verify{background:#8b5cf6;color:#fff;border-color:#8b5cf6;}
+.pp-q-circle.is-cache{background:#06b6d4;color:#fff;border-color:#06b6d4;}
 .pp-q-circle.is-error{background:#fff7ed;color:#b45309;border-color:#f59e0b;}
 .pp-q-circle.is-searching{background:#fff;color:#2563eb;border-color:#93c5fd;}
 .pp-q-circle.is-searching::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:1px solid rgba(59,130,246,.45);animation:ppfxQring 1.3s var(--ppfx-ease-soft) infinite;pointer-events:none;}
@@ -380,6 +384,9 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-rec-top{display:flex;align-items:center;gap:5px;margin-bottom:4px;}
 .pp-rec-idx{width:18px;height:18px;border-radius:6px;background:#f1f4f9;color:#8a96a8;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;}
 .pp-tag{font-size:8.5px;line-height:1.6;padding:0 4px;border-radius:4px;background:var(--pp-warning-bg);border:1px solid var(--pp-warning-line);color:#b45309;font-weight:600;}
+.pp-tag.is-ai{background:#ecfdf3;border-color:#bbf7d0;color:#067647;}
+.pp-tag.is-verify{background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9;}
+.pp-tag.is-cache{background:#ecfeff;border-color:#a5f3fc;color:#0e7490;}
 .pp-rec-q{font-size:11.5px;line-height:1.6;color:#2f3b4f;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;}
 .pp-rec-q img{max-width:100%;height:auto;vertical-align:middle;}
 .pp-rec-a{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--pp-line-soft);}
@@ -3451,15 +3458,25 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           const row = rows[index];
           if (row.source === "error" || row._fillFailed || !answersOf(row).length) return "error";
           if (row.source === "ai") return "ai";
+          if (row.source === "verify") return "verify";
+          if (row.source === "cache") return "cache";
           return "bank";
         }
         if (progress.isPlaying && progress.type === "答题" && index === rows.length) return "searching";
         return "pending";
       };
+      const SOURCE_LABELS = {
+        tiku: "题库",
+        ai: "AI",
+        verify: "校验",
+        cache: "缓存"
+      };
       const statusLabel = {
         searching: "搜索中",
         bank: "题库答案",
         ai: "AI答案",
+        verify: "校验答案",
+        cache: "缓存",
         error: "异常",
         pending: "待处理"
       };
@@ -3487,6 +3504,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-searching" }), "搜索中"]),
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-bank" }), "题库答案"]),
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-ai" }), "AI答案"]),
+        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-verify" }), "校验答案"]),
+        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-cache" }), "缓存"]),
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-error" }), "异常"])
       ]) : null;
       const renderCircles = () => currentTotal.value > 0 ? vue.h("div", { class: "pp-q-circles" },
@@ -3502,7 +3521,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const renderRecord = (row, index) => vue.h("article", { class: "pp-rec", key: index }, [
         vue.h("div", { class: "pp-rec-top" }, [
           vue.h("span", { class: "pp-rec-idx" }, index + 1),
-          row.source === "ai" ? vue.h("span", { class: "pp-tag" }, "AI") : null
+          row.source === "ai" ? vue.h("span", { class: "pp-tag is-ai" }, "AI") : null,
+          row.source === "verify" ? vue.h("span", { class: "pp-tag is-verify" }, "校验") : null,
+          row.source === "cache" ? vue.h("span", { class: "pp-tag is-cache" }, "缓存") : null
         ]),
         row.titleHtml
           ? vue.h("div", { class: "pp-rec-q", innerHTML: row.titleHtml, title: row.title || "" })
@@ -3750,7 +3771,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const renderRecord = (row, index) => {
         const open = expandedRow.value === index;
         const detail = [];
-        if (row.source) detail.push("来源：" + row.source);
+        if (row.source) detail.push("来源：" + (row.sourceName || SOURCE_LABELS[row.source] || row.source));
         if (row.models && Array.isArray(row.models) && row.models.length) detail.push(detailText(row));
         const modelText = modelLabel(row);
         const modelTitle = detailText(row);
@@ -7300,6 +7321,7 @@ const AuthorWords = _sfc_main$4;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
+              question.sourceName = answerData.data.sourceName || "";
               const filledOk = (await this.fillQuestion(question)) === true;
               if (filledOk) {
                 this.correctNum += 1;
@@ -10990,6 +11012,7 @@ const AuthorWords = _sfc_main$4;
       if (answerData.code === 200) {
         question.answer = answerData.data.answer;
         question.source = answerData.data.source;
+              question.sourceName = answerData.data.sourceName || "";
         let filledOk = false;
 
 
@@ -11595,6 +11618,7 @@ const AuthorWords = _sfc_main$4;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
+              question.sourceName = answerData.data.sourceName || "";
 
 
               this.addQuestion(question);
