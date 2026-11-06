@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      3.8.8
+// @version      4.0.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -370,6 +370,7 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-legend-dot.is-ai{background:#22c55e;border-color:#22c55e;}
 .pp-legend-dot.is-verify{background:#8b5cf6;border-color:#8b5cf6;}
 .pp-legend-dot.is-cache{background:#06b6d4;border-color:#06b6d4;}
+.pp-legend-dot.is-skipped{background:#94a3b8;border-color:#94a3b8;}
 .pp-legend-dot.is-error{background:#fff7ed;border-color:#f59e0b;}
 .pp-q-circles{flex:none;display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 4px;}
 .pp-q-circle{position:relative;width:21px;height:21px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;font-variant-numeric:tabular-nums;border:1px solid transparent;transition:background-color .2s var(--ppfx-ease-soft),color .2s var(--ppfx-ease-soft),border-color .2s var(--ppfx-ease-soft);}
@@ -377,6 +378,7 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-q-circle.is-ai{background:#22c55e;color:#fff;border-color:#22c55e;}
 .pp-q-circle.is-verify{background:#8b5cf6;color:#fff;border-color:#8b5cf6;}
 .pp-q-circle.is-cache{background:#06b6d4;color:#fff;border-color:#06b6d4;}
+.pp-q-circle.is-skipped{background:#94a3b8;color:#fff;border-color:#94a3b8;}
 .pp-q-circle.is-error{background:#fff7ed;color:#b45309;border-color:#f59e0b;}
 .pp-q-circle.is-searching{background:#fff;color:#2563eb;border-color:#93c5fd;}
 .pp-q-circle.is-searching::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:1px solid rgba(59,130,246,.45);animation:ppfxQring 1.3s var(--ppfx-ease-soft) infinite;pointer-events:none;}
@@ -394,6 +396,7 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-tag.is-ai{background:#ecfdf3;border-color:#bbf7d0;color:#067647;}
 .pp-tag.is-verify{background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9;}
 .pp-tag.is-cache{background:#ecfeff;border-color:#a5f3fc;color:#0e7490;}
+.pp-tag.is-skipped{background:#f1f5f9;border-color:#e2e8f0;color:#64748b;}
 .pp-rec-q{font-size:11.5px;line-height:1.6;color:#2f3b4f;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;}
 .pp-rec-q img{max-width:100%;height:auto;vertical-align:middle;}
 .pp-rec-a{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--pp-line-soft);}
@@ -3542,7 +3545,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const rows = currentRecords.value;
         if (index < rows.length) {
           const row = rows[index];
-          if (row.source === "error" || row._fillFailed || !answersOf(row).length) return "error";
+          if (row.source === "error" || row._fillFailed || (!answersOf(row).length && !row.skipped)) return "error";
+          if (row.skipped) return "skipped";
           if (row.source === "ai") return "ai";
           if (row.source === "verify") return "verify";
           if (row.source === "cache") return "cache";
@@ -3553,10 +3557,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       };
       const statusLabel = {
         searching: "搜索中",
-        bank: "题库答案",
-        ai: "AI答案",
-        verify: "校验答案",
+        bank: "题库",
+        ai: "AI",
+        verify: "校验",
         cache: "缓存",
+        skipped: "跳过",
         error: "异常",
         pending: "待处理"
       };
@@ -3582,10 +3587,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       ]) : null;
       const renderLegend = () => currentTotal.value > 0 ? vue.h("div", { class: "pp-rec-legend" }, [
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-searching" }), "搜索中"]),
-        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-bank" }), "题库答案"]),
-        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-ai" }), "AI答案"]),
-        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-verify" }), "校验答案"]),
+        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-bank" }), "题库"]),
+        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-ai" }), "AI"]),
+        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-verify" }), "校验"]),
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-cache" }), "缓存"]),
+        vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-skipped" }), "跳过"]),
         vue.h("span", { class: "pp-legend-item" }, [vue.h("i", { class: "pp-legend-dot is-error" }), "异常"])
       ]) : null;
       const renderCircles = () => currentTotal.value > 0 ? vue.h("div", { class: "pp-q-circles" },
@@ -3601,6 +3607,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const renderRecord = (row, index) => vue.h("article", { class: "pp-rec", key: index }, [
         vue.h("div", { class: "pp-rec-top" }, [
           vue.h("span", { class: "pp-rec-idx" }, index + 1),
+          row.skipped ? vue.h("span", { class: "pp-tag is-skipped" }, "跳过") : null,
           row.source === "ai" ? vue.h("span", { class: "pp-tag is-ai" }, "AI") : null,
           row.source === "verify" ? vue.h("span", { class: "pp-tag is-verify" }, "校验") : null,
           row.source === "cache" ? vue.h("span", { class: "pp-tag is-cache" }, "缓存") : null
@@ -7425,6 +7432,7 @@ const AuthorWords = _sfc_main$4;
             if (skipAnswered && this.checkIfAnswered(question, this.type)) {
               this.addLog(`第${index + 1}道题已作答，跳过`, "warning");
               skippedCount += 1;
+              question.skipped = true;
               this.addQuestion(question);
               continue;
             }
@@ -11117,6 +11125,7 @@ const AuthorWords = _sfc_main$4;
       if (skipAnswered && isAnswered) {
         logStore.addLog(`第${index + 1}题已作答，跳过`, "warning");
         skippedCount += 1;
+        question.skipped = true;
         questionStore.addQuestion(question);
         continue;
       }
@@ -11727,6 +11736,7 @@ const AuthorWords = _sfc_main$4;
             if (skipAnswered && this.isZhsQuestionAnswered(question)) {
               this.addLog(`第${label}道题已作答，跳过`, "warning");
               skippedCount += 1;
+              question.skipped = true;
               this.addQuestion(question);
               await clickNextQuestion();
               return;
@@ -12316,7 +12326,7 @@ const AuthorWords = _sfc_main$4;
   };
 
   const ppZhH5WriteText = (root, answers) => {
-    const fields = zhPickAll(".fillAnswer input, .fillAnswer textarea, textarea, input.el-input__inner, input[type='text']", root)
+    const fields = zhPickAll(".fillAnswer input, .fillAnswer textarea, textarea, input.el-input__inner, input[type='text'], [contenteditable='true']", root)
       .filter((field) => !/checkbox|radio/i.test(String(field.type || "")));
     if (!fields.length) return false;
     let written = 0;
@@ -12353,6 +12363,526 @@ const AuthorWords = _sfc_main$4;
       if (after && after !== before) return true;
     }
     return false;
+  };
+
+  const useZhExamLoopLogic = async () => {
+    if (window.__ppZhExamLoopBusy) return;
+    window.__ppZhExamLoopBusy = true;
+    const logStore = useLogStore();
+    const progressStore = useProgressStore();
+    const questionStore = useQuestionStore();
+    try {
+      if (!zhStudyTuning().answerOn) {
+        logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
+        return;
+      }
+      const rootSelector = ".question-area-content";
+      const getRoot = () => document.querySelector(rootSelector);
+      const startAt = Date.now();
+      while (Date.now() - startAt < 30000 && !getRoot()) await afkWait(250);
+      const root0 = getRoot();
+      if (!root0) {
+        logStore.addLog("未找到题目区域，请刷新页面重试", "danger");
+        return;
+      }
+      logStore.addLog("检测到智慧树作业/考试页面（examloop）", "primary");
+
+      const configStore = useConfigStore();
+      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === "答题参数");
+      const skipAnswered = answerParams?.params.find((param) => param.name === "跳过已答")?.value || false;
+
+      const getBlock = (root) => root.querySelector(":scope > .flex-1") || root;
+      const getOptionBox = (block) => block.querySelector("label")?.parentElement || block;
+      const STEM_SELECTORS = [
+        "div.flex-1 .mb-\\[32px\\] .text-mainText.font-medium",
+        ".text-mainText.font-medium",
+        "[class*='text-mainText'][class*='font-medium']",
+        "[class*='question'][class*='title']"
+      ];
+      const cleanText = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+      const getStemText = (root) => {
+        const scope = root || getRoot();
+        for (const selector of STEM_SELECTORS) {
+          let el = null;
+          try { el = scope.querySelector(selector); } catch (e) { el = null; }
+          const text = el ? cleanText(el.textContent) : "";
+          if (text && !/^\d+\s*[、.．]$/.test(text)) return text;
+        }
+        return "";
+      };
+      const waitForStem = async (timeoutMs = 10000) => {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+          if (getStemText()) return true;
+          await afkWait(300);
+        }
+        return false;
+      };
+      const getNumberText = (block) => {
+        const first = Array.from(block.querySelectorAll("span")).map((el) => (el.textContent || "").trim()).find((text) => /^\d+\s*[、.]/.test(text));
+        const match = first && first.match(/^(\d+)/);
+        return match ? match[1] : "";
+      };
+      const getTypeText = (block) => {
+        const texts = Array.from(block.querySelectorAll("span")).map((el) => (el.textContent || "").trim());
+        return texts.find((text) => /^(单选题|多选题|判断题|填空题|简答题|名词解释|论述题|计算题|多项选择)/.test(text)) || "";
+      };
+      const typeCodeOf = (label) => {
+        if (/多选|多项选择/.test(label)) return "1";
+        if (/判断/.test(label)) return "3";
+        if (/填空/.test(label)) return "2";
+        if (/简答/.test(label)) return "4";
+        if (/名词/.test(label)) return "5";
+        if (/论述/.test(label)) return "6";
+        if (/计算/.test(label)) return "7";
+        if (/单选|单项选择/.test(label)) return "0";
+        return "999";
+      };
+      const optionNodes = (block) => Array.from(getOptionBox(block).querySelectorAll(":scope > label"));
+      const optionText = (label) => {
+        const span = label.querySelector("span");
+        return (span || label).textContent.replace(/\s+/g, " ").trim();
+      };
+      const optionPicked = (label) => {
+        try {
+          if (!label) return false;
+          if (label.getAttribute("aria-checked") === "true") return true;
+          if (label.querySelector("input:checked")) return true;
+          const marked = (el) => {
+            const cls = String((el && el.className) || "");
+            return /(^|\s)(bg-mainBg|border-mainBg)(\/\d+)?(\s|$)/.test(cls) || /(^|\s)(is-checked|is-selected)(\s|$)/.test(cls);
+          };
+          if (marked(label)) return true;
+          if (Array.from(label.querySelectorAll("div, span")).some(marked)) return true;
+          const text = String((label.querySelector("span") || {}).className || "");
+          return /(^|\s)text-mainBg(\s|$)/.test(text);
+        } catch (e) {
+          return false;
+        }
+      };
+      const answerCardState = (number) => {
+        try {
+          const key = String(number || "").trim();
+          if (!key) return "";
+          const btn = Array.from(document.querySelectorAll("button")).find((item) => (item.textContent || "").trim() === key);
+          if (!btn) return "";
+          const cls = String(btn.className || "");
+          if (/bg-mainBg\/10/.test(cls)) return "answered";
+          if (/(^|\s)bg-mainBg(\s|$)/.test(cls)) return "current";
+          return "empty";
+        } catch (e) {
+          return "";
+        }
+      };
+      const clickOption = async (label) => {
+        try { label.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
+        const before = optionPicked(label);
+        try { label.click(); } catch (e) {}
+        await afkWait(140);
+        if (optionPicked(label) !== before) return true;
+        try { label.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } catch (e) {}
+        await afkWait(140);
+        return true;
+      };
+      const total = (() => {
+        const numbers = Array.from(document.querySelectorAll("button"))
+          .map((btn) => (btn.textContent || "").trim())
+          .filter((text) => /^\d+$/.test(text))
+          .map((text) => Number(text));
+        return numbers.length ? Math.max(...numbers) : 0;
+      })();
+      const findNext = () => Array.from(document.querySelectorAll("button")).find((btn) => (btn.textContent || "").trim() === "下一题");
+      const nextQuestion = async () => {
+        const btn = findNext();
+        if (!btn || btn.disabled || /disabled/.test(String(btn.className))) return false;
+        const before = getStemText() + "|" + optionNodes(getBlock(getRoot())).map(optionText).join("|");
+        btn.click();
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 6000) {
+          await afkWait(200);
+          const block = getBlock(getRoot());
+          const after = getStemText() + "|" + optionNodes(block).map(optionText).join("|");
+          if (after && after !== before) return true;
+        }
+        return false;
+      };
+
+      let handled = 0;
+      let filled = 0;
+      let skipped = 0;
+      let failed = 0;
+      const seen = new Set();
+
+      for (let step = 0; step < 200; step += 1) {
+        const root = getRoot();
+        if (!root) {
+          await afkWait(300);
+          continue;
+        }
+        if (!getStemText(root)) {
+          await waitForStem(10000);
+          if (!getStemText(root)) {
+            await afkWait(250);
+            continue;
+          }
+        }
+        const block = getBlock(root);
+        const stem = getStemText(root);
+        if (!stem) {
+          await afkWait(250);
+          continue;
+        }
+        const options = optionNodes(block);
+        const key = `${getNumberText(block)}|${stem}|${options.map(optionText).join("|")}`;
+        if (seen.has(key)) break;
+        seen.add(key);
+        handled += 1;
+
+        progressStore.update({
+          taskName: "智慧树答题",
+          type: "答题",
+          isPlaying: true,
+          questionTotal: total || handled,
+          questionIndex: handled,
+          percent: total ? Math.min(99, Math.round((handled - 1) / total * 100)) : 0,
+          detail: `第 ${handled} / ${total || "?"} 题`
+        });
+
+        const typeLabel = getTypeText(block);
+        const typeCode = typeCodeOf(typeLabel);
+        logStore.addLog(`第${handled}题（${stem.slice(0, 26)}）`, "info");
+
+        const cardAnswered = answerCardState(getNumberText(block)) === "answered";
+        if (skipAnswered && (cardAnswered || options.some(optionPicked))) {
+          skipped += 1;
+          const skippedQuestion = {
+            element: root,
+            html: root.outerHTML,
+            workType: "zhs",
+            refer: location.href,
+            type: typeCode,
+            title: stem,
+            optionsText: options.map(optionText),
+            skipped: true
+          };
+          questionStore.addQuestion(skippedQuestion);
+          logStore.addLog(`第${handled}题已作答，跳过`, "warning");
+          if (!(await nextQuestion())) break;
+          continue;
+        }
+
+        const question = {
+          element: root,
+          html: root.outerHTML,
+          workType: "zhs",
+          refer: location.href,
+          type: typeCode,
+          title: stem,
+          optionsText: options.map(optionText)
+        };
+
+        let answerData = null;
+        try {
+          answerData = await queryAnswer(question);
+        } catch (e) {
+          answerData = null;
+        }
+
+        if (answerData && answerData.code === 200) {
+          const rawAnswers = answerData.data?.answer;
+          const answers = Array.isArray(rawAnswers) ? rawAnswers : [rawAnswers];
+          let ok = false;
+          if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
+            const list = options.map((el) => ({ text: optionText(el), el }));
+            const wanted = new Set();
+            answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
+            if (wanted.size) {
+              if (typeCode === "1") {
+                for (let i = 0; i < options.length; i += 1) {
+                  const shouldPick = wanted.has(i);
+                  if (optionPicked(options[i]) !== shouldPick) {
+                    await clickOption(options[i]);
+                    await afkWait(120);
+                  }
+                }
+              } else {
+                const target = options[Array.from(wanted)[0]];
+                if (target && !optionPicked(target)) await clickOption(target);
+              }
+              ok = true;
+            }
+          } else {
+            ok = ppZhH5WriteText(block, answers.map((ans) => String(ans == null ? "" : ans)));
+          }
+          if (ok) {
+            filled += 1;
+            const sourceTag = answerData.data?.source === "ai" ? "（AI）" : "";
+            logStore.addLog(`第${handled}题已填涂${sourceTag}`, "success");
+          } else {
+            failed += 1;
+            logStore.addLog(`第${handled}题未匹配到可点击选项`, "warning");
+          }
+          question.answer = answers;
+          question.source = answerData.data?.source || "";
+          questionStore.addQuestion(question);
+        } else {
+          failed += 1;
+          const msg = answerData && answerData.msg ? answerData.msg : "查询失败";
+          question.answer = [msg];
+          question.source = "error";
+          questionStore.addQuestion(question);
+          logStore.addLog(`第${handled}题搜索失败：${msg}`, "danger");
+        }
+
+        if (!(await nextQuestion())) break;
+        await afkWait(350);
+      }
+
+      progressStore.update({
+        filledCount: filled,
+        fillRate: total ? Math.round((filled + skipped) / total * 100) : 0,
+        questionIndex: handled,
+        percent: 100,
+        isPlaying: false,
+        detail: `已完成 ${handled} / ${total || "?"} 题`
+      });
+      logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
+      logStore.addLog("智慧树作业页面不自动提交，请检查后手动提交", "primary");
+    } catch (error) {
+      logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
+    } finally {
+      window.__ppZhExamLoopBusy = false;
+    }
+  };
+
+  const useZhSmartAnswerLogic = async () => {
+    if (window.__ppZhSmartBusy) return;
+    window.__ppZhSmartBusy = true;
+    const logStore = useLogStore();
+    const progressStore = useProgressStore();
+    const questionStore = useQuestionStore();
+    try {
+      if (!zhStudyTuning().answerOn) {
+        logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
+        return;
+      }
+      const profiles = [
+        {
+          name: "新形态作业考试",
+          root: ".questionBox",
+          type: ".questionTit",
+          title: ".questionContent",
+          options: ".optionUl label",
+          next: "span.Topicswitchingbtn:nth-child(2)"
+        },
+        {
+          name: "新形态掌握度",
+          root: ".questionContent",
+          type: ".questionName",
+          title: ".questionName .centent-pre",
+          options: ".radio-view li.clearfix, .checkbox-views label.el-checkbox, .checkbox-view label.el-checkbox",
+          next: ".pre-next .next-topic"
+        },
+        {
+          name: "AI掌握度",
+          root: ".exam-item",
+          type: ".quest-type",
+          title: ".quest-title .option-name",
+          options: "label",
+          next: null
+        }
+      ];
+      const profile = profiles.find((item) => document.querySelector(item.root));
+      if (!profile) {
+        logStore.addLog("未识别到智慧树题目区域，请刷新页面或手动进入答题页", "warning");
+        return;
+      }
+      logStore.addLog(`检测到智慧树答题页面（${profile.name}）`, "primary");
+
+      const configStore = useConfigStore();
+      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === "答题参数");
+      const skipAnswered = answerParams?.params.find((param) => param.name === "跳过已答")?.value || false;
+      const clean = (text) => String(text == null ? "" : text).replace(/\s+/g, " ").trim();
+      const getRoot = () => document.querySelector(profile.root);
+      const getTitle = (root) => clean((root.querySelector(profile.title) || {}).textContent || "");
+      const getTypeText = (root) => clean((root.querySelector(profile.type) || {}).textContent || "");
+      const typeCodeOf = (label) => {
+        if (/多选|多项/.test(label)) return "1";
+        if (/判断|是非/.test(label)) return "3";
+        if (/填空/.test(label)) return "2";
+        if (/简答/.test(label)) return "4";
+        if (/名词/.test(label)) return "5";
+        if (/论述/.test(label)) return "6";
+        if (/计算/.test(label)) return "7";
+        if (/单选|单项/.test(label)) return "0";
+        return "999";
+      };
+      const optionNodes = (root) => Array.from(root.querySelectorAll(profile.options)).filter((el) => clean(el.textContent));
+      const optionText = (el) => clean(el.textContent).replace(/^[A-Za-z][.、．)）]\s*/, "");
+      const optionPicked = (el) => {
+        try {
+          if (el.getAttribute("aria-checked") === "true") return true;
+          if (el.querySelector("input:checked")) return true;
+          return /(^|\s)(is-checked|checked|selected|active)(\s|$)/.test(String(el.className || ""));
+        } catch (e) {
+          return false;
+        }
+      };
+      const clickOption = async (el) => {
+        try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
+        const before = optionPicked(el);
+        try { el.click(); } catch (e) {}
+        await afkWait(140);
+        if (optionPicked(el) !== before) return true;
+        try { el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } catch (e) {}
+        await afkWait(140);
+        return true;
+      };
+      const findNext = () => {
+        if (profile.next) {
+          const btn = document.querySelector(profile.next);
+          if (btn && !/noNext|disabled/.test(String(btn.className || ""))) return btn;
+        }
+        return Array.from(document.querySelectorAll("button")).find((btn) => {
+          const text = clean(btn.textContent);
+          return !btn.disabled && (/^(下一题|下一題|保存并下一题)$/.test(text) || text.includes("下一题"));
+        });
+      };
+      const nextQuestion = async () => {
+        const btn = findNext();
+        if (!btn) return false;
+        const before = getTitle(getRoot());
+        btn.click();
+        const start = Date.now();
+        while (Date.now() - start < 6000) {
+          await afkWait(200);
+          const nextTitle = getTitle(getRoot());
+          if (nextTitle && nextTitle !== before) return true;
+        }
+        return false;
+      };
+
+      let handled = 0;
+      let filled = 0;
+      let skipped = 0;
+      let failed = 0;
+      const seen = new Set();
+      for (let step = 0; step < 200; step += 1) {
+        const root = getRoot();
+        if (!root) {
+          await afkWait(300);
+          continue;
+        }
+        const title = getTitle(root);
+        if (!title) {
+          await afkWait(250);
+          continue;
+        }
+        const options = optionNodes(root);
+        const key = `${title}|${options.map(optionText).join("|")}`;
+        if (seen.has(key)) break;
+        seen.add(key);
+        handled += 1;
+        progressStore.update({
+          taskName: "智慧树答题",
+          type: "答题",
+          isPlaying: true,
+          questionIndex: handled,
+          detail: `第 ${handled} 题`
+        });
+        const typeLabel = getTypeText(root);
+        const typeCode = typeCodeOf(typeLabel);
+        logStore.addLog(`第${handled}题（${title.slice(0, 26)}）`, "info");
+
+        if (skipAnswered && options.some(optionPicked)) {
+          skipped += 1;
+          questionStore.addQuestion({
+            element: root,
+            html: root.outerHTML,
+            workType: "zhs",
+            refer: location.href,
+            type: typeCode,
+            title,
+            optionsText: options.map(optionText),
+            skipped: true
+          });
+          logStore.addLog(`第${handled}题已作答，跳过`, "warning");
+          if (!(await nextQuestion())) break;
+          continue;
+        }
+
+        const question = {
+          element: root,
+          html: root.outerHTML,
+          workType: "zhs",
+          refer: location.href,
+          type: typeCode,
+          title,
+          optionsText: options.map(optionText)
+        };
+        let answerData = null;
+        try {
+          answerData = await queryAnswer(question);
+        } catch (e) {
+          answerData = null;
+        }
+        if (answerData && answerData.code === 200) {
+          const rawAnswers = answerData.data?.answer;
+          const answers = Array.isArray(rawAnswers) ? rawAnswers : [rawAnswers];
+          let ok = false;
+          if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
+            const list = options.map((el) => ({ text: optionText(el), el }));
+            const wanted = new Set();
+            answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
+            if (wanted.size) {
+              if (typeCode === "1") {
+                for (let i = 0; i < options.length; i += 1) {
+                  if (optionPicked(options[i]) !== wanted.has(i)) await clickOption(options[i]);
+                }
+              } else {
+                const target = options[Array.from(wanted)[0]];
+                if (target && !optionPicked(target)) await clickOption(target);
+              }
+              ok = true;
+            }
+          } else {
+            ok = ppZhH5WriteText(root, answers.map((ans) => String(ans == null ? "" : ans)));
+          }
+          if (ok) {
+            filled += 1;
+            logStore.addLog(`第${handled}题已填涂${answerData.data?.source === "ai" ? "（AI）" : ""}`, "success");
+          } else {
+            failed += 1;
+            logStore.addLog(`第${handled}题未找到可填涂区域`, "warning");
+          }
+          question.answer = answers;
+          question.source = answerData.data?.source || "";
+          questionStore.addQuestion(question);
+        } else {
+          failed += 1;
+          const msg = answerData && answerData.msg ? answerData.msg : "查询失败";
+          question.answer = [msg];
+          question.source = "error";
+          questionStore.addQuestion(question);
+          logStore.addLog(`第${handled}题搜索失败：${msg}`, "danger");
+        }
+        if (!(await nextQuestion())) break;
+        await afkWait(350);
+      }
+      progressStore.update({
+        filledCount: filled,
+        questionIndex: handled,
+        percent: 100,
+        isPlaying: false,
+        detail: `已完成 ${handled} 题`
+      });
+      logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
+      logStore.addLog("智慧树答题页不自动提交，请检查后手动提交", "primary");
+    } catch (error) {
+      logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
+    } finally {
+      window.__ppZhSmartBusy = false;
+    }
   };
 
   const useZhsExamH5Logic = async () => {
@@ -13955,7 +14485,36 @@ const AuthorWords = _sfc_main$4;
 
 
 
-      const urlLogicPairs = [
+      const useCxPracticeIframeWatcher = () => {
+    const logStore = useLogStore();
+    const practiceKey = "/page/quiz/stu/answerQuestion2";
+    const storageKey = (url) => `pp-opened-practice-iframe:${url}`;
+    const scan = () => {
+      try {
+        const iframe = Array.from(document.querySelectorAll("iframe")).find((frame) => {
+          const src = frame.getAttribute("src") || frame.src || "";
+          return src.includes(practiceKey);
+        });
+        if (!iframe) return;
+        const raw = iframe.getAttribute("src") || iframe.src || "";
+        let url = raw;
+        try { url = new URL(raw, window.location.href).href; } catch (e) {}
+        if (!url || sessionStorage.getItem(storageKey(url))) return;
+        sessionStorage.setItem(storageKey(url), "1");
+        window.open(url, "_blank");
+        logStore.addLog("检测到随堂练习 iframe，已尝试在新窗口打开", "primary");
+      } catch (e) {}
+    };
+    scan();
+    setInterval(scan, 1000);
+  };
+
+  const useCxExamNotesTipLogic = () => {
+    const logStore = useLogStore();
+    logStore.addLog("已进入考试说明页，请点击进入答题页面后使用", "primary");
+  };
+
+  const urlLogicPairs = [
         { keyword: "/v2/web/studentLog", logic: useYktCourseLogic },
         { keyword: "/v2/web/student-lesson-report", logic: useYktCourseLogic },
         { keyword: "/ai-workspace/lms-graph", logic: useYktCourseLogic },
@@ -13973,10 +14532,22 @@ const AuthorWords = _sfc_main$4;
         { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "hike-teaching-center.polymas.com", logic: useZhClassroomStudy },
+        { keyword: "examloop.zhihuishu.com/exam/", logic: useZhExamLoopLogic },
+        { keyword: "studentexamcomh5.zhihuishu.com/studentReviewTestOrExam", logic: useZhSmartAnswerLogic },
+        { keyword: "smartcourseexam.zhihuishu.com/ReviewExam", logic: useZhSmartAnswerLogic },
+        { keyword: "fusioncourseh5.zhihuishu.com/exam", logic: useZhSmartAnswerLogic },
+        { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhSmartAnswerLogic },
+        { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhSmartAnswerLogic },
+        { keyword: "ai-smart-course-student-pro.zhihuishu.com/masteryHistory/", logic: useZhSmartAnswerLogic },
+        { keyword: "ai-smart-course-student-pro.zhihuishu.com/point/", logic: useZhSmartAnswerLogic },
+        { keyword: "smartcoursestudent.zhihuishu.com/masteryHistory/", logic: useZhSmartAnswerLogic },
+        { keyword: "smartcoursestudent.zhihuishu.com/point/", logic: useZhSmartAnswerLogic },
+        { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhSmartAnswerLogic },
         { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsExamH5Logic },
         { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },
         { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },
         { keyword: "exam/preview", logic: useCxExamPreviewLogic },
+        { keyword: "/examcode/examnotes", logic: useCxExamNotesTipLogic },
         { keyword: "/exam-ans/", logic: useCxExamLogic },
         { keyword: "/exam/test", logic: useCxExamLogic },
         { keyword: "/work/index", logic: useCxWorkLogic },
@@ -13988,10 +14559,9 @@ const AuthorWords = _sfc_main$4;
         { keyword: "/plaza", logic: useCxPlazaTipLogic },
         {
           keyword: "mycourse/stu?courseid",
-          logic: () => {
-            logStore.addLog("该页面无任务，请进入章节或答题页面使用", "danger");
-          }
+          logic: useCxPracticeIframeWatcher
         },
+        { keyword: "/page/active/stuActiveList", logic: useCxPracticeIframeWatcher },
         { keyword: "/stuExamWeb.html", logic: useZhsAnswerLogic },
         { keyword: "answerQuestion2", logic: useStuActiveLogic }
       ];
