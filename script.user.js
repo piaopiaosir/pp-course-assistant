@@ -2,9 +2,9 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.1
+// @version      4.0.2
 // @author       PIAOPIAO
-// @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
+// @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
@@ -26,8 +26,8 @@
 // @require      https://lib.baomitu.com/pinia/2.3.1/pinia.iife.min.js
 // @require      https://lib.baomitu.com/rxjs/7.8.2/rxjs.umd.min.js
 // @require      https://lib.baomitu.com/blueimp-md5/2.19.0/js/md5.min.js
+// @require      https://cdn.jsdelivr.net/gh/piaopiaosir/pp-font-decrypt@v1.0.2/font-decrypt.js
 // @resource     ElementPlusStyle  https://lib.baomitu.com/element-plus/2.8.2/index.min.css
-// @resource     ttf               https://www.forestpolice.org/ttf/2.0/table.json
 // @connect      *
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
@@ -42,12 +42,10 @@
 // @tag          全题型支持
 // ==/UserScript==
 
-
 const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
   "http://152.136.30.238:3000"
 ];
-
 
 const _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE = (() => new Promise((resolve) => {
   const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
@@ -752,10 +750,48 @@ const LAYOUT_CSS_GLOBAL = `
 if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(function(){var s=document.createElement("style");s.textContent=LAYOUT_CSS_GLOBAL;document.head.append(s);})();}
 
 (function (vue, pinia, rxjs, md5, ElementPlus) {
+
   'use strict';
 
-
-
+  // 平台参数名集中定义：配置项定义端与读取端共用，改名只需改这里
+  const PP_KEY = {
+    ANSWER: "答题参数",
+    MODE: "模式设置",
+    VIDEO: "视频设置",
+    SKIP_ANSWERED: "跳过已答",
+    AI_MODE: "AI模式",
+    AI_TYPE: "AI 类型选择",
+    AI_MODEL: "AI 模型选择",
+    WEB_SEARCH: "联网搜索",
+    NORMAL_MODE: "正常模式",
+    VERIFY: "答案校验",
+    VERIFY_MODE: "答案校验模式",
+    SIMULATE: "模拟播放",
+    NORMAL_PLAY: "正常播放",
+    RATE: "播放倍速",
+    AUTO_RATE: "自动倍速",
+    MANUAL_RATE: "手动倍速",
+    BREAK_RATE: "突破倍速",
+    AUTO_NEXT: "自动切换",
+    REVIEW: "复习模式",
+    CHAPTER: "章节/习题设置",
+    EXAM: "考试设置",
+    ANSWER_GAP: "答题间隔",
+    SIM_DELAY: "模拟延迟",
+    SIMILAR: "相似匹配",
+    THRESHOLD: "正确阈值",
+    STANDBY: "激活挂机",
+    DIRECT_REPORT: "直接上报",
+    MISC: "其他设置",
+    ANSWER_SETTINGS: "答题设置",
+    TASK_SETTINGS: "任务设置",
+    AUTO_COMMENT: "自动讨论评论",
+    GENERAL: "通用设置",
+    ONLY_VIDEO: "仅视频",
+    ONLY_ANSWER: "仅答题",
+    AUTO_SUBMIT: "自动提交",
+    UNLIMITED_READ: "无限阅读"
+  };
 
   if (window.self !== window.top) {
     const currentHref = window.location.href;
@@ -766,10 +802,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       return;
     }
   }
-
-
-
-
 
   var _GM_getResourceText = (() => typeof GM_getResourceText != "undefined" ? GM_getResourceText : void 0)();
   var _GM_getValue = (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
@@ -840,7 +872,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const selection = doc.getSelection ? doc.getSelection() : null;
         const text = selection ? String(selection) : "";
         if (!text) return;
-        decodeCipherFont(doc);
+        decodeCipherFontSafe(doc);
         const decoded = _ppApplyCipherMap(text, doc);
         if (decoded !== text && event.clipboardData) {
           event.clipboardData.setData("text/plain", decoded);
@@ -969,12 +1001,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   })();
   _PP_LOADING_WINDOW.show();
 
-
-
-
-
-
-
   const REGEX = {
     CLEAN_TITLE: /^【.*?】\s*|\s*（\d+\.\d+分）$/g,
     HTML_TAGS: /<((?!img|sub|sup|br)[^>]+)>/g,
@@ -999,10 +1025,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return "";
   };
 
-
-
-
-
   const SELECTORS = {
     CX_VIDEO: 'video',
     CX_AUDIO: 'audio',
@@ -1014,62 +1036,43 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     ZHS_OPTION: '.subject_node .nodeLab'
   };
 
-
-
-
-
-
-
   const SERVER_CONFIGS = _PP_SERVER_URLS.map((url, i) => ({
     url,
     location: i === 0 ? "广州" : "北京",
     color: i === 0 ? "#09b4ff" : "#21d181"
   }));
 
-
-
   const CURRENT_SERVER_CONFIG = SERVER_CONFIGS[Math.floor(Math.random() * SERVER_CONFIGS.length)];
   let CURRENT_SERVER = CURRENT_SERVER_CONFIG.url;
-
 
   let SPONSOR_URL = '';
   let PP_WELFARE_OFFER = null;
 
-
   let globalScriptDescription = null;
-
-
-  const triggerWelfarePromo = () => {
-  };
-
 
   const getSponsorLink = (url, text) => {
     if (!url) return text || '';
-    triggerWelfarePromo();
     return `<a href="${url}" target="_blank" style="color:#667eea;text-decoration:underline;">${text || '点我赞助获取新token'}</a>`;
   };
-
-
-
-
-
 
   let globalModelConfig = null;
   let globalPollInterval = 1000;
 
+  // 统一的 GET 请求封装（GM_xmlhttpRequest → Promise），path 不带域名
+  const ppHttpGet = (path, timeout = 5000) => new Promise((resolve, reject) => {
+    _GM_xmlhttpRequest({
+      method: "GET",
+      url: `${CURRENT_SERVER}${path}`,
+      timeout,
+      onload: (res) => resolve(res),
+      onerror: (err) => reject(err),
+      ontimeout: () => reject(new Error("timeout"))
+    });
+  });
 
   const fetchModelConfig = async () => {
     try {
-      const response = await new Promise((resolve, reject) => {
-        _GM_xmlhttpRequest({
-          method: 'GET',
-          url: `${CURRENT_SERVER}/ai/models`,
-          timeout: 5000,
-          onload: (res) => resolve(res),
-          onerror: (err) => reject(err),
-          ontimeout: () => reject(new Error('timeout'))
-        });
-      });
+      const response = await ppHttpGet("/ai/models");
       const data = JSON.parse(response.responseText);
       if (data.code === 200 && data.data) {
         globalModelConfig = data.data;
@@ -1082,19 +1085,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   };
 
-
   const fetchPollInterval = async () => {
     try {
-      const response = await new Promise((resolve, reject) => {
-        _GM_xmlhttpRequest({
-          method: 'GET',
-          url: `${CURRENT_SERVER}/poll-interval`,
-          timeout: 5000,
-          onload: (res) => resolve(res),
-          onerror: (err) => reject(err),
-          ontimeout: () => reject(new Error('timeout'))
-        });
-      });
+      const response = await ppHttpGet("/poll-interval");
       const data = JSON.parse(response.responseText);
       if (data.code === 200 && data.data && data.data.pollInterval) {
         globalPollInterval = data.data.pollInterval;
@@ -1105,8 +1098,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   };
 
-
-
   const getModelType = (aiType, aiModel) => {
     if (globalModelConfig && globalModelConfig.modelIdMap && globalModelConfig.modelIdMap[aiType]) {
       return globalModelConfig.modelIdMap[aiType][aiModel] || null;
@@ -1114,12 +1105,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return null;
   };
 
-
-
   const createAiTypeParam = () => {
     let _typeValue;
     return {
-      name: "AI 类型选择",
+      name: PP_KEY.AI_TYPE,
       get value() { return _typeValue !== undefined ? _typeValue : (globalModelConfig?.typeOptions?.[0] || ''); },
       set value(v) { _typeValue = v; },
       type: "string",
@@ -1127,11 +1116,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
   };
 
-
   const createAiModelParam = () => {
     let _modelValue;
     return {
-      name: "AI 模型选择",
+      name: PP_KEY.AI_MODEL,
       get value() {
         if (_modelValue !== undefined) return _modelValue;
         const type = globalModelConfig?.typeOptions?.[0];
@@ -1142,7 +1130,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       get options() { return globalModelConfig?.allModelOptions || []; }
     };
   };
-
 
   const handleExclusiveGroup = (param, item, $event) => {
     if (!param.exclusiveGroup) return true;
@@ -1160,19 +1147,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return true;
   };
 
-
   const fetchSponsorUrl = async () => {
     try {
-      const response = await new Promise((resolve, reject) => {
-        _GM_xmlhttpRequest({
-          method: 'GET',
-          url: `${CURRENT_SERVER}/sponsor-url`,
-          timeout: 5000,
-          onload: (res) => resolve(res),
-          onerror: (err) => reject(err),
-          ontimeout: () => reject(new Error('timeout'))
-        });
-      });
+      const response = await ppHttpGet("/sponsor-url");
       const data = JSON.parse(response.responseText);
       if (data.code === 200 && data.data && data.data.sponsorUrl) {
         SPONSOR_URL = data.data.sponsorUrl;
@@ -1180,29 +1157,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     } catch (e) {}
   };
 
-
   const fetchScriptDescription = async () => {
     try {
-      const response = await new Promise((resolve, reject) => {
-        _GM_xmlhttpRequest({
-          method: 'GET',
-          url: `${CURRENT_SERVER}/script-description`,
-          timeout: 5000,
-          onload: (res) => resolve(res),
-          onerror: (err) => reject(err),
-          ontimeout: () => reject(new Error('timeout'))
-        });
-      });
+      const response = await ppHttpGet("/script-description");
       const data = JSON.parse(response.responseText);
       if (data.code === 200 && data.data) {
         globalScriptDescription = data.data;
       }
     } catch (e) {}
   };
-
-
-
-
 
   const PRELOAD_MAX_WAIT_MS = 5000;
   const preloadBeforeStart = async () => {
@@ -1220,13 +1183,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     ]);
   };
 
-
-
-
-
-
   const delay = (second) => new Promise((resolve) => setTimeout(resolve, second * 1e3));
-
 
   const randomDelay = (baseSecond, jitter = 1) => {
     const min = Math.max(1, baseSecond - jitter);
@@ -1234,95 +1191,60 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     return delay(min + Math.random() * (max - min));
   };
 
-
   const getCookie = (name) => {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? match[2] : '';
   };
 
-
   let _cachedUid = null;
+  const readUidFromPage = () => {
+    if (typeof _unsafeWindow !== 'undefined') {
+      const viaCookie = _unsafeWindow.getCookie ? _unsafeWindow.getCookie("UID") : "";
+      if (viaCookie) return viaCookie;
+      if (_unsafeWindow.uid) return _unsafeWindow.uid;
+    }
+    return getCookie('UID') || getCookie('_uid') || '';
+  };
   const getUid = () => {
     if (_cachedUid) return _cachedUid;
-    if (typeof _unsafeWindow !== 'undefined') {
-      if (_unsafeWindow.getCookie) _cachedUid = _unsafeWindow.getCookie("UID");
-      if (!_cachedUid && _unsafeWindow.uid) _cachedUid = _unsafeWindow.uid;
-    }
-    if (!_cachedUid) _cachedUid = getCookie('UID');
-    if (!_cachedUid) _cachedUid = getCookie('_uid');
+    _cachedUid = readUidFromPage();
     return _cachedUid || '';
   };
 
-
   const getUidRealtime = () => {
-    let uid = '';
-    if (typeof _unsafeWindow !== 'undefined') {
-      if (_unsafeWindow.getCookie) uid = _unsafeWindow.getCookie("UID");
-      if (!uid && _unsafeWindow.uid) uid = _unsafeWindow.uid;
-    }
-    if (!uid) uid = getCookie('UID');
-    if (!uid) uid = getCookie('_uid');
-
+    const uid = readUidFromPage();
     if (uid) _cachedUid = uid;
     return uid || '';
   };
 
-
   let _cachedFid = null;
   const getFid = () => {
     if (_cachedFid) return _cachedFid;
-    if (typeof _unsafeWindow !== 'undefined' && _unsafeWindow.getCookie) {
-      _cachedFid = _unsafeWindow.getCookie("fid");
-    }
-    if (!_cachedFid) _cachedFid = getCookie('fid');
+    const viaCookie = typeof _unsafeWindow !== 'undefined' && _unsafeWindow.getCookie ? _unsafeWindow.getCookie("fid") : "";
+    _cachedFid = viaCookie || getCookie('fid') || '';
     return _cachedFid || '';
   };
-
 
   const fetchCloudCode = async () => {
     try {
       const userId = getUid();
       if (!userId) return;
-      const response = await new Promise((resolve, reject) => {
-        _GM_xmlhttpRequest({
-          method: 'GET',
-          url: `${CURRENT_SERVER}/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`,
-          timeout: 8000,
-          onload: (res) => resolve(res),
-          onerror: (err) => reject(err),
-          ontimeout: () => reject(new Error('timeout'))
-        });
-      });
+      const response = await ppHttpGet(`/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`, 8000);
       const data = JSON.parse(response.responseText);
       const welfare = data?.data?.welfare;
       if (welfare) {
         PP_WELFARE_OFFER = welfare.enabled === false ? null : welfare;
-      } else if (typeof data?.data?.extraCode === 'string' && data.data.extraCode) {
-        PP_WELFARE_OFFER = {
-          enabled: true,
-          bonus: 30,
-          title: "专属福利",
-          text: "赞助加赠 30% 额度",
-          plans: [],
-          link: SPONSOR_URL
-        };
       }
       window.__PP_WELFARE__ = PP_WELFARE_OFFER;
-      if (typeof data?.data?.extraCode === 'string' && data.data.extraCode) {
-        window.__PP_CLOUD_EXTRA_CODE__ = data.data.extraCode;
-      }
     } catch (e) {}
   };
-
 
   const pad = (n) => n < 10 ? "0" + n : n.toString();
   const formatDateTime = (dt) => `${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
   const getDateTime = () => formatDateTime(new Date());
   const formatDuration = (seconds) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 
-
   const getRandomServer = () => CURRENT_SERVER;
-
 
   let _serverFailCount = 0;
   const _MAX_FAIL_COUNT = 3;
@@ -1347,7 +1269,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     _serverFailCount = 0;
   };
 
-
   const compareVersion = (v1, v2) => {
     const parts1 = v1.split('.').map(Number);
     const parts2 = v2.split('.').map(Number);
@@ -1366,11 +1287,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
     return value;
   };
-
-
-
-
-
 
   const getScriptInfo = () => {
 
@@ -1420,11 +1336,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     } catch (e) {}
   };
 
-
-
-
-
-
   const useConfigStore = pinia.defineStore("configStore", {
     state: () => {
       const scriptInfo = getScriptInfo();
@@ -1447,28 +1358,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             name: `网课小助手-飘飘友情提供 v${scriptInfo.version}`,
             parts: [
               {
-                name: "模式设置",
+                name: PP_KEY.MODE,
                 params: [
                   {
-                    name: "正常模式",
+                    name: PP_KEY.NORMAL_MODE,
                     value: true,
                     type: "boolean",
                     exclusiveGroup: "cx_mode"
                   },
                   {
-                    name: "仅视频",
+                    name: PP_KEY.ONLY_VIDEO,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "cx_mode"
                   },
                   {
-                    name: "仅答题",
+                    name: PP_KEY.ONLY_ANSWER,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "cx_mode"
                   },
                   {
-                    name: "复习模式",
+                    name: PP_KEY.REVIEW,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "cx_mode"
@@ -1476,16 +1387,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 ]
               },
               {
-                name: "视频设置",
+                name: PP_KEY.VIDEO,
                 params: [
                   {
-                    name: "模拟播放",
+                    name: PP_KEY.SIMULATE,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "playMode"
                   },
                   {
-                    name: "正常播放",
+                    name: PP_KEY.NORMAL_PLAY,
                     value: true,
                     type: "boolean",
                     exclusiveGroup: "playMode"
@@ -1494,21 +1405,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     name: "规避检测",
                     value: false,
                     type: "boolean",
-                    dependsOn: { param: "模拟播放", value: true }
+                    dependsOn: { param: PP_KEY.SIMULATE, value: true }
                   },
                   {
                     name: "视频答题",
                     value: true,
                     type: "boolean",
-                    dependsOn: { param: "正常播放", value: true }
+                    dependsOn: { param: PP_KEY.NORMAL_PLAY, value: true }
                   },
                   {
-                    name: "自动倍速",
+                    name: PP_KEY.AUTO_RATE,
                     value: false,
                     type: "boolean"
                   },
                   {
-                    name: "播放倍速",
+                    name: PP_KEY.RATE,
                     value: 1,
                     type: "number",
                     min: 1,
@@ -1518,81 +1429,81 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 ]
               },
               {
-                name: "答题参数",
+                name: PP_KEY.ANSWER,
                 params: [
                   {
-                    name: "正常模式",
+                    name: PP_KEY.NORMAL_MODE,
                     value: true,
                     type: "boolean",
                     exclusiveGroup: "mode"
                   },
                   {
-                    name: "答案校验",
+                    name: PP_KEY.VERIFY,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "mode"
                   },
                   {
-                    name: "AI模式",
+                    name: PP_KEY.AI_MODE,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "mode"
                   },
                   {
-                    name: "联网搜索",
+                    name: PP_KEY.WEB_SEARCH,
                     value: false,
                     type: "boolean",
-                    dependsOn: { param: "AI模式", value: true }
+                    dependsOn: { param: PP_KEY.AI_MODE, value: true }
                   },
                   createAiTypeParam(),
                   createAiModelParam(),
                   {
-                    name: "跳过已答",
+                    name: PP_KEY.SKIP_ANSWERED,
                     value: true,
                     type: "boolean"
                   },
                   {
-                    name: "相似匹配",
+                    name: PP_KEY.SIMILAR,
                     value: true,
                     type: "boolean"
                   },
                   {
-                    name: "模拟延迟",
+                    name: PP_KEY.SIM_DELAY,
                     value: true,
                     type: "boolean"
                   },
                   {
-                    name: "答题间隔",
+                    name: PP_KEY.ANSWER_GAP,
                     value: 1,
                     type: "number"
                   },
                   {
-                    name: "正确阈值",
+                    name: PP_KEY.THRESHOLD,
                     value: 85,
                     type: "number"
                   }
                 ]
               },
               {
-                name: "章节/作业/测验设置",
+                name: PP_KEY.CHAPTER,
                 params: [
                   {
-                    name: "自动提交",
+                    name: PP_KEY.AUTO_SUBMIT,
                     value: false,
                     type: "boolean"
                   },
                   {
-                    name: "自动切换",
+                    name: PP_KEY.AUTO_NEXT,
                     value: true,
                     type: "boolean"
                   }
                 ]
               },
               {
-                name: "考试设置",
+                name: PP_KEY.EXAM,
                 params: [
                   {
-                    name: "自动切换",
+                    name: PP_KEY.AUTO_NEXT,
                     value: true,
                     type: "boolean"
                   }
@@ -1604,74 +1515,75 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             name: `网课小助手-飘飘友情提供 v${scriptInfo.version}`,
             parts: [
               {
-                name: "模式设置",
+                name: PP_KEY.MODE,
                 params: [
-                  { name: "正常模式", value: true, type: "boolean", exclusiveGroup: "zhs_mode" },
-                  { name: "仅答题", value: false, type: "boolean", exclusiveGroup: "zhs_mode" },
-                  { name: "仅视频", value: false, type: "boolean", exclusiveGroup: "zhs_mode" }
+                  { name: PP_KEY.NORMAL_MODE, value: true, type: "boolean", exclusiveGroup: "zhs_mode" },
+                  { name: PP_KEY.ONLY_VIDEO, value: false, type: "boolean", exclusiveGroup: "zhs_mode" },
+                  { name: PP_KEY.ONLY_ANSWER, value: false, type: "boolean", exclusiveGroup: "zhs_mode" },
+                  { name: PP_KEY.REVIEW, value: false, type: "boolean", exclusiveGroup: "zhs_mode" }
                 ]
               },
               {
-                name: "视频设置",
+                name: PP_KEY.VIDEO,
                 params: [
-                  { name: "正常播放", value: true, type: "boolean", locked: true },
-                  { name: "自动倍速", value: false, type: "boolean", breakBefore: true },
+                  { name: PP_KEY.NORMAL_PLAY, value: true, type: "boolean", locked: true },
+                  { name: PP_KEY.AUTO_RATE, value: false, type: "boolean", breakBefore: true },
                   { name: "弹题作答", value: true, type: "boolean" },
                   { name: "忽略习惯弹窗", value: false, type: "boolean" },
-                  { name: "播放倍速", value: 1, type: "number", min: 1, max: 1.5, step: 0.5 }
+                  { name: PP_KEY.RATE, value: 1, type: "number", min: 1, max: 1.5, step: 0.5 }
                 ]
               },
               {
-                name: "答题参数",
+                name: PP_KEY.ANSWER,
                 params: [
                   {
-                    name: "正常模式",
+                    name: PP_KEY.NORMAL_MODE,
                     value: true,
                     type: "boolean",
                     exclusiveGroup: "mode"
                   },
                   {
-                    name: "答案校验",
+                    name: PP_KEY.VERIFY,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "mode"
                   },
                   {
-                    name: "AI模式",
+                    name: PP_KEY.AI_MODE,
                     value: false,
                     type: "boolean",
                     exclusiveGroup: "mode"
                   },
                   {
-                    name: "联网搜索",
+                    name: PP_KEY.WEB_SEARCH,
                     value: false,
                     type: "boolean",
-                    dependsOn: { param: "AI模式", value: true }
+                    dependsOn: { param: PP_KEY.AI_MODE, value: true }
                   },
                   createAiTypeParam(),
                   createAiModelParam(),
                   {
-                    name: "跳过已答",
+                    name: PP_KEY.SKIP_ANSWERED,
                     value: true,
                     type: "boolean"
                   },
                   {
-                    name: "相似匹配",
+                    name: PP_KEY.SIMILAR,
                     value: true,
                     type: "boolean"
                   },
                   {
-                    name: "模拟延迟",
+                    name: PP_KEY.SIM_DELAY,
                     value: true,
                     type: "boolean"
                   },
                   {
-                    name: "答题间隔",
+                    name: PP_KEY.ANSWER_GAP,
                     value: 1,
                     type: "number"
                   },
                   {
-                    name: "正确阈值",
+                    name: PP_KEY.THRESHOLD,
                     value: 85,
                     type: "number"
                   }
@@ -1682,9 +1594,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           unknown: {
             name: "通用平台",
             parts: [{
-              name: "答题设置",
+              name: PP_KEY.ANSWER_SETTINGS,
               params: [{
-                name: "自动切换",
+                name: PP_KEY.AUTO_NEXT,
                 value: true,
                 type: "boolean"
               }]
@@ -1694,27 +1606,36 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             name: `网课小助手-飘飘友情提供 v${scriptInfo.version}`,
             parts: [
               {
-                name: "模式设置",
+                name: PP_KEY.MODE,
                 params: [
-                  { name: "仅视频", value: true, type: "boolean", exclusiveGroup: "ykt_mode" },
-                  { name: "复习模式", value: false, type: "boolean", exclusiveGroup: "ykt_mode" }
+                  { name: PP_KEY.NORMAL_MODE, value: true, type: "boolean", exclusiveGroup: "ykt_mode" },
+                  { name: PP_KEY.ONLY_VIDEO, value: false, type: "boolean", exclusiveGroup: "ykt_mode" },
+                  { name: PP_KEY.ONLY_ANSWER, value: false, type: "boolean", exclusiveGroup: "ykt_mode" },
+                  { name: PP_KEY.REVIEW, value: false, type: "boolean", exclusiveGroup: "ykt_mode" }
                 ]
               },
               {
-                name: "视频设置",
+                name: PP_KEY.VIDEO,
                 params: [
                   { name: "自动播放", value: true, type: "boolean" },
-                  { name: "手动倍速", value: true, type: "boolean", exclusiveGroup: "ykt_rate" },
-                  { name: "自动倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" },
-                  { name: "突破倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" },
-                  { name: "播放倍速", value: 1.5, type: "number", min: 1, max: 8 }
+                  { name: PP_KEY.MANUAL_RATE, value: true, type: "boolean", exclusiveGroup: "ykt_rate" },
+                  { name: PP_KEY.AUTO_RATE, value: false, type: "boolean", exclusiveGroup: "ykt_rate" },
+                  { name: PP_KEY.BREAK_RATE, value: false, type: "boolean", exclusiveGroup: "ykt_rate" },
+                  { name: PP_KEY.RATE, value: 1.5, type: "number", min: 1, max: 8 }
                 ]
               },
               {
-                name: "任务设置",
+                name: PP_KEY.ANSWER,
+                params: [
+                  { name: PP_KEY.SKIP_ANSWERED, value: true, type: "boolean" }
+                ]
+              },
+              {
+                name: PP_KEY.CHAPTER,
                 params: [
                   { name: "自动评论", value: false, type: "boolean" },
-                  { name: "自动切换", value: true, type: "boolean" }
+                  { name: PP_KEY.AUTO_SUBMIT, value: true, type: "boolean" },
+                  { name: PP_KEY.AUTO_NEXT, value: true, type: "boolean" }
                 ]
               }
             ]
@@ -1743,24 +1664,24 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             const migrateCxParts = () => {
               const parts = globalConfig.platformParams?.cx?.parts;
               if (!Array.isArray(parts)) return;
-              const videoPart = parts.find(p => p.name === "视频设置");
+              const videoPart = parts.find(p => p.name === PP_KEY.VIDEO);
 
               if (videoPart?.params) {
-                const legacyDirectIdx = videoPart.params.findIndex(p => p.name === "直接上报");
+                const legacyDirectIdx = videoPart.params.findIndex(p => p.name === PP_KEY.DIRECT_REPORT);
                 if (legacyDirectIdx >= 0) {
                   videoPart.params.splice(legacyDirectIdx, 1);
                 }
               }
 
-              const miscIdx = parts.findIndex(p => p.name === "其他设置");
+              const miscIdx = parts.findIndex(p => p.name === PP_KEY.MISC);
               let afkParam = null;
               if (miscIdx >= 0) {
-                afkParam = (parts[miscIdx].params || []).find(p => p.name === "激活挂机") || null;
+                afkParam = (parts[miscIdx].params || []).find(p => p.name === PP_KEY.STANDBY) || null;
                 parts.splice(miscIdx, 1);
               }
-              if (videoPart?.params && !videoPart.params.some(p => p.name === "激活挂机")) {
-                const param = afkParam || { name: "激活挂机", value: false, type: "boolean" };
-                const autoIdx = videoPart.params.findIndex(p => p.name === "自动倍速");
+              if (videoPart?.params && !videoPart.params.some(p => p.name === PP_KEY.STANDBY)) {
+                const param = afkParam || { name: PP_KEY.STANDBY, value: false, type: "boolean" };
+                const autoIdx = videoPart.params.findIndex(p => p.name === PP_KEY.AUTO_RATE);
                 if (autoIdx >= 0) {
                   videoPart.params.splice(autoIdx + 1, 0, param);
                 } else {
@@ -1768,13 +1689,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 }
               }
 
-              const modeParamNames = ["正常模式", "仅视频", "仅答题", "复习模式"];
-              let modePart = parts.find(p => p.name === "模式设置");
+              const modeParamNames = [PP_KEY.NORMAL_MODE, PP_KEY.ONLY_VIDEO, PP_KEY.ONLY_ANSWER, PP_KEY.REVIEW];
+              let modePart = parts.find(p => p.name === PP_KEY.MODE);
               if (!modePart) {
-                modePart = { name: "模式设置", params: [] };
+                modePart = { name: PP_KEY.MODE, params: [] };
                 parts.unshift(modePart);
               }
-              const chapterPart = parts.find(p => p.name === "章节/作业/测验设置");
+              const chapterPart = parts.find(p => p.name === PP_KEY.CHAPTER);
               if (chapterPart && chapterPart.params) {
                 modeParamNames.forEach((pn) => {
                   const pi = chapterPart.params.findIndex(p => p.name === pn);
@@ -1786,13 +1707,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 });
               }
               modePart.params.sort((a, b) => modeParamNames.indexOf(a.name) - modeParamNames.indexOf(b.name));
-              const chapterIdx = parts.findIndex(p => p.name === "章节/作业/测验设置");
+              const chapterIdx = parts.findIndex(p => p.name === PP_KEY.CHAPTER);
               if (chapterIdx >= 0) {
                 const chapterMoved = parts.splice(chapterIdx, 1)[0];
-                const answerIdx = parts.findIndex(p => p.name === "答题参数");
+                const answerIdx = parts.findIndex(p => p.name === PP_KEY.ANSWER);
                 parts.splice(answerIdx >= 0 ? answerIdx + 1 : parts.length, 0, chapterMoved);
               }
-              const modeIdx = parts.findIndex(p => p.name === "模式设置");
+              const modeIdx = parts.findIndex(p => p.name === PP_KEY.MODE);
               if (modeIdx > 0) {
                 parts.unshift(parts.splice(modeIdx, 1)[0]);
               }
@@ -1802,68 +1723,91 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             try {
               const zhsParts = globalConfig.platformParams?.zhs?.parts;
               if (Array.isArray(zhsParts)) {
-                const settingIdx = zhsParts.findIndex((p) => p.name === "答题设置");
+                const settingIdx = zhsParts.findIndex((p) => p.name === PP_KEY.ANSWER_SETTINGS);
                 if (settingIdx >= 0) zhsParts.splice(settingIdx, 1);
-                if (!zhsParts.some((p) => p.name === "模式设置")) {
-                  zhsParts.unshift({
-                    name: "模式设置",
-                    params: [{ name: "答题", value: true, type: "boolean", exclusiveGroup: "zhs_mode" }]
-                  });
+                let modePart = zhsParts.find((p) => p.name === PP_KEY.MODE);
+                if (!modePart) {
+                  modePart = { name: PP_KEY.MODE, params: [] };
+                  zhsParts.unshift(modePart);
                 }
+                if (!Array.isArray(modePart.params)) modePart.params = [];
+                // 老配置里只有一个「答题」开关，先把它翻译成「仅视频」，再补全四模式
+                const legacyAnswer = modePart.params.find((p) => p.name === "答题");
+                if (legacyAnswer) {
+                  const legacyOn = legacyAnswer.value !== false;
+                  modePart.params = modePart.params.filter((p) => p !== legacyAnswer);
+                  if (!legacyOn && !modePart.params.some((p) => p.name === PP_KEY.ONLY_VIDEO)) {
+                    modePart.params.push({ name: PP_KEY.ONLY_VIDEO, value: true, type: "boolean", exclusiveGroup: "zhs_mode" });
+                  }
+                }
+                const zhsModeNames = [PP_KEY.NORMAL_MODE, PP_KEY.ONLY_VIDEO, PP_KEY.ONLY_ANSWER, PP_KEY.REVIEW];
+                zhsModeNames.forEach((name) => {
+                  if (modePart.params.some((p) => p.name === name)) return;
+                  modePart.params.push({
+                    name,
+                    value: name === PP_KEY.NORMAL_MODE,
+                    type: "boolean",
+                    exclusiveGroup: "zhs_mode"
+                  });
+                });
+                modePart.params.forEach((p) => {
+                  if (zhsModeNames.indexOf(p.name) >= 0) p.exclusiveGroup = "zhs_mode";
+                });
+                modePart.params.sort((a, b) => zhsModeNames.indexOf(a.name) - zhsModeNames.indexOf(b.name));
               }
             } catch (e) {}
 
             try {
               const yktParts = globalConfig.platformParams?.ykt?.parts;
               if (Array.isArray(yktParts)) {
-                const videoPart = yktParts.find((p) => p.name === "视频设置");
+                const videoPart = yktParts.find((p) => p.name === PP_KEY.VIDEO);
                 let legacyReview = false;
                 if (videoPart && Array.isArray(videoPart.params)) {
-                  const idx = videoPart.params.findIndex((p) => p.name === "复习模式");
+                  const idx = videoPart.params.findIndex((p) => p.name === PP_KEY.REVIEW);
                   if (idx >= 0) {
                     legacyReview = Boolean(videoPart.params[idx].value);
                     videoPart.params.splice(idx, 1);
                   }
                 }
-                let modePart = yktParts.find((p) => p.name === "模式设置");
+                let modePart = yktParts.find((p) => p.name === PP_KEY.MODE);
                 if (!modePart) {
-                  modePart = { name: "模式设置", params: [] };
+                  modePart = { name: PP_KEY.MODE, params: [] };
                   yktParts.unshift(modePart);
                 }
                 if (!Array.isArray(modePart.params)) modePart.params = [];
-                const legacyNormal = modePart.params.find((p) => p.name === "正常模式");
+                const legacyNormal = modePart.params.find((p) => p.name === PP_KEY.NORMAL_MODE);
                 if (legacyNormal) {
-                  legacyNormal.name = "仅视频";
+                  legacyNormal.name = PP_KEY.ONLY_VIDEO;
                   legacyNormal.exclusiveGroup = "ykt_mode";
                 }
-                if (!modePart.params.some((p) => p.name === "仅视频")) {
-                  modePart.params.push({ name: "仅视频", value: !legacyReview, type: "boolean", exclusiveGroup: "ykt_mode" });
+                if (!modePart.params.some((p) => p.name === PP_KEY.ONLY_VIDEO)) {
+                  modePart.params.push({ name: PP_KEY.ONLY_VIDEO, value: !legacyReview, type: "boolean", exclusiveGroup: "ykt_mode" });
                 }
-                if (!modePart.params.some((p) => p.name === "复习模式")) {
-                  modePart.params.push({ name: "复习模式", value: legacyReview, type: "boolean", exclusiveGroup: "ykt_mode" });
+                if (!modePart.params.some((p) => p.name === PP_KEY.REVIEW)) {
+                  modePart.params.push({ name: PP_KEY.REVIEW, value: legacyReview, type: "boolean", exclusiveGroup: "ykt_mode" });
                 }
-                const videoPartCfg = yktParts.find((p) => p.name === "视频设置");
+                const videoPartCfg = yktParts.find((p) => p.name === PP_KEY.VIDEO);
                 if (videoPartCfg && Array.isArray(videoPartCfg.params)) {
-                  const speedParam = videoPartCfg.params.find((p) => p.name === "播放倍速");
+                  const speedParam = videoPartCfg.params.find((p) => p.name === PP_KEY.RATE);
                   if (speedParam) speedParam.max = 8;
-                  const autoRateParam = videoPartCfg.params.find((p) => p.name === "自动倍速");
+                  const autoRateParam = videoPartCfg.params.find((p) => p.name === PP_KEY.AUTO_RATE);
                   if (autoRateParam) {
                     if (!autoRateParam.exclusiveGroup) autoRateParam.exclusiveGroup = "ykt_rate";
                   } else {
-                    videoPartCfg.params.push({ name: "自动倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" });
+                    videoPartCfg.params.push({ name: PP_KEY.AUTO_RATE, value: false, type: "boolean", exclusiveGroup: "ykt_rate" });
                   }
-                  if (!videoPartCfg.params.some((p) => p.name === "突破倍速")) {
-                    const autoIdx = videoPartCfg.params.findIndex((p) => p.name === "自动倍速");
-                    const breakParam = { name: "突破倍速", value: false, type: "boolean", exclusiveGroup: "ykt_rate" };
+                  if (!videoPartCfg.params.some((p) => p.name === PP_KEY.BREAK_RATE)) {
+                    const autoIdx = videoPartCfg.params.findIndex((p) => p.name === PP_KEY.AUTO_RATE);
+                    const breakParam = { name: PP_KEY.BREAK_RATE, value: false, type: "boolean", exclusiveGroup: "ykt_rate" };
                     if (autoIdx >= 0) {
                       videoPartCfg.params.splice(autoIdx + 1, 0, breakParam);
                     } else {
                       videoPartCfg.params.push(breakParam);
                     }
                   }
-                  if (!videoPartCfg.params.some((p) => p.name === "手动倍速")) {
-                    const autoIdx2 = videoPartCfg.params.findIndex((p) => p.name === "自动倍速");
-                    const manualParam = { name: "手动倍速", value: true, type: "boolean", exclusiveGroup: "ykt_rate" };
+                  if (!videoPartCfg.params.some((p) => p.name === PP_KEY.MANUAL_RATE)) {
+                    const autoIdx2 = videoPartCfg.params.findIndex((p) => p.name === PP_KEY.AUTO_RATE);
+                    const manualParam = { name: PP_KEY.MANUAL_RATE, value: true, type: "boolean", exclusiveGroup: "ykt_rate" };
                     if (autoIdx2 >= 0) {
                       videoPartCfg.params.splice(autoIdx2, 0, manualParam);
                     } else {
@@ -1871,26 +1815,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     }
                   }
                 }
-                const taskPart = yktParts.find((p) => p.name === "任务设置");
+                const taskPart = yktParts.find((p) => p.name === PP_KEY.TASK_SETTINGS);
                 if (taskPart && Array.isArray(taskPart.params)) {
-                  const legacyComment = taskPart.params.find((p) => p.name === "自动讨论评论");
+                  const legacyComment = taskPart.params.find((p) => p.name === PP_KEY.AUTO_COMMENT);
                   if (legacyComment) legacyComment.name = "自动评论";
-                  if (!taskPart.params.some((p) => p.name === "自动切换")) {
-                    taskPart.params.push({ name: "自动切换", value: true, type: "boolean" });
-                  }
                 }
               }
             } catch (e) {}
 
-
-
             const restoreAiGetters = (platformConfig) => {
               if (!platformConfig || !platformConfig.parts) return;
-              const answerParamsPart = platformConfig.parts.find(p => p.name === "答题参数");
+              const answerParamsPart = platformConfig.parts.find(p => p.name === PP_KEY.ANSWER);
               if (!answerParamsPart || !answerParamsPart.params) return;
 
-              const aiTypeIdx = answerParamsPart.params.findIndex(p => p.name === "AI 类型选择");
-              const aiModelIdx = answerParamsPart.params.findIndex(p => p.name === "AI 模型选择");
+              const aiTypeIdx = answerParamsPart.params.findIndex(p => p.name === PP_KEY.AI_TYPE);
+              const aiModelIdx = answerParamsPart.params.findIndex(p => p.name === PP_KEY.AI_MODEL);
 
               if (aiTypeIdx >= 0) {
                 const savedTypeVal = answerParamsPart.params[aiTypeIdx].value;
@@ -1918,7 +1857,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               }
             };
 
-
             if (globalConfig.platformParams) {
               Object.keys(globalConfig.platformParams).forEach(key => {
                 restoreAiGetters(globalConfig.platformParams[key]);
@@ -1930,6 +1868,119 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             }
             if (globalConfig.platformParams && !globalConfig.platformParams.ykt) {
               globalConfig.platformParams.ykt = defaultConfig.platformParams.ykt;
+            }
+            // 「章节/作业/测验设置」改名为「章节/习题设置」：老配置里改掉名字，保住用户设置
+            const LEGACY_CHAPTER_NAME = "章节/作业/测验设置";
+            if (globalConfig.platformParams) {
+              Object.keys(globalConfig.platformParams).forEach((key) => {
+                const cfg = globalConfig.platformParams[key];
+                if (!cfg || !Array.isArray(cfg.parts)) return;
+                cfg.parts.forEach((part) => {
+                  if (part && part.name === LEGACY_CHAPTER_NAME) part.name = PP_KEY.CHAPTER;
+                });
+              });
+            }
+            // 雨课堂配置按学习通的分类对齐（模式设置 / 视频设置 / 答题参数 / 章节·习题设置）。
+            // 老配置里「自动提交」在答题参数、「自动切换」在任务设置，这里搬过去并保留用户已设的值。
+            if (globalConfig.platformParams && globalConfig.platformParams.ykt) {
+              const yktCfg = globalConfig.platformParams.ykt;
+              if (!Array.isArray(yktCfg.parts)) {
+                yktCfg.parts = JSON.parse(JSON.stringify(defaultConfig.platformParams.ykt.parts));
+              } else {
+                const parts = yktCfg.parts;
+                const findPart = (name) => parts.find(p => p && p.name === name);
+                // 老配置只有「仅视频 / 复习」两个模式，补上「正常 / 仅答题」时不能把用户
+                // 原来的选择顶掉：先记下有没有「正常模式」这个参数，没有就是老配置。
+                const modePartBefore = findPart(PP_KEY.MODE);
+                const hadNormalMode = !!(
+                  modePartBefore &&
+                  Array.isArray(modePartBefore.params) &&
+                  modePartBefore.params.some(x => x && x.name === PP_KEY.NORMAL_MODE)
+                );
+                const takeParam = (partName, paramName) => {
+                  const part = findPart(partName);
+                  if (!part || !Array.isArray(part.params)) return undefined;
+                  const idx = part.params.findIndex(x => x && x.name === paramName);
+                  if (idx < 0) return undefined;
+                  const value = part.params[idx].value;
+                  part.params.splice(idx, 1);
+                  return value;
+                };
+                // 先把老位置上的值取出来（会从原数组里摘掉）
+                const legacyAutoSubmit = takeParam(PP_KEY.ANSWER, "自动提交");
+                const legacyAutoSwitch = takeParam(PP_KEY.TASK_SETTINGS, PP_KEY.AUTO_NEXT);
+                const legacyAutoComment = takeParam(PP_KEY.TASK_SETTINGS, "自动评论");
+                // 补齐缺失的组**和组里缺失的参数**（只补组不够：章节组改名后已存在，新参数加不进去）
+                defaultConfig.platformParams.ykt.parts.forEach((defPart) => {
+                  const part = findPart(defPart.name);
+                  if (!part) {
+                    parts.push(JSON.parse(JSON.stringify(defPart)));
+                    return;
+                  }
+                  if (!Array.isArray(part.params)) part.params = [];
+                  defPart.params.forEach((defParam) => {
+                    if (!part.params.some(x => x && x.name === defParam.name)) {
+                      part.params.push(JSON.parse(JSON.stringify(defParam)));
+                    }
+                  });
+                  // 组内参数顺序也和默认对齐
+                  const paramOrder = defPart.params.map(x => x.name);
+                  part.params.sort((a, b) => {
+                    const ia = paramOrder.indexOf(a && a.name);
+                    const ib = paramOrder.indexOf(b && b.name);
+                    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+                  });
+                });
+                // 回填到新位置
+                const putValue = (partName, paramName, value) => {
+                  if (value === undefined) return;
+                  const part = findPart(partName);
+                  if (!part || !Array.isArray(part.params)) return;
+                  const target = part.params.find(x => x && x.name === paramName);
+                  if (target) target.value = value;
+                };
+                putValue(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, legacyAutoSubmit);
+                putValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, legacyAutoSwitch);
+                putValue(PP_KEY.CHAPTER, "自动评论", legacyAutoComment);
+                // 老配置补进「正常模式」后，会和原来的「仅视频 / 复习」同时选中，
+                // 这里保证只有一个模式生效：有旧选择就保留旧的，没有才用正常模式。
+                if (!hadNormalMode) {
+                  const modePart = findPart(PP_KEY.MODE);
+                  if (modePart && Array.isArray(modePart.params)) {
+                    const isOn = (name) => {
+                      const p = modePart.params.find(x => x && x.name === name);
+                      return !!(p && p.value);
+                    };
+                    const pick = (name, value) => {
+                      const p = modePart.params.find(x => x && x.name === name);
+                      if (p) p.value = value;
+                    };
+                    const legacy = isOn(PP_KEY.ONLY_ANSWER)
+                      ? PP_KEY.ONLY_ANSWER
+                      : isOn(PP_KEY.ONLY_VIDEO)
+                        ? PP_KEY.ONLY_VIDEO
+                        : isOn(PP_KEY.REVIEW)
+                          ? PP_KEY.REVIEW
+                          : "";
+                    pick(PP_KEY.NORMAL_MODE, !legacy);
+                    if (legacy) {
+                      [PP_KEY.ONLY_ANSWER, PP_KEY.ONLY_VIDEO, PP_KEY.REVIEW].forEach((k) => pick(k, k === legacy));
+                    }
+                  }
+                }
+                // 「任务设置」已并入「章节/习题设置」，空了就整组删掉
+                const taskIdx = parts.findIndex(p => p && p.name === PP_KEY.TASK_SETTINGS);
+                if (taskIdx >= 0 && (!parts[taskIdx].params || !parts[taskIdx].params.length)) {
+                  parts.splice(taskIdx, 1);
+                }
+                // 老配置的分组顺序可能和学习通不一致，按默认顺序重排（未知分组留在最后）
+                const order = defaultConfig.platformParams.ykt.parts.map(p => p.name);
+                parts.sort((a, b) => {
+                  const ia = order.indexOf(a && a.name);
+                  const ib = order.indexOf(b && b.name);
+                  return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+                });
+              }
             }
             if (!globalConfig.queryApis || !globalConfig.queryApis.length) {
               globalConfig.queryApis = defaultConfig.queryApis;
@@ -1974,32 +2025,29 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             }
             if (parsedStoredConfig.otherParams && parsedStoredConfig.otherParams.params) {
 
-              const otherParamsPart = globalConfig.platformParams.cx.parts.find(p => p.name === "答题参数");
+              const otherParamsPart = globalConfig.platformParams.cx.parts.find(p => p.name === PP_KEY.ANSWER);
               if (otherParamsPart && otherParamsPart.params) {
 
                 const nameMapping = {
-                  "答案校验模式": "答案校验",
-                  "跳过已答题": "跳过已答",
-                  "相似度答案匹配": "相似匹配",
-                  "答题正确率": "正确阈值"
+                  [PP_KEY.VERIFY_MODE]: PP_KEY.VERIFY,
+                  "跳过已答题": PP_KEY.SKIP_ANSWERED,
+                  "相似度答案匹配": PP_KEY.SIMILAR,
+                  "答题正确率": PP_KEY.THRESHOLD
                 };
 
-
-                const normalModeParam = otherParamsPart.params.find(p => p.name === "正常模式");
-                const aiModeParam = otherParamsPart.params.find(p => p.name === "AI模式");
-                const answerVerifyParam = otherParamsPart.params.find(p => p.name === "答案校验");
+                const normalModeParam = otherParamsPart.params.find(p => p.name === PP_KEY.NORMAL_MODE);
+                const aiModeParam = otherParamsPart.params.find(p => p.name === PP_KEY.AI_MODE);
+                const answerVerifyParam = otherParamsPart.params.find(p => p.name === PP_KEY.VERIFY);
 
                 if (normalModeParam && aiModeParam && answerVerifyParam) {
 
-                  const oldNormalMode = parsedStoredConfig.otherParams.params.find(p => p.name === "正常模式");
-                  const oldAiMode = parsedStoredConfig.otherParams.params.find(p => p.name === "AI模式");
-                  const oldAnswerVerify = parsedStoredConfig.otherParams.params.find(p => p.name === "答案校验模式");
-
+                  const oldNormalMode = parsedStoredConfig.otherParams.params.find(p => p.name === PP_KEY.NORMAL_MODE);
+                  const oldAiMode = parsedStoredConfig.otherParams.params.find(p => p.name === PP_KEY.AI_MODE);
+                  const oldAnswerVerify = parsedStoredConfig.otherParams.params.find(p => p.name === PP_KEY.VERIFY_MODE);
 
                   normalModeParam.value = false;
                   aiModeParam.value = false;
                   answerVerifyParam.value = false;
-
 
                   if (oldAnswerVerify && oldAnswerVerify.value) {
                     answerVerifyParam.value = true;
@@ -2014,7 +2062,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
                   const newName = nameMapping[oldParam.name] || oldParam.name;
                   const newParam = otherParamsPart.params.find(p => p.name === newName);
-                  if (newParam && !['正常模式', 'AI模式', '答案校验'].includes(newName)) {
+                  if (newParam && ![PP_KEY.NORMAL_MODE, PP_KEY.AI_MODE, PP_KEY.VERIFY].includes(newName)) {
                     newParam.value = oldParam.value;
                   }
                 });
@@ -2026,24 +2074,24 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
       }
       try {
-        const yktVideoPart = globalConfig.platformParams?.ykt?.parts?.find((p) => p.name === "视频设置");
+        const yktVideoPart = globalConfig.platformParams?.ykt?.parts?.find((p) => p.name === PP_KEY.VIDEO);
         const rateParams = (yktVideoPart?.params || []).filter((p) => p.exclusiveGroup === "ykt_rate");
         if (!globalConfig.yktRateDefaultMigrated) {
-          const autoRateParam = rateParams.find((p) => p.name === "自动倍速");
+          const autoRateParam = rateParams.find((p) => p.name === PP_KEY.AUTO_RATE);
           if (autoRateParam) autoRateParam.value = false;
-          const manualRateParam = rateParams.find((p) => p.name === "手动倍速");
+          const manualRateParam = rateParams.find((p) => p.name === PP_KEY.MANUAL_RATE);
           if (manualRateParam) manualRateParam.value = true;
           globalConfig.yktRateDefaultMigrated = true;
         }
         const active = rateParams.filter((p) => p.value);
         if (active.length > 1) {
-          const keep = active.find((p) => p.name !== "手动倍速") || active[0];
+          const keep = active.find((p) => p.name !== PP_KEY.MANUAL_RATE) || active[0];
           rateParams.forEach((p) => { p.value = p.name === keep.name; });
         }
-        const speedParamYkt = yktVideoPart?.params?.find((p) => p.name === "播放倍速");
+        const speedParamYkt = yktVideoPart?.params?.find((p) => p.name === PP_KEY.RATE);
         if (speedParamYkt) {
-          const manualOn = rateParams.some((p) => p.name === "手动倍速" && p.value);
-          const breakOn = rateParams.some((p) => p.name === "突破倍速" && p.value);
+          const manualOn = rateParams.some((p) => p.name === PP_KEY.MANUAL_RATE && p.value);
+          const breakOn = rateParams.some((p) => p.name === PP_KEY.BREAK_RATE && p.value);
           const limit = breakOn ? 8 : manualOn ? 2 : 8;
           speedParamYkt.max = limit;
           if (Number(speedParamYkt.value) > limit) speedParamYkt.value = limit;
@@ -2057,28 +2105,28 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (!Array.isArray(parts)) return;
           parts.forEach((part) => {
             (part.params || []).forEach((param) => {
-              if (param.name === "激活挂机" && param.value === true) afkValue = true;
+              if (param.name === PP_KEY.STANDBY && param.value === true) afkValue = true;
             });
           });
           for (let i = parts.length - 1; i >= 0; i--) {
             const part = parts[i];
-            if (part.name === "通用设置") {
+            if (part.name === PP_KEY.GENERAL) {
               parts.splice(i, 1);
               continue;
             }
             if (Array.isArray(part.params)) {
-              const idx = part.params.findIndex((p) => p.name === "激活挂机");
+              const idx = part.params.findIndex((p) => p.name === PP_KEY.STANDBY);
               if (idx >= 0) part.params.splice(idx, 1);
             }
           }
         });
-        const sharedAfkParam = { name: "激活挂机", value: afkValue, type: "boolean" };
+        const sharedAfkParam = { name: PP_KEY.STANDBY, value: afkValue, type: "boolean" };
         Object.keys(platforms).forEach((key) => {
           const parts = platforms[key] && platforms[key].parts;
           if (!Array.isArray(parts)) return;
-          let modePart = parts.find((p) => p.name === "模式设置");
+          let modePart = parts.find((p) => p.name === PP_KEY.MODE);
           if (!modePart) {
-            modePart = { name: "模式设置", params: [] };
+            modePart = { name: PP_KEY.MODE, params: [] };
             parts.unshift(modePart);
           }
           if (!Array.isArray(modePart.params)) modePart.params = [];
@@ -2091,9 +2139,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     },
     actions: {}
   });
-
-
-
 
   let ppfxLogSeq = 0;
   const useLogStore = pinia.defineStore("logStore", {
@@ -2117,9 +2162,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   });
 
-
-
-
   const useQuestionStore = pinia.defineStore("questionStore", {
     state: () => ({
       questionList: []
@@ -2133,10 +2175,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       }
     }
   });
-
-
-
-
 
   const useProgressStore = pinia.defineStore("progressStore", {
     state: () => ({
@@ -2471,7 +2509,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const config = useConfigStore();
       const modeLabel = vue.computed(() => {
         const platform = config.platformParams?.[config.platformName];
-        const part = platform?.parts?.find((p) => p.name === "模式设置");
+        const part = platform?.parts?.find((p) => p.name === PP_KEY.MODE);
         const active = part?.params?.find((p) => p.value);
         return active ? active.name : "默认模式";
       });
@@ -2562,23 +2600,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const configStore = useConfigStore();
       const logStore = useLogStore();
 
-
       const verifyState = vue.ref({
         status: '',
         message: ''
       });
 
-
       const pingDelay = vue.ref(null);
-
 
       const remainingCount = vue.ref(null);
 
-
       const existingTokens = vue.ref([]);
-
-
-
 
       const _uiUpdateTrigger = vue.ref(0);
       const triggerUiUpdate = () => { _uiUpdateTrigger.value++; };
@@ -2588,16 +2619,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
       const fetchModelCosts = async () => {
         try {
-          const response = await new Promise((resolve, reject) => {
-            _GM_xmlhttpRequest({
-              method: 'GET',
-              url: `${CURRENT_SERVER}/model-costs`,
-              timeout: 5000,
-              onload: (res) => resolve(res),
-              onerror: (err) => reject(err),
-              ontimeout: () => reject(new Error('timeout'))
-            });
-          });
+          const response = await ppHttpGet("/model-costs");
           const data = JSON.parse(response.responseText);
           if (data.code === 200 && data.data) {
             modelCosts.value = data.data;
@@ -2615,14 +2637,14 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
       const consumptionText = vue.computed(() => {
         watchUiUpdate();
-        const answerParamsPart = __props.globalConfig.platformParams?.[__props.globalConfig.platformName]?.parts?.find(p => p.name === "答题参数");
+        const answerParamsPart = __props.globalConfig.platformParams?.[__props.globalConfig.platformName]?.parts?.find(p => p.name === PP_KEY.ANSWER);
         if (!answerParamsPart) return "每题消耗约: 1 次";
 
-        const aiModeParam = answerParamsPart.params.find(p => p.name === "AI模式");
-        const normalModeParam = answerParamsPart.params.find(p => p.name === "正常模式");
-        const verifyModeParam = answerParamsPart.params.find(p => p.name === "答案校验");
-        const aiTypeParam = answerParamsPart.params.find(p => p.name === "AI 类型选择");
-        const aiModelParam = answerParamsPart.params.find(p => p.name === "AI 模型选择");
+        const aiModeParam = answerParamsPart.params.find(p => p.name === PP_KEY.AI_MODE);
+        const normalModeParam = answerParamsPart.params.find(p => p.name === PP_KEY.NORMAL_MODE);
+        const verifyModeParam = answerParamsPart.params.find(p => p.name === PP_KEY.VERIFY);
+        const aiTypeParam = answerParamsPart.params.find(p => p.name === PP_KEY.AI_TYPE);
+        const aiModelParam = answerParamsPart.params.find(p => p.name === PP_KEY.AI_MODEL);
 
         const isAiModeActive = aiModeParam && aiModeParam.value;
         const isNormalModeActive = normalModeParam && normalModeParam.value;
@@ -2643,7 +2665,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return /^\d/.test(cost) ? `每题消耗约: ${cost}` : `每题消耗: ${cost}`;
       });
 
-
       const debounce = (fn, delay) => {
         let timer = null;
         return (...args) => {
@@ -2652,22 +2673,18 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         };
       };
 
-
       const autoVerifyToken = debounce(() => {
 
         const currentToken = vue.unref(configStore).queryApis[0].token;
-
 
         if (!currentToken || !/^\d{16}$|^\d{24}$/.test(currentToken)) {
 
           return;
         }
 
-
         logStore.addLog('💡 检测到有效的Token格式，自动验证中...', 'info');
         verifyToken();
       }, 800);
-
 
       const selectToken = (token) => {
         if (token) {
@@ -2679,9 +2696,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
       };
 
-
       let lastVerifyTime = 0;
-
 
       const verifyToken = () => {
 
@@ -2694,7 +2709,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const token = vue.unref(configStore).queryApis[0].token;
 
         const userId = getUid();
-
 
         if (!token) {
 
@@ -2712,7 +2726,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         const startTime = Date.now();
 
-
         const configStoreRef = vue.unref(configStore);
         const workType = configStoreRef.platformName === "zhs" ? "zhs" : "cx";
         _GM_xmlhttpRequest({
@@ -2727,12 +2740,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
               if (res.data?.sponsorUrl) {
                 SPONSOR_URL = res.data.sponsorUrl;
-                const isFreeTokenWithBalance =
-                  res.code === 200 &&
-                  res.data.valid &&
-                  Number(res.data.num) > 0 &&
-                  (res.data.newToken || res.data.isNew || res.data.planCode === 'free');
-                if (!isFreeTokenWithBalance) triggerWelfarePromo();
               }
 
               if (res.code === 200 && res.data && res.data.valid) {
@@ -2741,7 +2748,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 configStore.tokenVerified = true;
                 configStore.tokenVerifyError = null;
                 logStore.addLog(`✅ Token验证成功，剩余次数: ${res.data.num}次`, 'success');
-
 
                 if (res.data.sponsorUrl) {
                   SPONSOR_URL = res.data.sponsorUrl;
@@ -2775,7 +2781,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 configStore.tokenVerified = false;
                 configStore.tokenVerifyError = 'invalid';
                 if (res.data?.sponsorUrl) {
-                  triggerWelfarePromo();
                   const sponsorUrl = res.data.sponsorUrl;
                   const msgHtml = (res.msg || '').replace('[可切换赞助获取token，不限制账户]',
                     `[<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">可切换赞助获取token，不限制账户</a>]`);
@@ -2813,14 +2818,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         });
       };
 
-
       const isMajorUpdate = (currentVersion, latestVersion) => {
         const parts1 = currentVersion.split('.').map(Number);
         const parts2 = latestVersion.split('.').map(Number);
 
         return (parts1[0] || 0) < (parts2[0] || 0) || (parts1[1] || 0) < (parts2[1] || 0);
       };
-
 
       const checkUpdate = () => {
 
@@ -2861,7 +2864,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         });
       };
-
 
       const showUpdateDialog = (latestVersion, updateUrl, updateMessage, currentVersion) => {
         try {
@@ -2907,13 +2909,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const token = vue.computed(() => configStore.queryApis?.[0]?.token || "");
 
       const PART_ICONS = {
-        "模式设置": "sliders",
-        "视频设置": "play",
-        "答题参数": "spark",
-        "章节/作业/测验设置": "list",
-        "考试设置": "shield",
-        "任务设置": "check",
-        "答题设置": "spark"
+        [PP_KEY.MODE]: "sliders",
+        [PP_KEY.VIDEO]: "play",
+        [PP_KEY.ANSWER]: "spark",
+        [PP_KEY.CHAPTER]: "list",
+        [PP_KEY.EXAM]: "shield",
+        [PP_KEY.ANSWER_SETTINGS]: "spark"
       };
       const GROUP_TITLES = {
         cx_mode: "运行模式",
@@ -2924,31 +2925,56 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         mode: "答题方式"
       };
       const PARAM_UNITS = {
-        "播放倍速": "x",
-        "正确阈值": "%",
-        "答题间隔": "秒"
+        [PP_KEY.RATE]: "x",
+        [PP_KEY.THRESHOLD]: "%",
+        [PP_KEY.ANSWER_GAP]: "秒"
       };
       const PART_DESCS = {
-        "模式设置": "选择脚本在当前页面的运行方式，模式之间互斥。",
-        "视频设置": "控制播放方式、倍速与视频内答题行为。",
-        "答题参数": "选择题库 / AI 答题策略，并控制消耗与准确率。",
-        "章节/作业/测验设置": "控制章节测验、作业的提交与自动切换。",
-        "考试设置": "控制考试页面的自动切换行为。",
-        "任务设置": "控制雨课堂任务的评论与自动切换。",
-        "答题设置": "控制智慧树的答题行为。"
+        [PP_KEY.MODE]: "选择脚本在当前页面的运行方式，模式之间互斥。",
+        [PP_KEY.VIDEO]: "控制播放方式、倍速与视频内答题行为。",
+        [PP_KEY.ANSWER]: "选择题库 / AI 答题策略，并控制消耗与准确率。",
+        [PP_KEY.CHAPTER]: "控制章节/习题的自动评论、提交与自动切换。",
+        [PP_KEY.EXAM]: "控制考试页面的自动切换行为。",
+        [PP_KEY.ANSWER_SETTINGS]: "控制智慧树的答题行为。"
       };
       const MODE_DESCS = {
-        "正常模式": "自动播放视频并完成章节测验，适合日常刷课。",
-        "仅视频": "只处理视频进度，不参与任何答题。",
-        "仅答题": "只完成章节测验、作业或考试，不主动播放视频。",
-        "复习模式": "重新完成已学内容，适合考前复习。",
+        [PP_KEY.NORMAL_MODE]: "自动播放视频并完成章节测验，适合日常刷课。",
+        [PP_KEY.ONLY_VIDEO]: "只处理视频进度，不参与任何答题。",
+        [PP_KEY.ONLY_ANSWER]: "只完成章节测验、作业或考试，不主动播放视频。",
+        [PP_KEY.REVIEW]: "重新完成已学内容，适合考前复习。",
         "答题": "开启后执行智慧树答题。"
       };
 
       const hasParam = (part, name) => part.params.some((p) => p.name === name);
       const getParam = (part, name) => part.params.find((p) => p.name === name);
-      const aiActive = (part) => !!(getParam(part, "AI模式") && getParam(part, "AI模式").value);
-      const hasAiBlock = (part) => !!getParam(part, "AI 类型选择") && !!getParam(part, "AI 模型选择");
+      // 从播放器「倍速」菜单里读出平台允许的最高倍速并缓存
+      const readMaxPlaybackRate = () => {
+        let maxRate = window.__maxPlaybackRate;
+        if (!maxRate) {
+          try {
+            const iframes = document.querySelectorAll("iframe");
+            for (const iframe of iframes) {
+              try {
+                if (iframe.contentDocument) {
+                  const items = iframe.contentDocument.querySelectorAll(".vjs-playback-rate .vjs-menu-content .vjs-menu-item");
+                  if (items.length > 0) {
+                    maxRate = 1;
+                    items.forEach((mi) => {
+                      const rate = parseFloat(String(mi.textContent).trim().replace("x", ""));
+                      if (!isNaN(rate) && rate > maxRate) maxRate = rate;
+                    });
+                    window.__maxPlaybackRate = maxRate;
+                    break;
+                  }
+                }
+              } catch (e) { continue; }
+            }
+          } catch (e) {}
+        }
+        return maxRate || 3;
+      };
+      const aiActive = (part) => !!(getParam(part, PP_KEY.AI_MODE) && getParam(part, PP_KEY.AI_MODE).value);
+      const hasAiBlock = (part) => !!getParam(part, PP_KEY.AI_TYPE) && !!getParam(part, PP_KEY.AI_MODEL);
 
       const isParamDisabled = (part, param) => {
         if (param.locked) return true;
@@ -2968,12 +2994,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       };
 
       const groupTitle = (part, group) => {
-        if (part.name === "模式设置") return "";
+        if (part.name === PP_KEY.MODE) return "";
         return GROUP_TITLES[group] || "选项";
       };
 
       const looseParams = (part) => {
-        const skip = new Set(["AI 类型选择", "AI 模型选择", "联网搜索"]);
+        const skip = new Set([PP_KEY.AI_TYPE, PP_KEY.AI_MODEL, PP_KEY.WEB_SEARCH]);
         return part.params.filter((p) => !(p.type === "boolean" && p.exclusiveGroup) && !skip.has(p.name));
       };
 
@@ -3002,73 +3028,25 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
         param.value = next;
 
-        if ((param.name === "模拟播放" || param.name === "正常播放") && next) {
-          const speedParam = getParam(part, "播放倍速");
+        if ((param.name === PP_KEY.SIMULATE || param.name === PP_KEY.NORMAL_PLAY) && next) {
+          const speedParam = getParam(part, PP_KEY.RATE);
           if (speedParam) {
-            if (param.name === "模拟播放") {
-              const autoMax = getParam(part, "自动倍速")?.value || false;
-              if (autoMax) {
-                let maxRate = window.__maxPlaybackRate;
-                if (!maxRate) {
-                  try {
-                    const iframes = document.querySelectorAll("iframe");
-                    for (const iframe of iframes) {
-                      try {
-                        if (iframe.contentDocument) {
-                          const items = iframe.contentDocument.querySelectorAll(".vjs-playback-rate .vjs-menu-content .vjs-menu-item");
-                          if (items.length > 0) {
-                            maxRate = 1;
-                            items.forEach((mi) => {
-                              const rate = parseFloat(String(mi.textContent).trim().replace("x", ""));
-                              if (!isNaN(rate) && rate > maxRate) maxRate = rate;
-                            });
-                            window.__maxPlaybackRate = maxRate;
-                            break;
-                          }
-                        }
-                      } catch (e) { continue; }
-                    }
-                  } catch (e) {}
-                }
-                speedParam.max = maxRate || 3;
-              } else {
-                speedParam.max = 3;
-              }
+            if (param.name === PP_KEY.SIMULATE) {
+              const autoMax = getParam(part, PP_KEY.AUTO_RATE)?.value || false;
+              speedParam.max = autoMax ? readMaxPlaybackRate() : 3;
               if (speedParam.value > speedParam.max) speedParam.value = speedParam.max;
             } else {
-              let maxRate = window.__maxPlaybackRate;
-              if (!maxRate) {
-                try {
-                  const iframes = document.querySelectorAll("iframe");
-                  for (const iframe of iframes) {
-                    try {
-                      if (iframe.contentDocument) {
-                        const items = iframe.contentDocument.querySelectorAll(".vjs-playback-rate .vjs-menu-content .vjs-menu-item");
-                        if (items.length > 0) {
-                          maxRate = 1;
-                          items.forEach((mi) => {
-                            const rate = parseFloat(String(mi.textContent).trim().replace("x", ""));
-                            if (!isNaN(rate) && rate > maxRate) maxRate = rate;
-                          });
-                          window.__maxPlaybackRate = maxRate;
-                          break;
-                        }
-                      }
-                    } catch (e) { continue; }
-                  }
-                } catch (e) {}
-              }
-              speedParam.max = maxRate || 3;
+              speedParam.max = readMaxPlaybackRate();
             }
           }
         }
 
         triggerUiUpdate();
 
-        if (param.name === "自动倍速") {
-          const speedParam = getParam(part, "播放倍速");
+        if (param.name === PP_KEY.AUTO_RATE) {
+          const speedParam = getParam(part, PP_KEY.RATE);
           if (speedParam) {
-            const isSimulate = getParam(part, "模拟播放")?.value || false;
+            const isSimulate = getParam(part, PP_KEY.SIMULATE)?.value || false;
             if (isSimulate) {
               if (next) {
                 speedParam.max = window.__maxPlaybackRate || 3;
@@ -3080,8 +3058,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           }
         }
 
-        if (part.name === "视频设置" && (param.name === "手动倍速" || param.name === "突破倍速")) {
-          const speedParam = getParam(part, "播放倍速");
+        if (part.name === PP_KEY.VIDEO && (param.name === PP_KEY.MANUAL_RATE || param.name === PP_KEY.BREAK_RATE)) {
+          const speedParam = getParam(part, PP_KEY.RATE);
           if (speedParam) {
             let menuMax = 2;
             try {
@@ -3089,7 +3067,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               const rates = (listText.match(/(\d+(?:\.\d+)?)\s*X/gi) || []).map((s) => parseFloat(s));
               if (rates.length) menuMax = Math.max(...rates);
             } catch (e) {}
-            const limit = param.name === "手动倍速" ? menuMax : 8;
+            const limit = param.name === PP_KEY.MANUAL_RATE ? menuMax : 8;
             speedParam.max = limit;
             if (Number(speedParam.value) > limit) speedParam.value = limit;
           }
@@ -3111,15 +3089,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const partSummary = (part) => {
         const out = [];
         const active = part.params.find((p) => p.type === "boolean" && p.exclusiveGroup && p.value);
-        const flags = part.params.filter((p) => p.type === "boolean" && !p.exclusiveGroup && p.value && p.name !== "联网搜索");
+        const flags = part.params.filter((p) => p.type === "boolean" && !p.exclusiveGroup && p.value && p.name !== PP_KEY.WEB_SEARCH);
         if (active) out.push(active.name);
         else if (flags.length) out.push(flags[0].name);
-        if (part.name === "答题参数" && aiActive(part)) {
-          const type = getParam(part, "AI 类型选择");
-          const model = getParam(part, "AI 模型选择");
+        if (part.name === PP_KEY.ANSWER && aiActive(part)) {
+          const type = getParam(part, PP_KEY.AI_TYPE);
+          const model = getParam(part, PP_KEY.AI_MODEL);
           if (type && model) out.push([type.value, model.value].filter(Boolean).join(" "));
         }
-        const speed = getParam(part, "播放倍速");
+        const speed = getParam(part, PP_KEY.RATE);
         if (speed) out.push(speed.value + "x");
         return out.length ? out.join(" · ") : "默认";
       };
@@ -3300,7 +3278,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           vue.h("span", { class: "pp-set-main" }, [
             vue.h("span", { class: "pp-set-name" }, [
               part.name,
-              part.name === "答题参数" && !configStore.tokenVerified
+              part.name === PP_KEY.ANSWER && !configStore.tokenVerified
                 ? vue.h("span", { class: "pp-set-badge" }, "待验证")
                 : null
             ]),
@@ -3348,9 +3326,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const Select = vue.resolveComponent("el-select");
         const Option = vue.resolveComponent("el-option");
         const Switch = vue.resolveComponent("el-switch");
-        const typeParam = getParam(part, "AI 类型选择");
-        const modelParam = getParam(part, "AI 模型选择");
-        const webParam = getParam(part, "联网搜索");
+        const typeParam = getParam(part, PP_KEY.AI_TYPE);
+        const modelParam = getParam(part, PP_KEY.AI_MODEL);
+        const webParam = getParam(part, PP_KEY.WEB_SEARCH);
         const active = aiActive(part);
         const typeOptions = typeParam.options || [];
         const modelOptions = (globalModelConfig?.typeModelMap?.[typeParam.value]) || modelParam.options || [];
@@ -3413,32 +3391,38 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
       const renderHints = (part) => {
         const hints = [];
-        if (hasParam(part, "激活挂机")) {
+        if (hasParam(part, PP_KEY.STANDBY)) {
           hints.push(ppHint("浏览器最小化刷课时，请开启激活挂机", { tone: "ok", icon: "check" }));
         }
-        if (part.name === "答题参数") {
-          const verify = getParam(part, "答案校验");
+        if (part.name === PP_KEY.ANSWER) {
+          const verify = getParam(part, PP_KEY.VERIFY);
           if (verify && verify.value) {
             hints.push(ppHint("校验模式会同时请求题库与 AI，答题次数双倍消耗、耗时更长", { tone: "warn", icon: "alert" }));
           }
-          const web = getParam(part, "联网搜索");
+          const web = getParam(part, PP_KEY.WEB_SEARCH);
           if (aiActive(part) && web && web.value) {
             hints.push(ppHint("联网搜索会显著增加 Token 与答题次数消耗", { tone: "warn", icon: "alert" }));
           }
         }
-        if (part.name === "视频设置") {
-          const breakRate = getParam(part, "突破倍速");
-          const autoRate = getParam(part, "自动倍速");
-          const simulate = getParam(part, "模拟播放");
-          const manual = getParam(part, "手动倍速");
-          if (breakRate && breakRate.value) {
-            hints.push(ppHint("突破倍速上限 8x，过高可能导致学习记录被清空", { tone: "warn", icon: "alert" }));
+        if (part.name === PP_KEY.VIDEO) {
+          const breakRate = getParam(part, PP_KEY.BREAK_RATE);
+          const autoRate = getParam(part, PP_KEY.AUTO_RATE);
+          const simulate = getParam(part, PP_KEY.SIMULATE);
+          const manual = getParam(part, PP_KEY.MANUAL_RATE);
+          const rateParam = getParam(part, PP_KEY.RATE);
+          const rateNum = Number(rateParam && rateParam.value) || 0;
+          const forced = !!(breakRate && breakRate.value);
+          if (forced) {
+            hints.push(ppHint("突破倍速会强制解锁到设定值，过高倍速可能触发平台异常、学习进度被清空，请谨慎使用", { tone: "warn", icon: "alert" }));
           } else if (autoRate && autoRate.value) {
             hints.push(ppHint("自动倍速受播放器限制，将使用允许的最大值", { icon: "info" }));
           } else if (simulate && simulate.value) {
             hints.push(ppHint("模拟播放会使用播放器允许的最大倍速", { icon: "info" }));
           } else if (manual && manual.value) {
             hints.push(ppHint("手动倍速受播放器限制，最大为播放器允许值", { icon: "info" }));
+          }
+          if (rateNum > 4) {
+            hints.push(ppHint(`当前设为 ${rateNum}x，偏高倍速可能被平台判定异常、学习记录被清空，建议不超过 4x`, { tone: "warn", icon: "alert" }));
           }
         }
         return hints;
@@ -3460,7 +3444,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               }
             )
           ]));
-          if (part.name === "模式设置" && active && MODE_DESCS[active.name]) {
+          if (part.name === PP_KEY.MODE && active && MODE_DESCS[active.name]) {
             nodes.push(ppHint(MODE_DESCS[active.name], { icon: "info" }));
           }
         });
@@ -3480,7 +3464,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           vue.h("div", { class: "pp-detail-head" }, [
             vue.h("button", { type: "button", class: "pp-back", onClick: closePart, title: "返回设置" }, ppIcon("chevronLeft", 14)),
             vue.h("span", { class: "pp-detail-title" }, part.name),
-            part.name === "答题参数" ? vue.h("span", { class: "pp-detail-extra" }, consumptionText.value) : null
+            part.name === PP_KEY.ANSWER ? vue.h("span", { class: "pp-detail-extra" }, consumptionText.value) : null
           ]),
           vue.h("div", { class: "pp-detail-desc" }, PART_DESCS[part.name] || ""),
           ...renderPartBody(part),
@@ -3638,12 +3622,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   });
   const QuestionTable =  _export_sfc(_sfc_main$6, [["__scopeId", "data-v-18523ca7"]]);
 
-
   const TOKEN_USAGE_MODE_OPTIONS = [
     { label: "全部模式", value: "" },
-    { label: "正常模式", value: "正常模式" },
+    { label: PP_KEY.NORMAL_MODE, value: PP_KEY.NORMAL_MODE },
     { label: "校验模式", value: "校验模式" },
-    { label: "AI模式", value: "AI模式" },
+    { label: PP_KEY.AI_MODE, value: PP_KEY.AI_MODE },
     { label: "AI聊天", value: "AI聊天" }
   ];
 
@@ -3675,28 +3658,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const isTokenValid = (value) => /^\d{16}$|^\d{24}$/.test(String(value || "").trim());
 
       const pad2 = (n) => n < 10 ? "0" + n : "" + n;
-      const formatTime = (ts) => {
+      // mode: "datetime" | "date" | "clock"
+      const formatTs = (ts, mode) => {
         const num = Number(ts);
-        if (!num) return "-";
+        if (!num) return mode === "clock" ? "" : "-";
         const d = new Date(num * 1000);
-        if (isNaN(d.getTime())) return "-";
-        return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+        if (isNaN(d.getTime())) return mode === "clock" ? "" : "-";
+        const ymd = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+        const hms = pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+        if (mode === "clock") return hms;
+        if (mode === "date") return ymd;
+        return ymd + " " + hms;
       };
+      const formatTime = (ts) => formatTs(ts, "datetime");
       const formatNumber = (value) => (Number(value) || 0).toLocaleString("zh-CN");
-      const formatDate = (ts) => {
-        const num = Number(ts);
-        if (!num) return "-";
-        const d = new Date(num * 1000);
-        if (isNaN(d.getTime())) return "-";
-        return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
-      };
-      const formatClock = (ts) => {
-        const num = Number(ts);
-        if (!num) return "";
-        const d = new Date(num * 1000);
-        if (isNaN(d.getTime())) return "";
-        return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
-      };
+      const formatDate = (ts) => formatTs(ts, "date");
+      const formatClock = (ts) => formatTs(ts, "clock");
       const remainingText = (value) => (value === null || value === undefined) ? "—" : formatNumber(value);
       const remainingColor = (value) => {
         const num = Number(value);
@@ -3729,9 +3706,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         "默认": { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" }
       };
       const MODE_CHIP_STYLES = {
-        "正常模式": { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" },
+        [PP_KEY.NORMAL_MODE]: { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" },
         "校验模式": { "background": "#fdf6ec", "border": "1px solid #faecd8", "color": "#e6a23c" },
-        "AI模式": { "background": "#f0f9eb", "border": "1px solid #e1f3d8", "color": "#67c23a" },
+        [PP_KEY.AI_MODE]: { "background": "#f0f9eb", "border": "1px solid #e1f3d8", "color": "#67c23a" },
         "AI聊天": { "background": "#eef7ff", "border": "1px solid #cfe7ff", "color": "#0369a1" },
         "默认": { "background": "#f4f4f5", "border": "1px solid #e9e9eb", "color": "#909399" }
       };
@@ -3749,7 +3726,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const names = (Array.isArray(row.models) ? row.models : [])
           .map((model) => String(model && model.name ? model.name : "").trim())
           .filter(Boolean);
-        if (!names.length) return row.mode === "AI模式" ? "模型未记录" : "";
+        if (!names.length) return row.mode === PP_KEY.AI_MODE ? "模型未记录" : "";
         const unique = [...new Set(names)];
         return unique.length > 1 ? unique[0] + "（等）" : unique[0];
       };
@@ -3872,7 +3849,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               vue.h("span", { class: "pp-u-line" }, [
                 vue.h("span", { class: "pp-u-date" }, (() => { const d = formatDate(row.createdAt); return d === "-" ? "-" : d.slice(5); })()),
                 vue.h("span", { class: "pp-u-time" }, formatClock(row.createdAt)),
-                row.mode ? vue.h("span", { class: "pp-u-mode " + (row.mode === "AI模式" ? "is-ai" : row.mode === "AI聊天" ? "is-chat" : row.mode === "校验模式" ? "is-verify" : row.mode === "正常模式" ? "is-normal" : "") }, row.mode) : null
+                row.mode ? vue.h("span", { class: "pp-u-mode " + (row.mode === PP_KEY.AI_MODE ? "is-ai" : row.mode === "AI聊天" ? "is-chat" : row.mode === "校验模式" ? "is-verify" : row.mode === PP_KEY.NORMAL_MODE ? "is-normal" : "") }, row.mode) : null
               ]),
               vue.h("span", { class: "pp-u-sub" }, [
                   vue.h("span", { class: "pp-u-sub-text" },
@@ -5551,7 +5528,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           title: "开启后按需联网，寒暄/闲聊不会搜索",
           disabled: streaming.value,
           onClick: () => { webSearch.value = !webSearch.value; }
-        }, [ppIcon("search", 10), vue.h("span", null, "联网搜索")])
+        }, [ppIcon("search", 10), vue.h("span", null, PP_KEY.WEB_SEARCH)])
       ]);
 
       const renderComposer = () => {
@@ -5608,10 +5585,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       };
     }
   });
-
-
-
-
 
   const _sfc_main$4 = vue.defineComponent({
     name: "AuthorWords",
@@ -6058,7 +6031,7 @@ const AuthorWords = _sfc_main$4;
         const groups = d.modelGroups || [];
         return vue.h("div", null, [
           ppDoc("模式说明", "sliders", [
-            ...modeBlock("正常模式", "pp-mode-normal", d.modes.normal || {}),
+            ...modeBlock(PP_KEY.NORMAL_MODE, "pp-mode-normal", d.modes.normal || {}),
             ...modeBlock("校验模式", "pp-mode-verify", d.modes.verify || {}),
             ...modeBlock("AI 模式", "pp-mode-ai", d.modes.ai || {})
           ]),
@@ -6087,28 +6060,12 @@ const AuthorWords = _sfc_main$4;
   });
   const ScriptDescription = _sfc_main_description;
 
-
-
-
-
   const FrameScanner = {
     collectDirect(root) {
       return [...root.querySelectorAll("iframe")];
     },
     collectDeep(root) {
-      const result = [];
-      const collect = (node) => {
-        for (const fr of node.querySelectorAll("iframe")) {
-          result.push(fr);
-          try {
-            if (fr.contentDocument) {
-              collect(fr.contentDocument.documentElement);
-            }
-          } catch (e) {  }
-        }
-      };
-      collect(root);
-      return rxjs.of(result);
+      return rxjs.of(FrameScanner.collectDeepSync(root));
     },
     collectDeepSync(root) {
       const result = [];
@@ -6126,130 +6083,6 @@ const AuthorWords = _sfc_main$4;
       return result;
     }
   };
-  var Typr$1={},Typr={parse:function(r){var e=Typr._bin,t=new Uint8Array(r);if("ttcf"==e.readASCII(t,0,4)){var a=4;e.readUshort(t,a),a+=2,e.readUshort(t,a),a+=2;var n=e.readUint(t,a);a+=4;for(var s=[],o=0;o<n;o++){var i=e.readUint(t,a);a+=4,s.push(Typr._readFont(t,i))}return s}return[Typr._readFont(t,0)]},_readFont:function(r,e){var t=Typr._bin,a=e;t.readFixed(r,e),e+=4;var n=t.readUshort(r,e);e+=2,t.readUshort(r,e),e+=2,t.readUshort(r,e),e+=2,t.readUshort(r,e),e+=2;for(var s=["cmap","head","hhea","maxp","hmtx","name","OS/2","post","loca","glyf","kern","CFF ","GPOS","GSUB","SVG "],o={_data:r,_offset:a},i={},h=0;h<n;h++){var f=t.readASCII(r,e,4);e+=4,t.readUint(r,e),e+=4;var p=t.readUint(r,e);e+=4;var d=t.readUint(r,e);e+=4,i[f]={offset:p,length:d}}for(h=0;h<s.length;h++){var l=s[h];i[l]&&(o[l.trim()]=Typr[l.trim()].parse(r,i[l].offset,i[l].length,o))}return o},_tabOffset:function(r,e,t){for(var a=Typr._bin,n=a.readUshort(r,t+4),s=t+12,o=0;o<n;o++){var i=a.readASCII(r,s,4);s+=4,a.readUint(r,s),s+=4;var h=a.readUint(r,s);if(s+=4,a.readUint(r,s),s+=4,i==e)return h}return 0}};Typr._bin={readFixed:function(r,e){return(r[e]<<8|r[e+1])+(r[e+2]<<8|r[e+3])/65540},readF2dot14:function(r,e){return Typr._bin.readShort(r,e)/16384},readInt:function(r,e){return Typr._bin._view(r).getInt32(e)},readInt8:function(r,e){return Typr._bin._view(r).getInt8(e)},readShort:function(r,e){return Typr._bin._view(r).getInt16(e)},readUshort:function(r,e){return Typr._bin._view(r).getUint16(e)},readUshorts:function(r,e,t){for(var a=[],n=0;n<t;n++)a.push(Typr._bin.readUshort(r,e+2*n));return a},readUint:function(r,e){return Typr._bin._view(r).getUint32(e)},readUint64:function(r,e){return 4294967296*Typr._bin.readUint(r,e)+Typr._bin.readUint(r,e+4)},readASCII:function(r,e,t){for(var a="",n=0;n<t;n++)a+=String.fromCharCode(r[e+n]);return a},readUnicode:function(r,e,t){for(var a="",n=0;n<t;n++){var s=r[e++]<<8|r[e++];a+=String.fromCharCode(s)}return a},_tdec:"undefined"!=typeof window&&window.TextDecoder?new window.TextDecoder:null,readUTF8:function(r,e,t){var a=Typr._bin._tdec;return a&&0==e&&t==r.length?a.decode(r):Typr._bin.readASCII(r,e,t)},readBytes:function(r,e,t){for(var a=[],n=0;n<t;n++)a.push(r[e+n]);return a},readASCIIArray:function(r,e,t){for(var a=[],n=0;n<t;n++)a.push(String.fromCharCode(r[e+n]));return a},_view:function(r){return r._dataView||(r._dataView=r.buffer?new DataView(r.buffer,r.byteOffset,r.byteLength):new DataView(new Uint8Array(r).buffer))}},Typr._lctf={},Typr._lctf.parse=function(r,e,t,a,n){var s=Typr._bin,o={},i=e;s.readFixed(r,e),e+=4;var h=s.readUshort(r,e);e+=2;var f=s.readUshort(r,e);e+=2;var p=s.readUshort(r,e);return e+=2,o.scriptList=Typr._lctf.readScriptList(r,i+h),o.featureList=Typr._lctf.readFeatureList(r,i+f),o.lookupList=Typr._lctf.readLookupList(r,i+p,n),o},Typr._lctf.readLookupList=function(r,e,t){var a=Typr._bin,n=e,s=[],o=a.readUshort(r,e);e+=2;for(var i=0;i<o;i++){var h=a.readUshort(r,e);e+=2;var f=Typr._lctf.readLookupTable(r,n+h,t);s.push(f)}return s},Typr._lctf.readLookupTable=function(r,e,t){var a=Typr._bin,n=e,s={tabs:[]};s.ltype=a.readUshort(r,e),e+=2,s.flag=a.readUshort(r,e),e+=2;var o=a.readUshort(r,e);e+=2;for(var i=s.ltype,h=0;h<o;h++){var f=a.readUshort(r,e);e+=2;var p=t(r,i,n+f,s);s.tabs.push(p)}return s},Typr._lctf.numOfOnes=function(r){for(var e=0,t=0;t<32;t++)r>>>t&1&&e++;return e},Typr._lctf.readClassDef=function(r,e){var t=Typr._bin,a=[],n=t.readUshort(r,e);if(e+=2,1==n){var s=t.readUshort(r,e);e+=2;var o=t.readUshort(r,e);e+=2;for(var i=0;i<o;i++)a.push(s+i),a.push(s+i),a.push(t.readUshort(r,e)),e+=2}if(2==n){var h=t.readUshort(r,e);for(e+=2,i=0;i<h;i++)a.push(t.readUshort(r,e)),e+=2,a.push(t.readUshort(r,e)),e+=2,a.push(t.readUshort(r,e)),e+=2}return a},Typr._lctf.getInterval=function(r,e){for(var t=0;t<r.length;t+=3){var a=r[t],n=r[t+1];if(r[t+2],a<=e&&e<=n)return t}return-1},Typr._lctf.readCoverage=function(r,e){var t=Typr._bin,a={};a.fmt=t.readUshort(r,e),e+=2;var n=t.readUshort(r,e);return e+=2,1==a.fmt&&(a.tab=t.readUshorts(r,e,n)),2==a.fmt&&(a.tab=t.readUshorts(r,e,3*n)),a},Typr._lctf.coverageIndex=function(r,e){var t=r.tab;if(1==r.fmt)return t.indexOf(e);if(2==r.fmt){var a=Typr._lctf.getInterval(t,e);if(-1!=a)return t[a+2]+(e-t[a])}return-1},Typr._lctf.readFeatureList=function(r,e){var t=Typr._bin,a=e,n=[],s=t.readUshort(r,e);e+=2;for(var o=0;o<s;o++){var i=t.readASCII(r,e,4);e+=4;var h=t.readUshort(r,e);e+=2;var f=Typr._lctf.readFeatureTable(r,a+h);f.tag=i.trim(),n.push(f)}return n},Typr._lctf.readFeatureTable=function(r,e){var t=Typr._bin,a=e,n={},s=t.readUshort(r,e);e+=2,s>0&&(n.featureParams=a+s);var o=t.readUshort(r,e);e+=2,n.tab=[];for(var i=0;i<o;i++)n.tab.push(t.readUshort(r,e+2*i));return n},Typr._lctf.readScriptList=function(r,e){var t=Typr._bin,a=e,n={},s=t.readUshort(r,e);e+=2;for(var o=0;o<s;o++){var i=t.readASCII(r,e,4);e+=4;var h=t.readUshort(r,e);e+=2,n[i.trim()]=Typr._lctf.readScriptTable(r,a+h)}return n},Typr._lctf.readScriptTable=function(r,e){var t=Typr._bin,a=e,n={},s=t.readUshort(r,e);e+=2,s>0&&(n.default=Typr._lctf.readLangSysTable(r,a+s));var o=t.readUshort(r,e);e+=2;for(var i=0;i<o;i++){var h=t.readASCII(r,e,4);e+=4;var f=t.readUshort(r,e);e+=2,n[h.trim()]=Typr._lctf.readLangSysTable(r,a+f)}return n},Typr._lctf.readLangSysTable=function(r,e){var t=Typr._bin,a={};t.readUshort(r,e),e+=2,a.reqFeature=t.readUshort(r,e),e+=2;var n=t.readUshort(r,e);return e+=2,a.features=t.readUshorts(r,e,n),a},Typr.CFF={},Typr.CFF.parse=function(r,e,t){var a=Typr._bin;(r=new Uint8Array(r.buffer,e,t))[e=0],r[++e],r[++e],r[++e],e++;var n=[];e=Typr.CFF.readIndex(r,e,n);for(var s=[],o=0;o<n.length-1;o++)s.push(a.readASCII(r,e+n[o],n[o+1]-n[o]));e+=n[n.length-1];var i=[];e=Typr.CFF.readIndex(r,e,i);var h=[];for(o=0;o<i.length-1;o++)h.push(Typr.CFF.readDict(r,e+i[o],e+i[o+1]));e+=i[i.length-1];var f=h[0],p=[];e=Typr.CFF.readIndex(r,e,p);var d=[];for(o=0;o<p.length-1;o++)d.push(a.readASCII(r,e+p[o],p[o+1]-p[o]));if(e+=p[p.length-1],Typr.CFF.readSubrs(r,e,f),f.CharStrings){e=f.CharStrings,p=[],e=Typr.CFF.readIndex(r,e,p);var l=[];for(o=0;o<p.length-1;o++)l.push(a.readBytes(r,e+p[o],p[o+1]-p[o]));f.CharStrings=l}if(f.ROS){e=f.FDArray;var u=[];for(e=Typr.CFF.readIndex(r,e,u),f.FDArray=[],o=0;o<u.length-1;o++){var y=Typr.CFF.readDict(r,e+u[o],e+u[o+1]);Typr.CFF._readFDict(r,y,d),f.FDArray.push(y)}e+=u[u.length-1],e=f.FDSelect,f.FDSelect=[];var v=r[e];if(e++,3!=v)throw v;var c=a.readUshort(r,e);for(e+=2,o=0;o<c+1;o++)f.FDSelect.push(a.readUshort(r,e),r[e+2]),e+=3}return f.Encoding&&(f.Encoding=Typr.CFF.readEncoding(r,f.Encoding,f.CharStrings.length)),f.charset&&(f.charset=Typr.CFF.readCharset(r,f.charset,f.CharStrings.length)),Typr.CFF._readFDict(r,f,d),f},Typr.CFF._readFDict=function(r,e,t){var a;for(var n in e.Private&&(a=e.Private[1],e.Private=Typr.CFF.readDict(r,a,a+e.Private[0]),e.Private.Subrs&&Typr.CFF.readSubrs(r,a+e.Private.Subrs,e.Private)),e)-1!=["FamilyName","FontName","FullName","Notice","version","Copyright"].indexOf(n)&&(e[n]=t[e[n]-426+35])},Typr.CFF.readSubrs=function(r,e,t){var a=Typr._bin,n=[];e=Typr.CFF.readIndex(r,e,n);var s,o=n.length;s=o<1240?107:o<33900?1131:32768,t.Bias=s,t.Subrs=[];for(var i=0;i<n.length-1;i++)t.Subrs.push(a.readBytes(r,e+n[i],n[i+1]-n[i]))},Typr.CFF.tableSE=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,0,111,112,113,114,0,115,116,117,118,119,120,121,122,0,123,0,124,125,126,127,128,129,130,131,0,132,133,0,134,135,136,137,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,138,0,139,0,0,0,0,140,141,142,143,0,0,0,0,0,144,0,0,0,145,0,0,146,147,148,149,0,0,0,0],Typr.CFF.glyphByUnicode=function(r,e){for(var t=0;t<r.charset.length;t++)if(r.charset[t]==e)return t;return-1},Typr.CFF.glyphBySE=function(r,e){return e<0||e>255?-1:Typr.CFF.glyphByUnicode(r,Typr.CFF.tableSE[e])},Typr.CFF.readEncoding=function(r,e,t){Typr._bin;var a=[".notdef"],n=r[e];if(e++,0!=n)throw"error: unknown encoding format: "+n;var s=r[e];e++;for(var o=0;o<s;o++)a.push(r[e+o]);return a},Typr.CFF.readCharset=function(r,e,t){var a=Typr._bin,n=[".notdef"],s=r[e];if(e++,0==s)for(var o=0;o<t;o++){var i=a.readUshort(r,e);e+=2,n.push(i)}else{if(1!=s&&2!=s)throw"error: format: "+s;for(;n.length<t;){i=a.readUshort(r,e),e+=2;var h=0;for(1==s?(h=r[e],e++):(h=a.readUshort(r,e),e+=2),o=0;o<=h;o++)n.push(i),i++}}return n},Typr.CFF.readIndex=function(r,e,t){var a=Typr._bin,n=a.readUshort(r,e)+1,s=r[e+=2];if(e++,1==s)for(var o=0;o<n;o++)t.push(r[e+o]);else if(2==s)for(o=0;o<n;o++)t.push(a.readUshort(r,e+2*o));else if(3==s)for(o=0;o<n;o++)t.push(16777215&a.readUint(r,e+3*o-1));else if(1!=n)throw"unsupported offset size: "+s+", count: "+n;return(e+=n*s)-1},Typr.CFF.getCharString=function(r,e,t){var a=Typr._bin,n=r[e],s=r[e+1];r[e+2],r[e+3],r[e+4];var o=1,i=null,h=null;n<=20&&(i=n,o=1),12==n&&(i=100*n+s,o=2),21<=n&&n<=27&&(i=n,o=1),28==n&&(h=a.readShort(r,e+1),o=3),29<=n&&n<=31&&(i=n,o=1),32<=n&&n<=246&&(h=n-139,o=1),247<=n&&n<=250&&(h=256*(n-247)+s+108,o=2),251<=n&&n<=254&&(h=256*-(n-251)-s-108,o=2),255==n&&(h=a.readInt(r,e+1)/65535,o=5),t.val=null!=h?h:"o"+i,t.size=o},Typr.CFF.readCharString=function(r,e,t){for(var a=e+t,n=Typr._bin,s=[];e<a;){var o=r[e],i=r[e+1];r[e+2],r[e+3],r[e+4];var h=1,f=null,p=null;o<=20&&(f=o,h=1),12==o&&(f=100*o+i,h=2),19!=o&&20!=o||(f=o,h=2),21<=o&&o<=27&&(f=o,h=1),28==o&&(p=n.readShort(r,e+1),h=3),29<=o&&o<=31&&(f=o,h=1),32<=o&&o<=246&&(p=o-139,h=1),247<=o&&o<=250&&(p=256*(o-247)+i+108,h=2),251<=o&&o<=254&&(p=256*-(o-251)-i-108,h=2),255==o&&(p=n.readInt(r,e+1)/65535,h=5),s.push(null!=p?p:"o"+f),e+=h}return s},Typr.CFF.readDict=function(r,e,t){for(var a=Typr._bin,n={},s=[];e<t;){var o=r[e],i=r[e+1];r[e+2],r[e+3],r[e+4];var h=1,f=null,p=null;if(28==o&&(p=a.readShort(r,e+1),h=3),29==o&&(p=a.readInt(r,e+1),h=5),32<=o&&o<=246&&(p=o-139,h=1),247<=o&&o<=250&&(p=256*(o-247)+i+108,h=2),251<=o&&o<=254&&(p=256*-(o-251)-i-108,h=2),255==o)throw p=a.readInt(r,e+1)/65535,h=5,"unknown number";if(30==o){var d=[];for(h=1;;){var l=r[e+h];h++;var u=l>>4,y=15&l;if(15!=u&&d.push(u),15!=y&&d.push(y),15==y)break}for(var v="",c=[0,1,2,3,4,5,6,7,8,9,".","e","e-","reserved","-","endOfNumber"],T=0;T<d.length;T++)v+=c[d[T]];p=parseFloat(v)}o<=21&&(f=["version","Notice","FullName","FamilyName","Weight","FontBBox","BlueValues","OtherBlues","FamilyBlues","FamilyOtherBlues","StdHW","StdVW","escape","UniqueID","XUID","charset","Encoding","CharStrings","Private","Subrs","defaultWidthX","nominalWidthX"][o],h=1,12==o&&(f=["Copyright","isFixedPitch","ItalicAngle","UnderlinePosition","UnderlineThickness","PaintType","CharstringType","FontMatrix","StrokeWidth","BlueScale","BlueShift","BlueFuzz","StemSnapH","StemSnapV","ForceBold",0,0,"LanguageGroup","ExpansionFactor","initialRandomSeed","SyntheticBase","PostScript","BaseFontName","BaseFontBlend",0,0,0,0,0,0,"ROS","CIDFontVersion","CIDFontRevision","CIDFontType","CIDCount","UIDBase","FDArray","FDSelect","FontName"][i],h=2)),null!=f?(n[f]=1==s.length?s[0]:s,s=[]):s.push(p),e+=h}return n},Typr.cmap={},Typr.cmap.parse=function(r,e,t){r=new Uint8Array(r.buffer,e,t),e=0;var a=Typr._bin,n={};a.readUshort(r,e),e+=2;var s=a.readUshort(r,e);e+=2;var o=[];n.tables=[];for(var i=0;i<s;i++){var h=a.readUshort(r,e);e+=2;var f=a.readUshort(r,e);e+=2;var p=a.readUint(r,e);e+=4;var d="p"+h+"e"+f,l=o.indexOf(p);if(-1==l){var u;l=n.tables.length,o.push(p);var y=a.readUshort(r,p);0==y?u=Typr.cmap.parse0(r,p):4==y?u=Typr.cmap.parse4(r,p):6==y?u=Typr.cmap.parse6(r,p):12==y&&(u=Typr.cmap.parse12(r,p)),n.tables.push(u)}if(null!=n[d])throw"multiple tables for one platform+encoding";n[d]=l}return n},Typr.cmap.parse0=function(r,e){var t=Typr._bin,a={};a.format=t.readUshort(r,e),e+=2;var n=t.readUshort(r,e);e+=2,t.readUshort(r,e),e+=2,a.map=[];for(var s=0;s<n-6;s++)a.map.push(r[e+s]);return a},Typr.cmap.parse4=function(r,e){var t=Typr._bin,a=e,n={};n.format=t.readUshort(r,e),e+=2;var s=t.readUshort(r,e);e+=2,t.readUshort(r,e),e+=2;var o=t.readUshort(r,e);e+=2;var i=o/2;n.searchRange=t.readUshort(r,e),e+=2,n.entrySelector=t.readUshort(r,e),e+=2,n.rangeShift=t.readUshort(r,e),e+=2,n.endCount=t.readUshorts(r,e,i),e+=2*i,e+=2,n.startCount=t.readUshorts(r,e,i),e+=2*i,n.idDelta=[];for(var h=0;h<i;h++)n.idDelta.push(t.readShort(r,e)),e+=2;for(n.idRangeOffset=t.readUshorts(r,e,i),e+=2*i,n.glyphIdArray=[];e<a+s;)n.glyphIdArray.push(t.readUshort(r,e)),e+=2;return n},Typr.cmap.parse6=function(r,e){var t=Typr._bin,a={};a.format=t.readUshort(r,e),e+=2,t.readUshort(r,e),e+=2,t.readUshort(r,e),e+=2,a.firstCode=t.readUshort(r,e),e+=2;var n=t.readUshort(r,e);e+=2,a.glyphIdArray=[];for(var s=0;s<n;s++)a.glyphIdArray.push(t.readUshort(r,e)),e+=2;return a},Typr.cmap.parse12=function(r,e){var t=Typr._bin,a={};a.format=t.readUshort(r,e),e+=2,e+=2,t.readUint(r,e),e+=4,t.readUint(r,e),e+=4;var n=t.readUint(r,e);e+=4,a.groups=[];for(var s=0;s<n;s++){var o=e+12*s,i=t.readUint(r,o+0),h=t.readUint(r,o+4),f=t.readUint(r,o+8);a.groups.push([i,h,f])}return a},Typr.glyf={},Typr.glyf.parse=function(r,e,t,a){for(var n=[],s=0;s<a.maxp.numGlyphs;s++)n.push(null);return n},Typr.glyf._parseGlyf=function(r,e){var t=Typr._bin,a=r._data,n=Typr._tabOffset(a,"glyf",r._offset)+r.loca[e];if(r.loca[e]==r.loca[e+1])return null;var s={};if(s.noc=t.readShort(a,n),n+=2,s.xMin=t.readShort(a,n),n+=2,s.yMin=t.readShort(a,n),n+=2,s.xMax=t.readShort(a,n),n+=2,s.yMax=t.readShort(a,n),n+=2,s.xMin>=s.xMax||s.yMin>=s.yMax)return null;if(s.noc>0){s.endPts=[];for(var o=0;o<s.noc;o++)s.endPts.push(t.readUshort(a,n)),n+=2;var i=t.readUshort(a,n);if(n+=2,a.length-n<i)return null;s.instructions=t.readBytes(a,n,i),n+=i;var h=s.endPts[s.noc-1]+1;for(s.flags=[],o=0;o<h;o++){var f=a[n];if(n++,s.flags.push(f),8&f){var p=a[n];n++;for(var d=0;d<p;d++)s.flags.push(f),o++}}for(s.xs=[],o=0;o<h;o++){var l=!!(2&s.flags[o]),u=!!(16&s.flags[o]);l?(s.xs.push(u?a[n]:-a[n]),n++):u?s.xs.push(0):(s.xs.push(t.readShort(a,n)),n+=2)}for(s.ys=[],o=0;o<h;o++)l=!!(4&s.flags[o]),u=!!(32&s.flags[o]),l?(s.ys.push(u?a[n]:-a[n]),n++):u?s.ys.push(0):(s.ys.push(t.readShort(a,n)),n+=2);var y=0,v=0;for(o=0;o<h;o++)y+=s.xs[o],v+=s.ys[o],s.xs[o]=y,s.ys[o]=v}else{var c;s.parts=[];do{c=t.readUshort(a,n),n+=2;var T={m:{a:1,b:0,c:0,d:1,tx:0,ty:0},p1:-1,p2:-1};if(s.parts.push(T),T.glyphIndex=t.readUshort(a,n),n+=2,1&c){var U=t.readShort(a,n);n+=2;var g=t.readShort(a,n);n+=2}else U=t.readInt8(a,n),n++,g=t.readInt8(a,n),n++;2&c?(T.m.tx=U,T.m.ty=g):(T.p1=U,T.p2=g),8&c?(T.m.a=T.m.d=t.readF2dot14(a,n),n+=2):64&c?(T.m.a=t.readF2dot14(a,n),n+=2,T.m.d=t.readF2dot14(a,n),n+=2):128&c&&(T.m.a=t.readF2dot14(a,n),n+=2,T.m.b=t.readF2dot14(a,n),n+=2,T.m.c=t.readF2dot14(a,n),n+=2,T.m.d=t.readF2dot14(a,n),n+=2)}while(32&c);if(256&c){var S=t.readUshort(a,n);for(n+=2,s.instr=[],o=0;o<S;o++)s.instr.push(a[n]),n++}}return s},Typr.GPOS={},Typr.GPOS.parse=function(r,e,t,a){return Typr._lctf.parse(r,e,t,a,Typr.GPOS.subt)},Typr.GPOS.subt=function(r,e,t,a){var n=Typr._bin,s=t,o={};if(o.fmt=n.readUshort(r,t),t+=2,1==e||2==e||3==e||7==e||8==e&&o.fmt<=2){var i=n.readUshort(r,t);t+=2,o.coverage=Typr._lctf.readCoverage(r,i+s)}if(1==e&&1==o.fmt){var h=n.readUshort(r,t);t+=2;var f=Typr._lctf.numOfOnes(h);0!=h&&(o.pos=Typr.GPOS.readValueRecord(r,t,h))}else{if(!(2==e&&o.fmt>=1&&o.fmt<=2)){if(9==e&&1==o.fmt){var p=n.readUshort(r,t);t+=2;var d=n.readUint(r,t);if(t+=4,9==a.ltype)a.ltype=p;else if(a.ltype!=p)throw"invalid extension substitution";return Typr.GPOS.subt(r,a.ltype,s+d)}return o}h=n.readUshort(r,t),t+=2;var l=n.readUshort(r,t);t+=2,f=Typr._lctf.numOfOnes(h);var u=Typr._lctf.numOfOnes(l);if(1==o.fmt){o.pairsets=[];var y=n.readUshort(r,t);t+=2;for(var v=0;v<y;v++){var c=s+n.readUshort(r,t);t+=2;var T=n.readUshort(r,c);c+=2;for(var U=[],g=0;g<T;g++){var S=n.readUshort(r,c);c+=2,0!=h&&(x=Typr.GPOS.readValueRecord(r,c,h),c+=2*f),0!=l&&(P=Typr.GPOS.readValueRecord(r,c,l),c+=2*u),U.push({gid2:S,val1:x,val2:P})}o.pairsets.push(U)}}if(2==o.fmt){var m=n.readUshort(r,t);t+=2;var b=n.readUshort(r,t);t+=2;var F=n.readUshort(r,t);t+=2;var _=n.readUshort(r,t);for(t+=2,o.classDef1=Typr._lctf.readClassDef(r,s+m),o.classDef2=Typr._lctf.readClassDef(r,s+b),o.matrix=[],v=0;v<F;v++){var C=[];for(g=0;g<_;g++){var x=null,P=null;0!=h&&(x=Typr.GPOS.readValueRecord(r,t,h),t+=2*f),0!=l&&(P=Typr.GPOS.readValueRecord(r,t,l),t+=2*u),C.push({val1:x,val2:P})}o.matrix.push(C)}}}},Typr.GPOS.readValueRecord=function(r,e,t){var a=Typr._bin,n=[];return n.push(1&t?a.readShort(r,e):0),e+=1&t?2:0,n.push(2&t?a.readShort(r,e):0),e+=2&t?2:0,n.push(4&t?a.readShort(r,e):0),e+=4&t?2:0,n.push(8&t?a.readShort(r,e):0),e+=8&t?2:0,n},Typr.GSUB={},Typr.GSUB.parse=function(r,e,t,a){return Typr._lctf.parse(r,e,t,a,Typr.GSUB.subt)},Typr.GSUB.subt=function(r,e,t,a){var n=Typr._bin,s=t,o={};if(o.fmt=n.readUshort(r,t),t+=2,1!=e&&4!=e&&5!=e&&6!=e)return null;if(1==e||4==e||5==e&&o.fmt<=2||6==e&&o.fmt<=2){var i=n.readUshort(r,t);t+=2,o.coverage=Typr._lctf.readCoverage(r,s+i)}if(1==e&&o.fmt>=1&&o.fmt<=2){if(1==o.fmt)o.delta=n.readShort(r,t),t+=2;else if(2==o.fmt){var h=n.readUshort(r,t);t+=2,o.newg=n.readUshorts(r,t,h),t+=2*o.newg.length}}else if(4==e){o.vals=[],h=n.readUshort(r,t),t+=2;for(var f=0;f<h;f++){var p=n.readUshort(r,t);t+=2,o.vals.push(Typr.GSUB.readLigatureSet(r,s+p))}}else if(5==e&&2==o.fmt){if(2==o.fmt){var d=n.readUshort(r,t);t+=2,o.cDef=Typr._lctf.readClassDef(r,s+d),o.scset=[];var l=n.readUshort(r,t);for(t+=2,f=0;f<l;f++){var u=n.readUshort(r,t);t+=2,o.scset.push(0==u?null:Typr.GSUB.readSubClassSet(r,s+u))}}}else{if(6!=e||3!=o.fmt){if(7==e&&1==o.fmt){var y=n.readUshort(r,t);t+=2;var v=n.readUint(r,t);if(t+=4,9==a.ltype)a.ltype=y;else if(a.ltype!=y)throw"invalid extension substitution";return Typr.GSUB.subt(r,a.ltype,s+v)}return o}if(3==o.fmt){for(f=0;f<3;f++){h=n.readUshort(r,t),t+=2;for(var c=[],T=0;T<h;T++)c.push(Typr._lctf.readCoverage(r,s+n.readUshort(r,t+2*T)));t+=2*h,0==f&&(o.backCvg=c),1==f&&(o.inptCvg=c),2==f&&(o.ahedCvg=c)}h=n.readUshort(r,t),t+=2,o.lookupRec=Typr.GSUB.readSubstLookupRecords(r,t,h)}}},Typr.GSUB.readSubClassSet=function(r,e){var t=Typr._bin.readUshort,a=e,n=[],s=t(r,e);e+=2;for(var o=0;o<s;o++){var i=t(r,e);e+=2,n.push(Typr.GSUB.readSubClassRule(r,a+i))}return n},Typr.GSUB.readSubClassRule=function(r,e){var t=Typr._bin.readUshort,a={},n=t(r,e),s=t(r,e+=2);e+=2,a.input=[];for(var o=0;o<n-1;o++)a.input.push(t(r,e)),e+=2;return a.substLookupRecords=Typr.GSUB.readSubstLookupRecords(r,e,s),a},Typr.GSUB.readSubstLookupRecords=function(r,e,t){for(var a=Typr._bin.readUshort,n=[],s=0;s<t;s++)n.push(a(r,e),a(r,e+2)),e+=4;return n},Typr.GSUB.readChainSubClassSet=function(r,e){var t=Typr._bin,a=e,n=[],s=t.readUshort(r,e);e+=2;for(var o=0;o<s;o++){var i=t.readUshort(r,e);e+=2,n.push(Typr.GSUB.readChainSubClassRule(r,a+i))}return n},Typr.GSUB.readChainSubClassRule=function(r,e){for(var t=Typr._bin,a={},n=["backtrack","input","lookahead"],s=0;s<n.length;s++){var o=t.readUshort(r,e);e+=2,1==s&&o--,a[n[s]]=t.readUshorts(r,e,o),e+=2*a[n[s]].length}return o=t.readUshort(r,e),e+=2,a.subst=t.readUshorts(r,e,2*o),e+=2*a.subst.length,a},Typr.GSUB.readLigatureSet=function(r,e){var t=Typr._bin,a=e,n=[],s=t.readUshort(r,e);e+=2;for(var o=0;o<s;o++){var i=t.readUshort(r,e);e+=2,n.push(Typr.GSUB.readLigature(r,a+i))}return n},Typr.GSUB.readLigature=function(r,e){var t=Typr._bin,a={chain:[]};a.nglyph=t.readUshort(r,e),e+=2;var n=t.readUshort(r,e);e+=2;for(var s=0;s<n-1;s++)a.chain.push(t.readUshort(r,e)),e+=2;return a},Typr.head={},Typr.head.parse=function(r,e,t){var a=Typr._bin,n={};return a.readFixed(r,e),e+=4,n.fontRevision=a.readFixed(r,e),e+=4,a.readUint(r,e),e+=4,a.readUint(r,e),e+=4,n.flags=a.readUshort(r,e),e+=2,n.unitsPerEm=a.readUshort(r,e),e+=2,n.created=a.readUint64(r,e),e+=8,n.modified=a.readUint64(r,e),e+=8,n.xMin=a.readShort(r,e),e+=2,n.yMin=a.readShort(r,e),e+=2,n.xMax=a.readShort(r,e),e+=2,n.yMax=a.readShort(r,e),e+=2,n.macStyle=a.readUshort(r,e),e+=2,n.lowestRecPPEM=a.readUshort(r,e),e+=2,n.fontDirectionHint=a.readShort(r,e),e+=2,n.indexToLocFormat=a.readShort(r,e),e+=2,n.glyphDataFormat=a.readShort(r,e),e+=2,n},Typr.hhea={},Typr.hhea.parse=function(r,e,t){var a=Typr._bin,n={};return a.readFixed(r,e),e+=4,n.ascender=a.readShort(r,e),e+=2,n.descender=a.readShort(r,e),e+=2,n.lineGap=a.readShort(r,e),e+=2,n.advanceWidthMax=a.readUshort(r,e),e+=2,n.minLeftSideBearing=a.readShort(r,e),e+=2,n.minRightSideBearing=a.readShort(r,e),e+=2,n.xMaxExtent=a.readShort(r,e),e+=2,n.caretSlopeRise=a.readShort(r,e),e+=2,n.caretSlopeRun=a.readShort(r,e),e+=2,n.caretOffset=a.readShort(r,e),e+=2,e+=8,n.metricDataFormat=a.readShort(r,e),e+=2,n.numberOfHMetrics=a.readUshort(r,e),e+=2,n},Typr.hmtx={},Typr.hmtx.parse=function(r,e,t,a){for(var n=Typr._bin,s={aWidth:[],lsBearing:[]},o=0,i=0,h=0;h<a.maxp.numGlyphs;h++)h<a.hhea.numberOfHMetrics&&(o=n.readUshort(r,e),e+=2,i=n.readShort(r,e),e+=2),s.aWidth.push(o),s.lsBearing.push(i);return s},Typr.kern={},Typr.kern.parse=function(r,e,t,a){var n=Typr._bin,s=n.readUshort(r,e);if(e+=2,1==s)return Typr.kern.parseV1(r,e-2,t,a);var o=n.readUshort(r,e);e+=2;for(var i={glyph1:[],rval:[]},h=0;h<o;h++){e+=2,t=n.readUshort(r,e),e+=2;var f=n.readUshort(r,e);e+=2;var p=f>>>8;if(0!=(p&=15))throw"unknown kern table format: "+p;e=Typr.kern.readFormat0(r,e,i)}return i},Typr.kern.parseV1=function(r,e,t,a){var n=Typr._bin;n.readFixed(r,e),e+=4;var s=n.readUint(r,e);e+=4;for(var o={glyph1:[],rval:[]},i=0;i<s;i++){n.readUint(r,e),e+=4;var h=n.readUshort(r,e);e+=2,n.readUshort(r,e),e+=2;var f=h>>>8;if(0!=(f&=15))throw"unknown kern table format: "+f;e=Typr.kern.readFormat0(r,e,o)}return o},Typr.kern.readFormat0=function(r,e,t){var a=Typr._bin,n=-1,s=a.readUshort(r,e);e+=2,a.readUshort(r,e),e+=2,a.readUshort(r,e),e+=2,a.readUshort(r,e),e+=2;for(var o=0;o<s;o++){var i=a.readUshort(r,e);e+=2;var h=a.readUshort(r,e);e+=2;var f=a.readShort(r,e);e+=2,i!=n&&(t.glyph1.push(i),t.rval.push({glyph2:[],vals:[]}));var p=t.rval[t.rval.length-1];p.glyph2.push(h),p.vals.push(f),n=i}return e},Typr.loca={},Typr.loca.parse=function(r,e,t,a){var n=Typr._bin,s=[],o=a.head.indexToLocFormat,i=a.maxp.numGlyphs+1;if(0==o)for(var h=0;h<i;h++)s.push(n.readUshort(r,e+(h<<1))<<1);if(1==o)for(h=0;h<i;h++)s.push(n.readUint(r,e+(h<<2)));return s},Typr.maxp={},Typr.maxp.parse=function(r,e,t){var a=Typr._bin,n={},s=a.readUint(r,e);return e+=4,n.numGlyphs=a.readUshort(r,e),e+=2,65536==s&&(n.maxPoints=a.readUshort(r,e),e+=2,n.maxContours=a.readUshort(r,e),e+=2,n.maxCompositePoints=a.readUshort(r,e),e+=2,n.maxCompositeContours=a.readUshort(r,e),e+=2,n.maxZones=a.readUshort(r,e),e+=2,n.maxTwilightPoints=a.readUshort(r,e),e+=2,n.maxStorage=a.readUshort(r,e),e+=2,n.maxFunctionDefs=a.readUshort(r,e),e+=2,n.maxInstructionDefs=a.readUshort(r,e),e+=2,n.maxStackElements=a.readUshort(r,e),e+=2,n.maxSizeOfInstructions=a.readUshort(r,e),e+=2,n.maxComponentElements=a.readUshort(r,e),e+=2,n.maxComponentDepth=a.readUshort(r,e),e+=2),n},Typr.name={},Typr.name.parse=function(r,e,t){var a=Typr._bin,n={};a.readUshort(r,e),e+=2;var s=a.readUshort(r,e);e+=2,a.readUshort(r,e);for(var o,i=["copyright","fontFamily","fontSubfamily","ID","fullName","version","postScriptName","trademark","manufacturer","designer","description","urlVendor","urlDesigner","licence","licenceURL","---","typoFamilyName","typoSubfamilyName","compatibleFull","sampleText","postScriptCID","wwsFamilyName","wwsSubfamilyName","lightPalette","darkPalette"],h=e+=2,f=0;f<s;f++){var p=a.readUshort(r,e);e+=2;var d=a.readUshort(r,e);e+=2;var l=a.readUshort(r,e);e+=2;var u=a.readUshort(r,e);e+=2;var y=a.readUshort(r,e);e+=2;var v=a.readUshort(r,e);e+=2;var c,T=i[u],U=h+12*s+v;if(0==p)c=a.readUnicode(r,U,y/2);else if(3==p&&0==d)c=a.readUnicode(r,U,y/2);else if(0==d)c=a.readASCII(r,U,y);else if(1==d)c=a.readUnicode(r,U,y/2);else if(3==d)c=a.readUnicode(r,U,y/2);else{if(1!=p)throw"unknown encoding "+d+", platformID: "+p;c=a.readASCII(r,U,y)}var g="p"+p+","+l.toString(16);null==n[g]&&(n[g]={}),n[g][void 0!==T?T:u]=c,n[g]._lang=l}for(var S in n)if(null!=n[S].postScriptName&&1033==n[S]._lang)return n[S];for(var S in n)if(null!=n[S].postScriptName&&0==n[S]._lang)return n[S];for(var S in n)if(null!=n[S].postScriptName&&3084==n[S]._lang)return n[S];for(var S in n)if(null!=n[S].postScriptName)return n[S];for(var S in n){o=S;break}return n[o]},Typr["OS/2"]={},Typr["OS/2"].parse=function(r,e,t){var a=Typr._bin.readUshort(r,e);e+=2;var n={};if(0==a)Typr["OS/2"].version0(r,e,n);else if(1==a)Typr["OS/2"].version1(r,e,n);else if(2==a||3==a||4==a)Typr["OS/2"].version2(r,e,n);else{if(5!=a)throw"unknown OS/2 table version: "+a;Typr["OS/2"].version5(r,e,n)}return n},Typr["OS/2"].version0=function(r,e,t){var a=Typr._bin;return t.xAvgCharWidth=a.readShort(r,e),e+=2,t.usWeightClass=a.readUshort(r,e),e+=2,t.usWidthClass=a.readUshort(r,e),e+=2,t.fsType=a.readUshort(r,e),e+=2,t.ySubscriptXSize=a.readShort(r,e),e+=2,t.ySubscriptYSize=a.readShort(r,e),e+=2,t.ySubscriptXOffset=a.readShort(r,e),e+=2,t.ySubscriptYOffset=a.readShort(r,e),e+=2,t.ySuperscriptXSize=a.readShort(r,e),e+=2,t.ySuperscriptYSize=a.readShort(r,e),e+=2,t.ySuperscriptXOffset=a.readShort(r,e),e+=2,t.ySuperscriptYOffset=a.readShort(r,e),e+=2,t.yStrikeoutSize=a.readShort(r,e),e+=2,t.yStrikeoutPosition=a.readShort(r,e),e+=2,t.sFamilyClass=a.readShort(r,e),e+=2,t.panose=a.readBytes(r,e,10),e+=10,t.ulUnicodeRange1=a.readUint(r,e),e+=4,t.ulUnicodeRange2=a.readUint(r,e),e+=4,t.ulUnicodeRange3=a.readUint(r,e),e+=4,t.ulUnicodeRange4=a.readUint(r,e),e+=4,t.achVendID=[a.readInt8(r,e),a.readInt8(r,e+1),a.readInt8(r,e+2),a.readInt8(r,e+3)],e+=4,t.fsSelection=a.readUshort(r,e),e+=2,t.usFirstCharIndex=a.readUshort(r,e),e+=2,t.usLastCharIndex=a.readUshort(r,e),e+=2,t.sTypoAscender=a.readShort(r,e),e+=2,t.sTypoDescender=a.readShort(r,e),e+=2,t.sTypoLineGap=a.readShort(r,e),e+=2,t.usWinAscent=a.readUshort(r,e),e+=2,t.usWinDescent=a.readUshort(r,e),e+2},Typr["OS/2"].version1=function(r,e,t){var a=Typr._bin;return e=Typr["OS/2"].version0(r,e,t),t.ulCodePageRange1=a.readUint(r,e),e+=4,t.ulCodePageRange2=a.readUint(r,e),e+4},Typr["OS/2"].version2=function(r,e,t){var a=Typr._bin;return e=Typr["OS/2"].version1(r,e,t),t.sxHeight=a.readShort(r,e),e+=2,t.sCapHeight=a.readShort(r,e),e+=2,t.usDefault=a.readUshort(r,e),e+=2,t.usBreak=a.readUshort(r,e),e+=2,t.usMaxContext=a.readUshort(r,e),e+2},Typr["OS/2"].version5=function(r,e,t){var a=Typr._bin;return e=Typr["OS/2"].version2(r,e,t),t.usLowerOpticalPointSize=a.readUshort(r,e),e+=2,t.usUpperOpticalPointSize=a.readUshort(r,e),e+2},Typr.post={},Typr.post.parse=function(r,e,t){var a=Typr._bin,n={};return n.version=a.readFixed(r,e),e+=4,n.italicAngle=a.readFixed(r,e),e+=4,n.underlinePosition=a.readShort(r,e),e+=2,n.underlineThickness=a.readShort(r,e),e+=2,n},Typr.SVG={},Typr.SVG.parse=function(r,e,t){var a=Typr._bin,n={entries:[]},s=e;a.readUshort(r,e),e+=2;var o=a.readUint(r,e);e+=4,a.readUint(r,e),e+=4,e=o+s;var i=a.readUshort(r,e);e+=2;for(var h=0;h<i;h++){var f=a.readUshort(r,e);e+=2;var p=a.readUshort(r,e);e+=2;var d=a.readUint(r,e);e+=4;var l=a.readUint(r,e);e+=4;for(var u=new Uint8Array(r.buffer,s+d+o,l),y=a.readUTF8(u,0,u.length),v=f;v<=p;v++)n.entries[v]=y}return n},Typr.SVG.toPath=function(r){var e={cmds:[],crds:[]};if(null==r)return e;for(var t=(new DOMParser).parseFromString(r,"image/svg+xml").firstChild;"svg"!=t.tagName;)t=t.nextSibling;var a=t.getAttribute("viewBox");a=a?a.trim().split(" ").map(parseFloat):[0,0,1e3,1e3],Typr.SVG._toPath(t.children,e);for(var n=0;n<e.crds.length;n+=2){var s=e.crds[n],o=e.crds[n+1];s-=a[0],o=-(o-=a[1]),e.crds[n]=s,e.crds[n+1]=o}return e},Typr.SVG._toPath=function(r,e,t){for(var a=0;a<r.length;a++){var n=r[a],s=n.tagName,o=n.getAttribute("fill");if(null==o&&(o=t),"g"==s)Typr.SVG._toPath(n.children,e,o);else if("path"==s){e.cmds.push(o||"#000000");var i=n.getAttribute("d"),h=Typr.SVG._tokens(i);Typr.SVG._toksToPath(h,e),e.cmds.push("X")}}},Typr.SVG._tokens=function(r){for(var e=[],t=0,a=!1,n="";t<r.length;){var s=r.charCodeAt(t),o=r.charAt(t);t++;var i=48<=s&&s<=57||"."==o||"-"==o;a?"-"==o?(e.push(parseFloat(n)),n=o):i?n+=o:(e.push(parseFloat(n)),","!=o&&" "!=o&&e.push(o),a=!1):i?(n=o,a=!0):","!=o&&" "!=o&&e.push(o)}return a&&e.push(parseFloat(n)),e},Typr.SVG._toksToPath=function(r,e){for(var t=0,a=0,n=0,s=0,o=0,i={M:2,L:2,H:1,V:1,S:4,C:6},h=e.cmds,f=e.crds;t<r.length;){var p=r[t];if(t++,"z"==p)h.push("Z"),a=s,n=o;else for(var d=p.toUpperCase(),l=i[d],u=Typr.SVG._reps(r,t,l),y=0;y<u;y++){var v=0,c=0;if(p!=d&&(v=a,c=n),"M"==d)a=v+r[t++],n=c+r[t++],h.push("M"),f.push(a,n),s=a,o=n;else if("L"==d)a=v+r[t++],n=c+r[t++],h.push("L"),f.push(a,n);else if("H"==d)a=v+r[t++],h.push("L"),f.push(a,n);else if("V"==d)n=c+r[t++],h.push("L"),f.push(a,n);else if("C"==d){var T=v+r[t++],U=c+r[t++],g=v+r[t++],S=c+r[t++],m=v+r[t++],b=c+r[t++];h.push("C"),f.push(T,U,g,S,m,b),a=m,n=b}else if("S"==d){var F=Math.max(f.length-4,0);T=a+a-f[F],U=n+n-f[F+1],g=v+r[t++],S=c+r[t++],m=v+r[t++],b=c+r[t++],h.push("C"),f.push(T,U,g,S,m,b),a=m,n=b}}}},Typr.SVG._reps=function(r,e,t){for(var a=e;a<r.length&&"string"!=typeof r[a];)a+=t;return(a-e)/t},null==Typr&&(Typr={}),null==Typr.U&&(Typr.U={}),Typr.U.codeToGlyph=function(r,e){for(var t=r.cmap,a=0,n=[t.p0e4,t.p3e1,t.p3e10,t.p0e3,t.p1e0];a<n.length;a++){var s=n[a];if(null!=s){var o=t.tables[s];if(0==o.format){if(e>=o.map.length)continue;return o.map[e]}if(4==o.format){for(var i=-1,h=0;h<o.endCount.length;h++)if(e<=o.endCount[h]){i=h;break}if(-1==i)continue;if(o.startCount[i]>e)continue;return 65535&(0!=o.idRangeOffset[i]?o.glyphIdArray[e-o.startCount[i]+(o.idRangeOffset[i]>>1)-(o.idRangeOffset.length-i)]:e+o.idDelta[i])}if(12!=o.format)throw"unknown cmap table format "+o.format;if(e>o.groups[o.groups.length-1][1])continue;for(h=0;h<o.groups.length;h++){var f=o.groups[h];if(f[0]<=e&&e<=f[1])return f[2]+(e-f[0])}}}return 0},Typr.U.glyphToPath=function(r,e){var t={cmds:[],crds:[]};if(r.SVG&&r.SVG.entries[e]){var a=r.SVG.entries[e];return null==a?t:("string"==typeof a&&(a=Typr.SVG.toPath(a),r.SVG.entries[e]=a),a)}if(r.CFF){var n={x:0,y:0,stack:[],nStems:0,haveWidth:!1,width:r.CFF.Private?r.CFF.Private.defaultWidthX:0,open:!1},s=r.CFF,o=r.CFF.Private;if(s.ROS){for(var i=0;s.FDSelect[i+2]<=e;)i+=2;o=s.FDArray[s.FDSelect[i+1]].Private}Typr.U._drawCFF(r.CFF.CharStrings[e],n,s,o,t)}else r.glyf&&Typr.U._drawGlyf(e,r,t);return t},Typr.U._drawGlyf=function(r,e,t){var a=e.glyf[r];null==a&&(a=e.glyf[r]=Typr.glyf._parseGlyf(e,r)),null!=a&&(a.noc>-1?Typr.U._simpleGlyph(a,t):Typr.U._compoGlyph(a,e,t))},Typr.U._simpleGlyph=function(r,e){for(var t=0;t<r.noc;t++){for(var a=0==t?0:r.endPts[t-1]+1,n=r.endPts[t],s=a;s<=n;s++){var o=s==a?n:s-1,i=s==n?a:s+1,h=1&r.flags[s],f=1&r.flags[o],p=1&r.flags[i],d=r.xs[s],l=r.ys[s];if(s==a)if(h){if(!f){Typr.U.P.moveTo(e,d,l);continue}Typr.U.P.moveTo(e,r.xs[o],r.ys[o])}else f?Typr.U.P.moveTo(e,r.xs[o],r.ys[o]):Typr.U.P.moveTo(e,(r.xs[o]+d)/2,(r.ys[o]+l)/2);h?f&&Typr.U.P.lineTo(e,d,l):p?Typr.U.P.qcurveTo(e,d,l,r.xs[i],r.ys[i]):Typr.U.P.qcurveTo(e,d,l,(d+r.xs[i])/2,(l+r.ys[i])/2)}Typr.U.P.closePath(e)}},Typr.U._compoGlyph=function(r,e,t){for(var a=0;a<r.parts.length;a++){var n={cmds:[],crds:[]},s=r.parts[a];Typr.U._drawGlyf(s.glyphIndex,e,n);for(var o=s.m,i=0;i<n.crds.length;i+=2){var h=n.crds[i],f=n.crds[i+1];t.crds.push(h*o.a+f*o.b+o.tx),t.crds.push(h*o.c+f*o.d+o.ty)}for(i=0;i<n.cmds.length;i++)t.cmds.push(n.cmds[i])}},Typr.U._getGlyphClass=function(r,e){var t=Typr._lctf.getInterval(e,r);return-1==t?0:e[t+2]},Typr.U.getPairAdjustment=function(r,e,t){var a=!1;if(r.GPOS)for(var n=r.GPOS,s=n.lookupList,o=n.featureList,i=[],h=0;h<o.length;h++){var f=o[h];if("kern"==f.tag){a=!0;for(var p=0;p<f.tab.length;p++)if(!i[f.tab[p]]){i[f.tab[p]]=!0;for(var d=s[f.tab[p]],l=0;l<d.tabs.length;l++)if(null!=d.tabs[l]){var u,y=d.tabs[l];if(!y.coverage||-1!=(u=Typr._lctf.coverageIndex(y.coverage,e)))if(1==d.ltype);else if(2==d.ltype){var v=null;if(1==y.fmt){var c=y.pairsets[u];for(h=0;h<c.length;h++)c[h].gid2==t&&(v=c[h])}else if(2==y.fmt){var T=Typr.U._getGlyphClass(e,y.classDef1),U=Typr.U._getGlyphClass(t,y.classDef2);v=y.matrix[T][U]}if(v){var g=0;return v.val1&&v.val1[2]&&(g+=v.val1[2]),v.val2&&v.val2[0]&&(g+=v.val2[0]),g}}}}}}if(r.kern&&!a){var S=r.kern.glyph1.indexOf(e);if(-1!=S){var m=r.kern.rval[S].glyph2.indexOf(t);if(-1!=m)return r.kern.rval[S].vals[m]}}return 0},Typr.U.stringToGlyphs=function(r,e){for(var t=[],a=0;a<e.length;a++)(n=e.codePointAt(a))>65535&&a++,t.push(Typr.U.codeToGlyph(r,n));for(a=0;a<e.length;a++){var n;if(2367==(n=e.codePointAt(a))){var s=t[a-1];t[a-1]=t[a],t[a]=s}n>65535&&a++}var o=r.GSUB;if(null==o)return t;for(var i=o.lookupList,h=o.featureList,f=["rlig","liga","mset","isol","init","fina","medi","half","pres","blws"],p=[],d=0;d<h.length;d++){var l=h[d];if(-1!=f.indexOf(l.tag))for(var u=0;u<l.tab.length;u++)if(!p[l.tab[u]]){p[l.tab[u]]=!0;for(var y=i[l.tab[u]],v=0;v<t.length;v++){var c=Typr.U._getWPfeature(e,v);-1!="isol,init,fina,medi".indexOf(l.tag)&&l.tag!=c||Typr.U._applySubs(t,v,y,i)}}}return t},Typr.U._getWPfeature=function(r,e){var t='\n\t" ,.:;!?()  ،',a="آأؤإاةدذرزوٱٲٳٵٶٷڈډڊڋڌڍڎڏڐڑڒړڔڕږڗژڙۀۃۄۅۆۇۈۉۊۋۍۏےۓەۮۯܐܕܖܗܘܙܞܨܪܬܯݍݙݚݛݫݬݱݳݴݸݹࡀࡆࡇࡉࡔࡧࡩࡪࢪࢫࢬࢮࢱࢲࢹૅેૉ૊૎૏ૐ૑૒૝ૡ૤૯஁ஃ஄அஉ஌எஏ஑னப஫஬",n=0==e||-1!=t.indexOf(r[e-1]),s=e==r.length-1||-1!=t.indexOf(r[e+1]);return n||-1==a.indexOf(r[e-1])||(n=!0),s||-1==a.indexOf(r[e])||(s=!0),s||-1=="ꡲ્૗".indexOf(r[e+1])||(s=!0),n||-1=="ꡲ્૗".indexOf(r[e])||(n=!0),n?s?"isol":"init":s?"fina":"medi"},Typr.U._applySubs=function(r,e,t,a){for(var n=r.length-e-1,s=0;s<t.tabs.length;s++)if(null!=t.tabs[s]){var o,i=t.tabs[s];if(!i.coverage||-1!=(o=Typr._lctf.coverageIndex(i.coverage,r[e])))if(1==t.ltype)r[e],1==i.fmt?r[e]=r[e]+i.delta:r[e]=i.newg[o];else if(4==t.ltype)for(var h=i.vals[o],f=0;f<h.length;f++){var p=h[f],d=p.chain.length;if(!(d>n)){for(var l=!0,u=0,y=0;y<d;y++){for(;-1==r[e+u+(1+y)];)u++;p.chain[y]!=r[e+u+(1+y)]&&(l=!1)}if(l){for(r[e]=p.nglyph,y=0;y<d+u;y++)r[e+y+1]=-1;break}}}else if(5==t.ltype&&2==i.fmt)for(var v=Typr._lctf.getInterval(i.cDef,r[e]),c=i.cDef[v+2],T=i.scset[c],U=0;U<T.length;U++){var g=T[U],S=g.input;if(!(S.length>n)){for(l=!0,y=0;y<S.length;y++){var m=Typr._lctf.getInterval(i.cDef,r[e+1+y]);if(-1==v&&i.cDef[m+2]!=S[y]){l=!1;break}}if(l){var b=g.substLookupRecords;for(f=0;f<b.length;f+=2)b[f],b[f+1]}}}else if(6==t.ltype&&3==i.fmt){if(!Typr.U._glsCovered(r,i.backCvg,e-i.backCvg.length))continue;if(!Typr.U._glsCovered(r,i.inptCvg,e))continue;if(!Typr.U._glsCovered(r,i.ahedCvg,e+i.inptCvg.length))continue;var F=i.lookupRec;for(U=0;U<F.length;U+=2){v=F[U];var _=a[F[U+1]];Typr.U._applySubs(r,e+v,_,a)}}}},Typr.U._glsCovered=function(r,e,t){for(var a=0;a<e.length;a++)if(-1==Typr._lctf.coverageIndex(e[a],r[t+a]))return!1;return!0},Typr.U.glyphsToPath=function(r,e,t){for(var a={cmds:[],crds:[]},n=0,s=0;s<e.length;s++){var o=e[s];if(-1!=o){for(var i=s<e.length-1&&-1!=e[s+1]?e[s+1]:0,h=Typr.U.glyphToPath(r,o),f=0;f<h.crds.length;f+=2)a.crds.push(h.crds[f]+n),a.crds.push(h.crds[f+1]);for(t&&a.cmds.push(t),f=0;f<h.cmds.length;f++)a.cmds.push(h.cmds[f]);t&&a.cmds.push("X"),n+=r.hmtx.aWidth[o],s<e.length-1&&(n+=Typr.U.getPairAdjustment(r,o,i))}}return a},Typr.U.pathToSVG=function(r,e){null==e&&(e=5);for(var t=[],a=0,n={M:2,L:2,Q:4,C:6},s=0;s<r.cmds.length;s++){var o=r.cmds[s],i=a+(n[o]?n[o]:0);for(t.push(o);a<i;){var h=r.crds[a++];t.push(parseFloat(h.toFixed(e))+(a==i?"":" "))}}return t.join("")},Typr.U.pathToContext=function(r,e){for(var t=0,a=r.crds,n=0;n<r.cmds.length;n++){var s=r.cmds[n];"M"==s?(e.moveTo(a[t],a[t+1]),t+=2):"L"==s?(e.lineTo(a[t],a[t+1]),t+=2):"C"==s?(e.bezierCurveTo(a[t],a[t+1],a[t+2],a[t+3],a[t+4],a[t+5]),t+=6):"Q"==s?(e.quadraticCurveTo(a[t],a[t+1],a[t+2],a[t+3]),t+=4):"#"==s.charAt(0)?(e.beginPath(),e.fillStyle=s):"Z"==s?e.closePath():"X"==s&&e.fill()}},Typr.U.P={},Typr.U.P.moveTo=function(r,e,t){r.cmds.push("M"),r.crds.push(e,t)},Typr.U.P.lineTo=function(r,e,t){r.cmds.push("L"),r.crds.push(e,t)},Typr.U.P.curveTo=function(r,e,t,a,n,s,o){r.cmds.push("C"),r.crds.push(e,t,a,n,s,o)},Typr.U.P.qcurveTo=function(r,e,t,a,n){r.cmds.push("Q"),r.crds.push(e,t,a,n)},Typr.U.P.closePath=function(r){r.cmds.push("Z")},Typr.U._drawCFF=function(r,e,t,a,n){for(var s=e.stack,o=e.nStems,i=e.haveWidth,h=e.width,f=e.open,p=0,d=e.x,l=e.y,u=0,y=0,v=0,c=0,T=0,U=0,g=0,S=0,m=0,b=0,F={val:0,size:0};p<r.length;){Typr.CFF.getCharString(r,p,F);var _=F.val;if(p+=F.size,"o1"==_||"o18"==_)s.length%2!=0&&!i&&(h=s.shift()+a.nominalWidthX),o+=s.length>>1,s.length=0,i=!0;else if("o3"==_||"o23"==_)s.length%2!=0&&!i&&(h=s.shift()+a.nominalWidthX),o+=s.length>>1,s.length=0,i=!0;else if("o4"==_)s.length>1&&!i&&(h=s.shift()+a.nominalWidthX,i=!0),f&&Typr.U.P.closePath(n),l+=s.pop(),Typr.U.P.moveTo(n,d,l),f=!0;else if("o5"==_)for(;s.length>0;)d+=s.shift(),l+=s.shift(),Typr.U.P.lineTo(n,d,l);else if("o6"==_||"o7"==_)for(var C=s.length,x="o6"==_,P=0;P<C;P++){var I=s.shift();x?d+=I:l+=I,x=!x,Typr.U.P.lineTo(n,d,l)}else if("o8"==_||"o24"==_){C=s.length;for(var G=0;G+6<=C;)u=d+s.shift(),y=l+s.shift(),v=u+s.shift(),c=y+s.shift(),d=v+s.shift(),l=c+s.shift(),Typr.U.P.curveTo(n,u,y,v,c,d,l),G+=6;"o24"==_&&(d+=s.shift(),l+=s.shift(),Typr.U.P.lineTo(n,d,l))}else{if("o11"==_)break;if("o1234"==_||"o1235"==_||"o1236"==_||"o1237"==_)"o1234"==_&&(y=l,v=(u=d+s.shift())+s.shift(),b=c=y+s.shift(),U=c,S=l,d=(g=(T=(m=v+s.shift())+s.shift())+s.shift())+s.shift(),Typr.U.P.curveTo(n,u,y,v,c,m,b),Typr.U.P.curveTo(n,T,U,g,S,d,l)),"o1235"==_&&(u=d+s.shift(),y=l+s.shift(),v=u+s.shift(),c=y+s.shift(),m=v+s.shift(),b=c+s.shift(),T=m+s.shift(),U=b+s.shift(),g=T+s.shift(),S=U+s.shift(),d=g+s.shift(),l=S+s.shift(),s.shift(),Typr.U.P.curveTo(n,u,y,v,c,m,b),Typr.U.P.curveTo(n,T,U,g,S,d,l)),"o1236"==_&&(u=d+s.shift(),y=l+s.shift(),v=u+s.shift(),b=c=y+s.shift(),U=c,g=(T=(m=v+s.shift())+s.shift())+s.shift(),S=U+s.shift(),d=g+s.shift(),Typr.U.P.curveTo(n,u,y,v,c,m,b),Typr.U.P.curveTo(n,T,U,g,S,d,l)),"o1237"==_&&(u=d+s.shift(),y=l+s.shift(),v=u+s.shift(),c=y+s.shift(),m=v+s.shift(),b=c+s.shift(),T=m+s.shift(),U=b+s.shift(),g=T+s.shift(),S=U+s.shift(),Math.abs(g-d)>Math.abs(S-l)?d=g+s.shift():l=S+s.shift(),Typr.U.P.curveTo(n,u,y,v,c,m,b),Typr.U.P.curveTo(n,T,U,g,S,d,l));else if("o14"==_){if(s.length>0&&!i&&(h=s.shift()+t.nominalWidthX,i=!0),4==s.length){var O=s.shift(),w=s.shift(),k=s.shift(),D=s.shift(),B=Typr.CFF.glyphBySE(t,k),L=Typr.CFF.glyphBySE(t,D);Typr.U._drawCFF(t.CharStrings[B],e,t,a,n),e.x=O,e.y=w,Typr.U._drawCFF(t.CharStrings[L],e,t,a,n)}f&&(Typr.U.P.closePath(n),f=!1)}else if("o19"==_||"o20"==_)s.length%2!=0&&!i&&(h=s.shift()+a.nominalWidthX),o+=s.length>>1,s.length=0,i=!0,p+=o+7>>3;else if("o21"==_)s.length>2&&!i&&(h=s.shift()+a.nominalWidthX,i=!0),l+=s.pop(),d+=s.pop(),f&&Typr.U.P.closePath(n),Typr.U.P.moveTo(n,d,l),f=!0;else if("o22"==_)s.length>1&&!i&&(h=s.shift()+a.nominalWidthX,i=!0),d+=s.pop(),f&&Typr.U.P.closePath(n),Typr.U.P.moveTo(n,d,l),f=!0;else if("o25"==_){for(;s.length>6;)d+=s.shift(),l+=s.shift(),Typr.U.P.lineTo(n,d,l);u=d+s.shift(),y=l+s.shift(),v=u+s.shift(),c=y+s.shift(),d=v+s.shift(),l=c+s.shift(),Typr.U.P.curveTo(n,u,y,v,c,d,l)}else if("o26"==_)for(s.length%2&&(d+=s.shift());s.length>0;)u=d,y=l+s.shift(),d=v=u+s.shift(),l=(c=y+s.shift())+s.shift(),Typr.U.P.curveTo(n,u,y,v,c,d,l);else if("o27"==_)for(s.length%2&&(l+=s.shift());s.length>0;)y=l,v=(u=d+s.shift())+s.shift(),c=y+s.shift(),d=v+s.shift(),l=c,Typr.U.P.curveTo(n,u,y,v,c,d,l);else if("o10"==_||"o29"==_){var A="o10"==_?a:t;if(0==s.length);else{var R=s.pop(),V=A.Subrs[R+A.Bias];e.x=d,e.y=l,e.nStems=o,e.haveWidth=i,e.width=h,e.open=f,Typr.U._drawCFF(V,e,t,a,n),d=e.x,l=e.y,o=e.nStems,i=e.haveWidth,h=e.width,f=e.open}}else if("o30"==_||"o31"==_){var W=s.length,M=(G=0,"o31"==_);for(G+=W-(C=-3&W);G<C;)M?(y=l,v=(u=d+s.shift())+s.shift(),l=(c=y+s.shift())+s.shift(),C-G==5?(d=v+s.shift(),G++):d=v,M=!1):(u=d,y=l+s.shift(),v=u+s.shift(),c=y+s.shift(),d=v+s.shift(),C-G==5?(l=c+s.shift(),G++):l=c,M=!0),Typr.U.P.curveTo(n,u,y,v,c,d,l),G+=4}else{if("o"==(_+"").charAt(0))throw _;s.push(_)}}}e.x=d,e.y=l,e.nStems=o,e.haveWidth=i,e.width=h,e.open=f},Typr$1.Typr=Typr;var Typr_js_1=Typr$1;
-  var friendlyTags = { "aalt": "Access All Alternates", "abvf": "Above-base Forms", "abvm": "Above - base Mark Positioning", "abvs": "Above - base Substitutions", "afrc": "Alternative Fractions", "akhn": "Akhands", "blwf": "Below - base Forms", "blwm": "Below - base Mark Positioning", "blws": "Below - base Substitutions", "calt": "Contextual Alternates", "case": "Case - Sensitive Forms", "ccmp": "Glyph Composition / Decomposition", "cfar": "Conjunct Form After Ro", "cjct": "Conjunct Forms", "clig": "Contextual Ligatures", "cpct": "Centered CJK Punctuation", "cpsp": "Capital Spacing", "cswh": "Contextual Swash", "curs": "Cursive Positioning", "c2pc": "Petite Capitals From Capitals", "c2sc": "Small Capitals From Capitals", "dist": "Distances", "dlig": "Discretionary Ligatures", "dnom": "Denominators", "dtls": "Dotless Forms", "expt": "Expert Forms", "falt": "Final Glyph on Line Alternates", "fin2": "Terminal Forms #2", "fin3": "Terminal Forms #3", "fina": "Terminal Forms", "flac": "Flattened accent forms", "frac": "Fractions", "fwid": "Full Widths", "half": "Half Forms", "haln": "Halant Forms", "halt": "Alternate Half Widths", "hist": "Historical Forms", "hkna": "Horizontal Kana Alternates", "hlig": "Historical Ligatures", "hngl": "Hangul", "hojo": "Hojo Kanji Forms(JIS X 0212 - 1990 Kanji Forms)", "hwid": "Half Widths", "init": "Initial Forms", "isol": "Isolated Forms", "ital": "Italics", "jalt": "Justification Alternates", "jp78": "JIS78 Forms", "jp83": "JIS83 Forms", "jp90": "JIS90 Forms", "jp04": "JIS2004 Forms", "kern": "Kerning", "lfbd": "Left Bounds", "liga": "Standard Ligatures", "ljmo": "Leading Jamo Forms", "lnum": "Lining Figures", "locl": "Localized Forms", "ltra": "Left - to - right alternates", "ltrm": "Left - to - right mirrored forms", "mark": "Mark Positioning", "med2": "Medial Forms #2", "medi": "Medial Forms", "mgrk": "Mathematical Greek", "mkmk": "Mark to Mark Positioning", "mset": "Mark Positioning via Substitution", "nalt": "Alternate Annotation Forms", "nlck": "NLC Kanji Forms", "nukt": "Nukta Forms", "numr": "Numerators", "onum": "Oldstyle Figures", "opbd": "Optical Bounds", "ordn": "Ordinals", "ornm": "Ornaments", "palt": "Proportional Alternate Widths", "pcap": "Petite Capitals", "pkna": "Proportional Kana", "pnum": "Proportional Figures", "pref": "Pre - Base Forms", "pres": "Pre - base Substitutions", "pstf": "Post - base Forms", "psts": "Post - base Substitutions", "pwid": "Proportional Widths", "qwid": "Quarter Widths", "rand": "Randomize", "rclt": "Required Contextual Alternates", "rkrf": "Rakar Forms", "rlig": "Required Ligatures", "rphf": "Reph Forms", "rtbd": "Right Bounds", "rtla": "Right - to - left alternates", "rtlm": "Right - to - left mirrored forms", "ruby": "Ruby Notation Forms", "rvrn": "Required Variation Alternates", "salt": "Stylistic Alternates", "sinf": "Scientific Inferiors", "size": "Optical size", "smcp": "Small Capitals", "smpl": "Simplified Forms", "ssty": "Math script style alternates", "stch": "Stretching Glyph Decomposition", "subs": "Subscript", "sups": "Superscript", "swsh": "Swash", "titl": "Titling", "tjmo": "Trailing Jamo Forms", "tnam": "Traditional Name Forms", "tnum": "Tabular Figures", "trad": "Traditional Forms", "twid": "Third Widths", "unic": "Unicase", "valt": "Alternate Vertical Metrics", "vatu": "Vattu Variants", "vert": "Vertical Writing", "vhal": "Alternate Vertical Half Metrics", "vjmo": "Vowel Jamo Forms", "vkna": "Vertical Kana Alternates", "vkrn": "Vertical Kerning", "vpal": "Proportional Alternate Vertical Metrics", "vrt2": "Vertical Alternates and Rotation", "vrtr": "Vertical Alternates for Rotation", "zero": "Slashed Zero" };
-  var Font = (
-
-    function() {
-      function Font2(data) {
-        var obj = Typr_js_1.Typr.parse(data);
-        if (!obj.length || typeof obj[0] !== "object" || typeof obj[0].hasOwnProperty !== "function") {
-          throw "unable to parse font";
-        }
-        for (var n in obj[0]) {
-          this[n] = obj[0][n];
-        }
-        this.enabledGSUB = {};
-      }
-      Font2.prototype.getFamilyName = function() {
-        return this.name && (this.name.typoFamilyName || this.name.fontFamily) || "";
-      };
-      Font2.prototype.getSubFamilyName = function() {
-        return this.name && (this.name.typoSubfamilyName || this.name.fontSubfamily) || "";
-      };
-      Font2.prototype.glyphToPath = function(gid) {
-        return Typr_js_1.Typr.U.glyphToPath(this, gid);
-      };
-      Font2.prototype.getPairAdjustment = function(gid1, gid2) {
-        return Typr_js_1.Typr.U.getPairAdjustment(this, gid1, gid2);
-      };
-      Font2.prototype.stringToGlyphs = function(str) {
-        return Typr_js_1.Typr.U.stringToGlyphs(this, str);
-      };
-      Font2.prototype.glyphsToPath = function(gls) {
-        return Typr_js_1.Typr.U.glyphsToPath(this, gls);
-      };
-      Font2.prototype.pathToSVG = function(path, prec) {
-        return Typr_js_1.Typr.U.pathToSVG(path, prec);
-      };
-      Font2.prototype.pathToContext = function(path, ctx) {
-        return Typr_js_1.Typr.U.pathToContext(path, ctx);
-      };
-      Font2.prototype.lookupFriendlyName = function(table, feature) {
-        if (this[table] !== void 0) {
-          var tbl = this[table];
-          var feat = tbl.featureList[feature];
-          return this.featureFriendlyName(feat);
-        }
-        return "";
-      };
-      Font2.prototype.featureFriendlyName = function(feature) {
-        if (friendlyTags[feature.tag]) {
-          return friendlyTags[feature.tag];
-        }
-        if (feature.tag.match(/ss[0-2][0-9]/)) {
-          var name_1 = "Stylistic Set " + Number(feature.tag.substr(2, 2)).toString();
-          if (feature.featureParams) {
-            var version = Typr_js_1.Typr._bin.readUshort(this._data, feature.featureParams);
-            if (version === 0) {
-              var nameID = Typr_js_1.Typr._bin.readUshort(this._data, feature.featureParams + 2);
-              if (this.name && this.name[nameID] !== void 0) {
-                return name_1 + " - " + this.name[nameID];
-              }
-            }
-          }
-          return name_1;
-        }
-        if (feature.tag.match(/cv[0-9][0-9]/)) {
-          return "Character Variant " + Number(feature.tag.substr(2, 2)).toString();
-        }
-        return "";
-      };
-      Font2.prototype.enableGSUB = function(featureNumber) {
-        if (this.GSUB) {
-          var feature = this.GSUB.featureList[featureNumber];
-          if (feature) {
-            for (var i = 0; i < feature.tab.length; ++i) {
-              this.enabledGSUB[feature.tab[i]] = (this.enabledGSUB[feature.tab[i]] || 0) + 1;
-            }
-          }
-        }
-      };
-      Font2.prototype.disableGSUB = function(featureNumber) {
-        if (this.GSUB) {
-          var feature = this.GSUB.featureList[featureNumber];
-          if (feature) {
-            for (var i = 0; i < feature.tab.length; ++i) {
-              if (this.enabledGSUB[feature.tab[i]] > 1) {
-                --this.enabledGSUB[feature.tab[i]];
-              } else {
-                delete this.enabledGSUB[feature.tab[i]];
-              }
-            }
-          }
-        }
-      };
-      Font2.prototype.codeToGlyph = function(code) {
-        var g = Typr_js_1.Typr.U.codeToGlyph(this, code);
-        if (this.GSUB) {
-          var gls = [g];
-          for (var n in this.enabledGSUB) {
-            var l = this.GSUB.lookupList[n];
-            Typr_js_1.Typr.U._applySubs(gls, 0, l, this.GSUB.lookupList);
-          }
-          if (gls.length === 1)
-            return gls[0];
-        }
-        return g;
-      };
-      return Font2;
-    }()
-  );
-  var Font_1 = Font;
-
-
-
-
-
-  let _ppFontTableCache = null;
-  function _ppGetFontTable() {
-    if (_ppFontTableCache) return _ppFontTableCache;
-    const text = _GM_getResourceText("ttf");
-    if (!text) throw new Error("字体参考表资源缺失（@resource ttf 未取到）");
-    _ppFontTableCache = JSON.parse(text);
-    return _ppFontTableCache;
-  }
-
   function _ppApplyCipherMap(text, doc) {
     const map = doc && doc.__ppCipherCharMap;
     if (!map || !text) return text;
@@ -6261,71 +6094,61 @@ const AuthorWords = _sfc_main$4;
     return out;
   }
 
-  function decodeCipherFont(doc) {
-    const styleNodes = doc.querySelectorAll("style");
-    let cipherStyle = null;
-    for (let i = 0; i < styleNodes.length; i++) {
-      if (styleNodes[i].textContent?.includes("font-cxsecret")) {
-        cipherStyle = styleNodes[i];
-        break;
-      }
-    }
-    if (!cipherStyle) return;
-    const b64Match = cipherStyle.textContent?.match(/base64,([\w\W]+?)'/);
-    if (!b64Match) return;
-    const raw = window.atob(b64Match[1]);
-    const buf = new ArrayBuffer(raw.length);
-    const bytes = new Uint8Array(buf);
-    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-    const fontObj = new Font_1(buf);
-    const encryptedEls = doc.querySelectorAll(".font-cxsecret");
-    if (!encryptedEls.length) return;
-    const ttfTable = _ppGetFontTable();
-    const charMap = {};
-    const pendingPoints = [];
-    const seenPoints = new Set();
-    for (let i = 0; i < encryptedEls.length; i++) {
-      const html = encryptedEls[i].innerHTML;
-      for (let j = 0; j < html.length; j++) {
-        const cp = html.charCodeAt(j);
-        if (cp >= 19968 && cp <= 40870 && !seenPoints.has(cp)) {
-          seenPoints.add(cp);
-          pendingPoints.push(cp);
-        }
-      }
-    }
-    pendingPoints.sort((a, b) => a - b);
-    while (pendingPoints.length) {
-      const codePoint = pendingPoints.shift();
-      const glyphId = fontObj.codeToGlyph(codePoint);
-      if (!glyphId) continue;
-      const pathData = fontObj.glyphToPath(glyphId);
-      const signature = md5(JSON.stringify(pathData)).slice(24);
-      charMap[codePoint] = ttfTable[signature];
-      const decodedPoint = String.fromCharCode(charMap[codePoint]).charCodeAt(0);
-      if (decodedPoint > codePoint && decodedPoint >= 19968 && decodedPoint <= 40870 && !seenPoints.has(decodedPoint)) {
-        seenPoints.add(decodedPoint);
-        pendingPoints.push(decodedPoint);
-        pendingPoints.sort((a, b) => a - b);
-      }
-    }
-    for (let i = 0; i < encryptedEls.length; i++) {
-      const el = encryptedEls[i];
-      let text = el.innerHTML;
-      for (const cp in charMap) {
-        const decoded = String.fromCharCode(charMap[cp]);
-        const re = new RegExp(String.fromCharCode(+cp), "g");
-        text = text.replace(re, decoded);
-      }
-      el.innerHTML = text;
-      el.classList.remove("font-cxsecret");
-    }
-    doc.__ppCipherCharMap = charMap;
-  }
+  // ============================================================
+  // 字体解密库适配层（font-decrypt.js，通过 @require 预加载）
+  //
+  // 库负责：学习通 / 雨课堂 两套字形指纹算法 + 两张完整对照表（全部内嵌）。
+  // 主脚本只调用它，本文件内不再保留任何解密实现。
+  // ============================================================
+  const ppGetFontDecrypt = () => {
+    try {
+      if (typeof _unsafeWindow !== "undefined" && _unsafeWindow.FontDecrypt) return _unsafeWindow.FontDecrypt;
+    } catch (e) {}
+    try {
+      if (typeof window !== "undefined" && window.FontDecrypt) return window.FontDecrypt;
+    } catch (e) {}
+    return null;
+  };
+  const ppFontDecryptAvailable = () => {
+    const lib = ppGetFontDecrypt();
+    return !!(lib && typeof lib.cxDecode === "function" && typeof lib.yktPrepare === "function");
+  };
 
+  /** 学习通：解密统一交给 font-decrypt.js */
+  const decodeCipherFontSafe = (doc) => {
+    const lib = ppGetFontDecrypt();
+    if (!lib || typeof lib.cxDecode !== "function") return;
+    return lib.cxDecode(doc);
+  };
 
+  /** 雨课堂：预热字体对照表（异步，一次即可）。返回是否就绪 */
+  const ppYktPrepareFont = async (doc) => {
+    const lib = ppGetFontDecrypt();
+    if (!lib || typeof lib.yktPrepare !== "function") return false;
+    try {
+      if (typeof lib.yktDetect === "function" && !lib.yktDetect(doc)) return false;
+      return await lib.yktPrepare(doc);
+    } catch (e) {
+      return false;
+    }
+  };
 
-
+  /**
+   * 发题目给服务端之前的统一解密入口。
+   * 在克隆体上解密，原 DOM 一个字节不动。
+   * @param {Element} el 题目根元素
+   * @param {"cx"|"ykt"} platform
+   * @returns {Element} 解密后的克隆体；库不可用时返回原元素
+   */
+  const ppDecryptQuestionClone = (el, platform) => {
+    const lib = ppGetFontDecrypt();
+    if (!lib || typeof lib.cloneDecrypted !== "function") return el;
+    try {
+      return lib.cloneDecrypted(el, platform);
+    } catch (e) {
+      return el;
+    }
+  };
 
   const CX_FACE_SELECTORS = ["#fcqrimg", ".chapterVideoFaceMaskDiv", ".faceRecognition", ".face-verify"];
   const CX_FACE_TEXT_RE = /(请完成人脸识别|人脸识别验证|请进行人脸识别|请先完成人脸)/;
@@ -6379,6 +6202,56 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
+  // 题型名 → 题库 type 码：超星隐藏字段按题型名精确匹配，智慧树题面文案再走关键字兜底
+  const PP_TYPE_CODE_MAP = new Map([
+    ["单选题", "0"], ["A1型题", "0"], ["A1A2型题", "0"],
+    ["多选题", "1"], ["X型题", "1"],
+    ["填空题", "2"], ["听力填空", "2"], ["听力对话填空", "2"], ["完形填空", "2"], ["短文填空", "2"], ["选词填空", "2"],
+    ["填表题", "2"], ["阅读填空", "2"], ["阅读题", "2"], ["阅读理解", "2"],
+    ["程序题", "17"], ["写作题", "26"],
+    ["判断题", "3"],
+    ["简答题", "4"], ["名词解释", "5"],
+    ["论述题", "6"], ["计算题", "7"],
+    ["排序题", "13"],
+    ["连线题", "11"]
+  ]);
+  // 题面文案里的常见别名（「多项选择」「是非题」等）
+  const PP_TYPE_CODE_ALIASES = [
+    [/多选|多项/, "1"],
+    [/判断|是非/, "3"],
+    [/填空/, "2"],
+    [/简答/, "4"],
+    [/名词/, "5"],
+    [/论述/, "6"],
+    [/计算/, "7"],
+    [/单选|单项/, "0"]
+  ];
+  // 智慧树题面文案 → type 码；只取 0-7，避免把程序题/写作题等超星专有类型带进智慧树
+  // 题型标签经常和题干拼在一起（「4. 单选题 商品零售物价指数的计算中…」），
+  // 所以按出现位置取最靠前的题型词：题干里的「计算」「填空」不会再抢在「单选题」前面
+  const ppTypeCodeOf = (label) => {
+    const text = String(label == null ? "" : label).trim();
+    const exact = PP_TYPE_CODE_MAP.get(text);
+    if (exact && /^[0-7]$/.test(exact)) return exact;
+    let hit = null;
+    for (const [pattern, code] of PP_TYPE_CODE_ALIASES) {
+      const at = text.search(pattern);
+      if (at < 0) continue;
+      if (!hit || at < hit.at) hit = { at, code };
+    }
+    return hit ? hit.code : "999";
+  };
+
+  // 选择题选项「已作答」标记：超星 zj/zy 与智慧树共用同一组 DOM 特征
+  const ppOptionLooksSelected = (optEl) => {
+    if (!optEl) return false;
+    if (optEl.getAttribute("aria-checked") === "true") return true;
+    if (optEl.classList.contains("cur") || optEl.classList.contains("selected")) return true;
+    const spanEl = optEl.querySelector("span.num_option_dx") || optEl.querySelector("span.num_option") || optEl.querySelector("span[data]");
+    if (spanEl && (spanEl.classList.contains("cur") || spanEl.classList.contains("selected"))) return true;
+    return Boolean(optEl.querySelector(".onChecked") || optEl.querySelector(".check_answer"));
+  };
+
   class QuestionProcessor {
     constructor() {
       __publicField(this, "_document", document);
@@ -6395,21 +6268,12 @@ const AuthorWords = _sfc_main$4;
         throw new Error("Abstract method: fillQuestion must be implemented by subclass");
       });
 
-
       __publicField(this, "checkIfAnswered", (question) => {
 
         if (question.type === "0" || question.type === "1") {
           for (const key in question.options) {
             const optEl = question.options[key];
-
-            if (optEl.getAttribute("aria-checked") === "true") return true;
-
-            if (optEl.classList.contains("cur") || optEl.classList.contains("selected")) return true;
-
-            const spanEl = optEl.querySelector("span.num_option_dx") || optEl.querySelector("span.num_option") || optEl.querySelector("span[data]");
-            if (spanEl && (spanEl.classList.contains("cur") || spanEl.classList.contains("selected"))) return true;
-
-            if (optEl.querySelector(".onChecked") || optEl.querySelector(".check_answer")) return true;
+            if (ppOptionLooksSelected(optEl)) return true;
           }
           return false;
         }
@@ -6475,7 +6339,6 @@ const AuthorWords = _sfc_main$4;
           return false;
         }
 
-
         if (question.type === "11") {
           const selectElements = question.element.querySelectorAll("select.dept_select");
           for (const sel of selectElements) {
@@ -6537,18 +6400,7 @@ const AuthorWords = _sfc_main$4;
         return false;
       });
 
-      __publicField(this, "typeMap", new Map([
-        ["单选题", "0"], ["A1型题", "0"], ["A1A2型题", "0"],
-        ["多选题", "1"], ["X型题", "1"],
-        ["填空题", "2"], ["听力填空", "2"], ["听力对话填空", "2"], ["完形填空", "2"], ["短文填空", "2"], ["选词填空", "2"],
-        ["填表题", "2"], ["阅读填空", "2"], ["阅读题", "2"], ["阅读理解", "2"],
-        ["程序题", "17"], ["写作题", "26"],
-        ["判断题", "3"],
-        ["简答题", "4"], ["名词解释", "5"],
-        ["论述题", "6"], ["计算题", "7"],
-        ["排序题", "13"],
-        ["连线题", "11"]
-      ]));
+      __publicField(this, "typeMap", PP_TYPE_CODE_MAP);
 
       __publicField(this, "stripTags", (html) => {
         if (html == null) return "";
@@ -6607,6 +6459,29 @@ const AuthorWords = _sfc_main$4;
         return clone.innerHTML;
       });
 
+      __publicField(this, "extractOptions", (optionElements, optionSelector) => {
+        const optionsObject = {};
+        const optionTexts = [];
+        const optionsList = [];
+        const allElements = Array.from(optionElements || []);
+        const topElements = allElements.filter((el) => !allElements.some((other) => other !== el && other.contains(el)));
+        topElements.forEach((optionElement) => {
+          const inner = optionElement.querySelector(optionSelector) || optionElement;
+          const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
+          if (!optionTextContent) return;
+          optionsList.push({ text: optionTextContent, el: optionElement });
+          optionTexts.push(optionTextContent);
+          let key = optionTextContent;
+          let suffix = 2;
+          while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
+            key = optionTextContent + "#" + suffix;
+            suffix += 1;
+          }
+          optionsObject[key] = optionElement;
+        });
+        return [optionsObject, optionTexts, optionsList];
+      });
+
       __publicField(this, "trimTitle", (str) => {
         return str.replace(REGEX.CLEAN_TITLE, "");
       });
@@ -6616,8 +6491,6 @@ const AuthorWords = _sfc_main$4;
       this.addQuestion = questionStore.addQuestion;
     }
   }
-
-
 
   const buildErrorResponse = (reason) => ({
     code: 50001,
@@ -6673,11 +6546,6 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {}
   };
 
-
-
-
-
-
   const checkServerNotice = () => {
     _GM_xmlhttpRequest({
       method: "GET",
@@ -6705,12 +6573,6 @@ const AuthorWords = _sfc_main$4;
     });
   };
 
-
-
-
-
-
-
   const readCxParamValue = (partName, paramName, fallback = false) => {
     try {
       const parts = useConfigStore().platformParams?.cx?.parts || [];
@@ -6732,7 +6594,7 @@ const AuthorWords = _sfc_main$4;
       const store = useConfigStore();
       const key = platformKey || store.platformName;
       const parts = store.platformParams?.[key]?.parts || [];
-      const part = parts.find((p) => p.name === "答题参数");
+      const part = parts.find((p) => p.name === PP_KEY.ANSWER);
       return (part?.params || []).find((p) => p.name === paramName) || null;
     } catch (e) {
       return null;
@@ -6740,7 +6602,7 @@ const AuthorWords = _sfc_main$4;
   };
 
   const resolveAnswerThreshold = (platformKey) => {
-    const raw = Number(findAnswerParam(platformKey, "正确阈值")?.value);
+    const raw = Number(findAnswerParam(platformKey, PP_KEY.THRESHOLD)?.value);
     return Math.min(
       ANSWER_THRESHOLD_MAX,
       Math.max(ANSWER_THRESHOLD_MIN, Number.isFinite(raw) && raw > 0 ? raw : ANSWER_THRESHOLD_DEFAULT),
@@ -6811,8 +6673,8 @@ const AuthorWords = _sfc_main$4;
     try {
       const store = useConfigStore();
       const parts = store.platformParams?.[store.platformName]?.parts || [];
-      const modePart = parts.find((p) => p.name === "模式设置");
-      const param = (modePart?.params || []).find((p) => p.name === "激活挂机");
+      const modePart = parts.find((p) => p.name === PP_KEY.MODE);
+      const param = (modePart?.params || []).find((p) => p.name === PP_KEY.STANDBY);
       return Boolean(param && param.value);
     } catch (e) {
       return false;
@@ -6846,20 +6708,19 @@ const AuthorWords = _sfc_main$4;
       }
       return Boolean(worker);
     };
+    const newTimer = (prefix, cb, message) => {
+      if (!ensure()) return null;
+      const id = `${prefix}${++seq}`;
+      callbacks.set(id, cb);
+      worker.postMessage(message(id));
+      return id;
+    };
     return {
       interval(cb, ms) {
-        if (!ensure()) return null;
-        const id = `ppw${++seq}`;
-        callbacks.set(id, cb);
-        worker.postMessage({ type: "start", id, interval: ms });
-        return id;
+        return newTimer("ppw", cb, (id) => ({ type: "start", id, interval: ms }));
       },
       once(ms, cb) {
-        if (!ensure()) return null;
-        const id = `ppo${++seq}`;
-        callbacks.set(id, cb);
-        worker.postMessage({ type: "once", id, delay: ms });
-        return id;
+        return newTimer("ppo", cb, (id) => ({ type: "once", id, delay: ms }));
       },
       stop(id) {
         if (!id || !worker) return;
@@ -6912,14 +6773,16 @@ const AuthorWords = _sfc_main$4;
     try {
       const platform = useConfigStore().platformName;
       if (platform === "ykt") {
-        const review = readYktParam("模式设置", "复习模式", false);
-        return `当前模式：${review ? "复习模式" : "正常模式"}`;
+        const mode =
+          [PP_KEY.ONLY_ANSWER, PP_KEY.ONLY_VIDEO, PP_KEY.REVIEW].find((name) => readYktParam(PP_KEY.MODE, name, false)) ||
+          PP_KEY.NORMAL_MODE;
+        return `当前模式：${mode}`;
       }
       if (platform !== "cx") return "";
     } catch (e) {}
     const taskMode =
-      ["复习模式", "仅视频", "仅答题"].find((name) => readCxParamValue("模式设置", name, false)) ||
-      "正常模式";
+      [PP_KEY.REVIEW, PP_KEY.ONLY_VIDEO, PP_KEY.ONLY_ANSWER].find((name) => readCxParamValue(PP_KEY.MODE, name, false)) ||
+      PP_KEY.NORMAL_MODE;
     return `当前模式：${taskMode}`;
   };
 
@@ -6931,27 +6794,19 @@ const AuthorWords = _sfc_main$4;
 
     window.__answerModeLogged = false;
 
-
-
-
-
-
-
-
     let verifyAnswer = false;
     let useAIOnly = false;
     let enableWebSearch = false;
     let aiType = globalModelConfig?.typeOptions?.[0] || '';
     let aiModel = globalModelConfig?.defaultModels?.[aiType] || '';
-    const answerParamsPart = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数");
+    const answerParamsPart = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === PP_KEY.ANSWER);
     if (answerParamsPart && answerParamsPart.params) {
-      const normalModeParam = answerParamsPart.params.find(p => p.name === "正常模式");
-      const aiModeParam = answerParamsPart.params.find(p => p.name === "AI模式");
-      const answerVerifyParam = answerParamsPart.params.find(p => p.name === "答案校验");
-      const webSearchParam = answerParamsPart.params.find(p => p.name === "联网搜索");
-      const aiTypeParam = answerParamsPart.params.find(p => p.name === "AI 类型选择");
-      const aiModelParam = answerParamsPart.params.find(p => p.name === "AI 模型选择");
-
+      const normalModeParam = answerParamsPart.params.find(p => p.name === PP_KEY.NORMAL_MODE);
+      const aiModeParam = answerParamsPart.params.find(p => p.name === PP_KEY.AI_MODE);
+      const answerVerifyParam = answerParamsPart.params.find(p => p.name === PP_KEY.VERIFY);
+      const webSearchParam = answerParamsPart.params.find(p => p.name === PP_KEY.WEB_SEARCH);
+      const aiTypeParam = answerParamsPart.params.find(p => p.name === PP_KEY.AI_TYPE);
+      const aiModelParam = answerParamsPart.params.find(p => p.name === PP_KEY.AI_MODEL);
 
       if (aiTypeParam && aiTypeParam.value) {
         aiType = aiTypeParam.value;
@@ -6960,20 +6815,17 @@ const AuthorWords = _sfc_main$4;
         aiModel = aiModelParam.value;
       }
 
-
       if (aiModeParam && aiModeParam.value) {
         useAIOnly = true;
       } else if (answerVerifyParam && answerVerifyParam.value) {
         verifyAnswer = true;
       }
 
-
       if (webSearchParam && webSearchParam.value && useAIOnly) {
         enableWebSearch = true;
       }
 
     }
-
 
     const modelType = getModelType(aiType, aiModel);
 
@@ -6984,23 +6836,22 @@ const AuthorWords = _sfc_main$4;
 
     const userId = getUidRealtime();
 
-
     const isZhs = String(question.workType) === "zhs";
+    const isYkt = String(question.workType) === "ykt";
     try {
       if (question.element && question.element.ownerDocument) {
-        decodeCipherFont(question.element.ownerDocument);
+        decodeCipherFontSafe(question.element.ownerDocument);
       }
     } catch (e) {}
     const questionData = {
       questionData: question.element.outerHTML,
-      workType: isZhs ? "zhs" : "cx",
+      workType: isYkt ? "ykt" : isZhs ? "zhs" : "cx",
       refer: question.refer,
       u: userId,
       t: Math.floor(( new Date()).getTime() / 1e3).toString()
     };
 
-
-    if (isZhs) {
+    if (isZhs || isYkt) {
       questionData.questionData = question.html || question.element.outerHTML;
     } else {
       questionData.audios = Array.isArray(question.audios) ? question.audios : [];
@@ -7013,19 +6864,16 @@ const AuthorWords = _sfc_main$4;
       })();
     }
 
-
     const startTaskId = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
 
-    const answerIntervalParam = answerParamsPart?.params.find(p => p.name === "答题间隔");
-    const simulateDelay = answerParamsPart?.params.find(p => p.name === "模拟延迟")?.value ?? true;
+    const answerIntervalParam = answerParamsPart?.params.find(p => p.name === PP_KEY.ANSWER_GAP);
+    const simulateDelay = answerParamsPart?.params.find(p => p.name === PP_KEY.SIM_DELAY)?.value ?? true;
     await (simulateDelay ? randomDelay(answerIntervalParam?.value || 1, 0.5) : delay(answerIntervalParam?.value || 1));
-
 
     const currentTaskIdAfterSleep = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
     if (currentTaskIdAfterSleep !== startTaskId) {
       return { code: 499, msg: '用户取消', data: null };
     }
-
 
     let step1TaskId = null;
     const sendRequest = (checkOnly = false) => {
@@ -7043,12 +6891,10 @@ const AuthorWords = _sfc_main$4;
           }
         }
 
-
         const logStore = useLogStore();
         if (useAIOnly && !checkOnly && !window.__inThinkingMode__) {
           logStore.addLog(`⏳ ${aiType} ${aiModel} 正在处理中，请耐心等待...`, 'info');
         }
-
 
         const timeout = checkOnly ? 60000 : 90000;
 
@@ -7137,12 +6983,10 @@ const AuthorWords = _sfc_main$4;
       setTimeout(poll, pollInterval);
     };
 
-
     const firstResponse = useAIOnly ? await sendRequest(false) : await sendRequest(true);
 
     if (firstResponse.code === 202 && firstResponse.status === "thinking") {
       const logStore = useLogStore();
-
 
       const thinkingModelName = firstResponse.data?.thinkingModel || 'AI模型';
 
@@ -7150,19 +6994,14 @@ const AuthorWords = _sfc_main$4;
       logStore.addLog('🤔 答案校验失败，启动深度思考...', 'warning');
       logStore.addLog(`⏳ ${thinkingModelName} 正在深度思考中，请耐心等待...`, 'info');
 
-
       window.__inThinkingMode__ = true;
-
-
 
       const currentTaskId = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
       if (currentTaskId !== thinkingStartTaskId) {
         return { code: 499, msg: '用户取消', data: null };
       }
 
-
       await randomDelay(0.1, 0.15);
-
 
       const currentTaskId2 = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
       if (currentTaskId2 !== thinkingStartTaskId) {
@@ -7170,7 +7009,6 @@ const AuthorWords = _sfc_main$4;
       }
 
       const finalResponse = await sendRequest(false);
-
 
       window.__inThinkingMode__ = false;
 
@@ -7180,16 +7018,9 @@ const AuthorWords = _sfc_main$4;
     return firstResponse;
   };
 
-
-
   const queryAnswer = async (question) => {
     return await fetchAnswerData(question);
   };
-
-
-
-
-
 
   const computeMatch = (str1, str2) => {
     const s1 = str1.trim().toLowerCase();
@@ -7309,11 +7140,6 @@ const AuthorWords = _sfc_main$4;
     return -1;
   };
 
-
-
-
-
-
   class CxQuestionHandler extends QuestionProcessor {
     constructor(type, iframe) {
       super();
@@ -7345,8 +7171,8 @@ const AuthorWords = _sfc_main$4;
 
           const startTaskId = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
 
-          const _answerParamsPart1 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数");
-          const skipAnswered = _answerParamsPart1?.params.find(p => p.name === "跳过已答")?.value || false;
+          const _answerParamsPart1 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === PP_KEY.ANSWER);
+          const skipAnswered = _answerParamsPart1?.params.find(p => p.name === PP_KEY.SKIP_ANSWERED)?.value || false;
           this.correctNum = 0;
           this.skippedCount = 0;
           this.failedCount = 0;
@@ -7375,7 +7201,6 @@ const AuthorWords = _sfc_main$4;
             }
             this.addLog(`正在查找第${index + 1}道题目答案...`, "primary");
             const answerData = await queryAnswer(question);
-
 
             const currentTaskId2 = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
             if (currentTaskId2 !== startTaskId || answerData.code === 499) {
@@ -7843,20 +7668,14 @@ const AuthorWords = _sfc_main$4;
       if (iframe) {
         this._document = iframe.contentDocument;
         this._window = iframe.contentWindow;
-        decodeCipherFont(this._document);
+        decodeCipherFontSafe(this._document);
       } else {
-        decodeCipherFont(this._document);
+        decodeCipherFontSafe(this._document);
       }
     }
     isOptionSelected(optionElement) {
-      if (["zj", "zy"].includes(this.type)) {
-        if (optionElement.getAttribute("aria-checked") === "true") return true;
-        if (optionElement.classList.contains("cur") || optionElement.classList.contains("selected")) return true;
-        const spanEl = optionElement.querySelector("span.num_option_dx") || optionElement.querySelector("span.num_option") || optionElement.querySelector("span[data]");
-        if (spanEl && (spanEl.classList.contains("cur") || spanEl.classList.contains("selected"))) return true;
-        if (optionElement.querySelector(".onChecked") || optionElement.querySelector(".check_answer")) return true;
-        return false;
-      } else if (["ks"].includes(this.type)) {
+      if (["zj", "zy"].includes(this.type)) return ppOptionLooksSelected(optionElement);
+      if (["ks"].includes(this.type)) {
         return !!(optionElement.querySelector(".check_answer") || optionElement.querySelector(".check_answer_dx"));
       }
       return false;
@@ -7877,9 +7696,9 @@ const AuthorWords = _sfc_main$4;
 
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const configStore = useConfigStore();
-      const answerParams = configStore.platformParams[configStore.platformName]?.parts.find((p) => p.name === "答题参数")?.params || [];
-      const useSimilarity = answerParams.find((p) => p.name === "相似匹配")?.value !== false;
-      const thresholdRaw = Number(answerParams.find((p) => p.name === "正确阈值")?.value);
+      const answerParams = configStore.platformParams[configStore.platformName]?.parts.find((p) => p.name === PP_KEY.ANSWER)?.params || [];
+      const useSimilarity = answerParams.find((p) => p.name === PP_KEY.SIMILAR)?.value !== false;
+      const thresholdRaw = Number(answerParams.find((p) => p.name === PP_KEY.THRESHOLD)?.value);
       const threshold = Math.min(99, Math.max(50, Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 85));
 
       const optionList = getOptionList(question);
@@ -8070,7 +7889,6 @@ const AuthorWords = _sfc_main$4;
 
         let blankAnswers = flatAnswers;
         const blankCount = Math.max(wordSpans.length, selectBoxes.length, textareaElements.length);
-
 
         const preferTextarea = (type === "2" || type === "10") && textareaElements.length > 0;
         if (wordSpans.length > 0 && !preferTextarea) {
@@ -8351,31 +8169,6 @@ const AuthorWords = _sfc_main$4;
       const code = input ? String(input.value || "").trim() : "";
       return code || "999";
     }
-    extractOptions(optionElements, optionSelector) {
-      const optionsObject = {};
-      const optionTexts = [];
-      const optionsList = [];
-      const allElements = Array.from(optionElements || []);
-      const topElements = allElements.filter(
-        (el) => !allElements.some((other) => other !== el && other.contains(el)),
-      );
-      topElements.forEach((optionElement) => {
-        var _a;
-        const inner = optionElement.querySelector(optionSelector) || optionElement;
-        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
-        if (!optionTextContent) return;
-        optionsList.push({ text: optionTextContent, el: optionElement });
-        optionTexts.push(optionTextContent);
-        let key = optionTextContent;
-        let suffix = 2;
-        while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
-          key = optionTextContent + "#" + suffix;
-          suffix += 1;
-        }
-        optionsObject[key] = optionElement;
-      });
-      return [optionsObject, optionTexts, optionsList];
-    }
     addQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
         var _a, _b, _c, _d;
@@ -8387,7 +8180,6 @@ const AuthorWords = _sfc_main$4;
         const resolvedType = this.resolveQuestionType(questionElement);
         const zyKsSelector = SELECTORS.CX_OPTION_ZY_KS;
         const zjSelector = SELECTORS.CX_OPTION_ZJ;
-
 
         const subItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
         const subTypeCode = String(resolvedType);
@@ -8578,7 +8370,6 @@ const AuthorWords = _sfc_main$4;
           const h3Element = questionElement.querySelector("h3");
           const colorShallowElement = questionElement.querySelector(".colorShallow");
 
-
           const fullText = h3Element ? this.stripTags(this.htmlWithAbsoluteImages(h3Element)) : "";
           const typeText = colorShallowElement ? this.stripTags(colorShallowElement.innerHTML) : "";
           questionTitle = fullText.replace(typeText, "").replace(/^\d+\.\s*/, "").replace(/_{2,}/g, "____").trim();
@@ -8587,8 +8378,6 @@ const AuthorWords = _sfc_main$4;
         } else if (["zj"].includes(this.type)) {
           questionTitle = this.stripTags(this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel")))
             .replace(/（[\d.]+分）/g, "").trim();
-
-
 
           const isMatchingQuestion = questionElement.getAttribute("data") === "11" ||
                                      String((questionElement.querySelector('input[id^="answertype"], input[name^="type"]') || {}).value || "") === "11" ||
@@ -8601,26 +8390,19 @@ const AuthorWords = _sfc_main$4;
             const secondListItems = matchDiv.querySelectorAll("ul.secondUlList li:not(.groupTitile)");
             const selectElements = matchDiv.querySelectorAll("select.dept_select");
 
-
-            const leftItems = [];
-            firstListItems.forEach((li, idx) => {
-              const numEl = li.querySelector("i");
+            const readMatchSide = (listItems, build) => Array.from(listItems).map((li, idx) => {
+              const headEl = li.querySelector("i");
               const textEl = li.querySelector("div p, div a p");
-              const num = numEl ? numEl.textContent.replace(/[、，.]/g, "").trim() : String(idx + 1);
               const text = textEl ? this.stripTags(textEl.innerHTML).trim() : "";
-              leftItems.push(`${num}. ${text}`);
+              return build(headEl ? headEl.textContent : null, text, idx);
             });
-
-
-            const rightItems = [];
-            secondListItems.forEach((li) => {
-              const labelEl = li.querySelector("i");
-              const textEl = li.querySelector("div p, div a p");
-              const label = labelEl ? labelEl.textContent.replace(/[、，]/g, "").trim() : "";
-              const text = textEl ? this.stripTags(textEl.innerHTML).trim() : "";
-              rightItems.push(label ? `${label} ${text}` : text);
+            const leftItems = readMatchSide(firstListItems, (head, text, idx) =>
+              `${head === null ? String(idx + 1) : head.replace(/[、，.]/g, "").trim()}. ${text}`
+            );
+            const rightItems = readMatchSide(secondListItems, (head, text) => {
+              const label = head === null ? "" : head.replace(/[、，]/g, "").trim();
+              return label ? `${label} ${text}` : text;
             });
-
 
             const fullTitle = `${questionTitle} 左侧: ${leftItems.join("；")} 右侧: ${rightItems.join("；")}`;
 
@@ -8673,14 +8455,9 @@ const AuthorWords = _sfc_main$4;
     }
   }
 
-
-
-
-
   const useCxChapterLogic = () => {
     const logStore = useLogStore();
     const progressStore = useProgressStore();
-
 
     const getCookieLocal = (name) => {
       const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -8700,7 +8477,7 @@ const AuthorWords = _sfc_main$4;
 
     const cxVideoParam = (name) => {
       const parts = configStore.platformParams?.cx?.parts || [];
-      const part = parts.find(p => p.name === "视频设置");
+      const part = parts.find(p => p.name === PP_KEY.VIDEO);
       return (part?.params || []).find(p => p.name === name) || {};
     };
     const cxVideoParamValue = (name, fallback = false) => {
@@ -8713,7 +8490,6 @@ const AuthorWords = _sfc_main$4;
     let _urlBackupTimer = null;
     let _urlWatcherInterval = null;
     let _urlBackupWorkerId = null;
-
 
     const monitorIframes = () => {
       const afkEnabledMonitor = readGlobalAfk();
@@ -8741,9 +8517,7 @@ const AuthorWords = _sfc_main$4;
 
       const currentSrc = iframe.src || '';
 
-
       const srcChanged = currentSrc !== _lastIframeSrc;
-
 
       if (iframe !== _currentIframe) {
         _currentIframe = iframe;
@@ -8761,7 +8535,6 @@ const AuthorWords = _sfc_main$4;
           monitorIframes();
         });
       }
-
 
       try {
         if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
@@ -8842,7 +8615,6 @@ const AuthorWords = _sfc_main$4;
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
-
       if (thisTaskId !== _globalTaskId) {
         return;
       }
@@ -8863,7 +8635,7 @@ const AuthorWords = _sfc_main$4;
         _currentWatchSubscription = rxjs.from(classified).pipe(rxjs.concatMap(({ iframe, type }) => executeFrame(iframe, type))).subscribe({
           complete: async () => {
             if (thisTaskId === _globalTaskId) {
-              const autoSwitch = readCxParamValue("章节/作业/测验设置", "自动切换", true);
+              const autoSwitch = readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
               logStore.addLog("本页任务点已全部完成", "success");
               if (!autoSwitch) {
                 logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
@@ -8903,21 +8675,16 @@ const AuthorWords = _sfc_main$4;
       });
     };
 
-
-
     const calculateEnc = (classId, uid, jobId, objectId, playTime, duration) => {
       const str = `[${classId}][${uid}][${jobId}][${objectId}][${playTime * 1000}][d_yHJ!$pdA~5][${duration * 1000}][0_${duration}]`;
       return md5(str);
     };
-
 
     const formatDuration = (seconds) => {
       const mins = Math.floor(seconds / 60);
       const secs = Math.floor(seconds % 60);
       return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
-
-
 
     const hasVideoOrAudio = () => {
       try {
@@ -8939,7 +8706,6 @@ const AuthorWords = _sfc_main$4;
         return false;
       }
     };
-
 
     const completedSimulatedIds = new Set();
     const processingSimulatedId = { current: null };
@@ -9035,47 +8801,29 @@ const AuthorWords = _sfc_main$4;
       }
     };
 
+    const stopSimulatePlay = (reason) => {
+      if (!window._simulateActive) return;
+      if (reason) logStore.addLog(reason, 'warning');
+      window._simulateActive = false;
+      if (window._currentMediaInterval) {
+        clearInterval(window._currentMediaInterval);
+        window._currentMediaInterval = null;
+      }
+      if (window._simulateLoopId) {
+        BackgroundWorker.stop(window._simulateLoopId);
+        window._simulateLoopId = null;
+      }
+      progressStore.update({ isPlaying: false });
+      processingSimulatedId.current = null;
+      simulateVideoPlay._currentObjectId = null;
+      clearOverlayAndBanner();
+    };
     const stopSimulatePlayIfNeeded = () => {
-      if (window._simulateActive) {
-        const hasMedia = hasVideoOrAudio();
-        if (!hasMedia) {
-          window._simulateActive = false;
-          logStore.addLog('检测到视频/音频已消失，停止模拟播放', 'warning');
-          if (window._currentMediaInterval) {
-            clearInterval(window._currentMediaInterval);
-            window._currentMediaInterval = null;
-          }
-          if (window._simulateLoopId) {
-            BackgroundWorker.stop(window._simulateLoopId);
-            window._simulateLoopId = null;
-          }
-          progressStore.update({
-            isPlaying: false
-          });
-          processingSimulatedId.current = null;
-          simulateVideoPlay._currentObjectId = null;
-          clearOverlayAndBanner();
-        }
+      if (window._simulateActive && !hasVideoOrAudio()) {
+        stopSimulatePlay('检测到视频/音频已消失，停止模拟播放');
       }
     };
-    const forceStopSimulatePlay = () => {
-      if (window._simulateActive) {
-        window._simulateActive = false;
-        if (window._currentMediaInterval) {
-          clearInterval(window._currentMediaInterval);
-          window._currentMediaInterval = null;
-        }
-        if (window._simulateLoopId) {
-          BackgroundWorker.stop(window._simulateLoopId);
-          window._simulateLoopId = null;
-        }
-        progressStore.update({ isPlaying: false });
-        processingSimulatedId.current = null;
-        simulateVideoPlay._currentObjectId = null;
-        clearOverlayAndBanner();
-      }
-    };
-
+    const forceStopSimulatePlay = () => stopSimulatePlay();
 
     const getVideoInfo = async (objectId) => {
       return new Promise((resolve, reject) => {
@@ -9083,7 +8831,6 @@ const AuthorWords = _sfc_main$4;
         const protocol = window.location.protocol;
         const FID = _unsafeWindow.FID || '';
         const statusUrl = `${protocol}//${host}/ananas/status/${objectId}?k=${FID}&flag=normal&_dc=${Date.now()}`;
-
 
         let vrefer = '';
         try {
@@ -9123,7 +8870,6 @@ const AuthorWords = _sfc_main$4;
       });
     };
 
-
     const getTaskParams = () => {
       try {
 
@@ -9131,7 +8877,6 @@ const AuthorWords = _sfc_main$4;
         if (topWindow.margs) {
           return topWindow.margs;
         }
-
 
         const urlParams = new URLSearchParams(window.location.search);
         return {
@@ -9143,7 +8888,6 @@ const AuthorWords = _sfc_main$4;
         return null;
       }
     };
-
 
     const getEvasionRate = (baseRate) => {
       const evasionRate = baseRate * (0.95 + Math.random() * 0.1);
@@ -9162,7 +8906,6 @@ const AuthorWords = _sfc_main$4;
     };
 
     const compensateDuration = (playTime, duration, baseRate) => playTime;
-
 
     const BackgroundWorker = (() => {
       let worker = null;
@@ -9227,11 +8970,6 @@ const AuthorWords = _sfc_main$4;
         }
       };
     })();
-
-
-
-
-
 
     const FakeMediaPlayer = (() => {
       let audioContext = null;
@@ -9301,11 +9039,6 @@ const AuthorWords = _sfc_main$4;
       return { start, stop, isActive };
     })();
 
-
-
-
-
-
     const simulateVideoPlay = (iframe, iframeDocument, mediaType) => {
       return new Promise((resolve) => {
         (async () => {
@@ -9318,7 +9051,6 @@ const AuthorWords = _sfc_main$4;
         const safeResolve = (val) => { releaseLock(); resolve(val); };
         logStore.addLog(`发现一个${mediaType}，当前播放模式: 模拟播放`, "primary");
 
-
         try {
           const mediaElement = iframeDocument?.documentElement?.querySelector(mediaType);
           if (mediaElement) {
@@ -9329,8 +9061,6 @@ const AuthorWords = _sfc_main$4;
           }
         } catch (e) {
         }
-
-
 
         try {
 
@@ -9345,8 +9075,7 @@ const AuthorWords = _sfc_main$4;
           let rt = '0.9';
           let iframeSrc = iframe.src || '';
           let videoName = mediaType === 'video' ? '视频' : '音频';
-          const reviewMode = readCxParamValue("模式设置", "复习模式", false);
-
+          const reviewMode = readCxParamValue(PP_KEY.MODE, PP_KEY.REVIEW, false);
 
           try {
 
@@ -9357,7 +9086,6 @@ const AuthorWords = _sfc_main$4;
               parent = parent.parentElement;
               if (parent === document.body || parent === document.documentElement) break;
             }
-
 
             if (!prevTitleElement) {
               prevTitleElement = document.querySelector('.prev_title');
@@ -9379,7 +9107,6 @@ const AuthorWords = _sfc_main$4;
             logStore.addLog(`从标题获取失败: ${e.message}`, "danger");
           }
 
-
           const getStr = (str, start, end) => {
             const startIndex = str.indexOf(start);
             if (startIndex === -1) return null;
@@ -9389,9 +9116,7 @@ const AuthorWords = _sfc_main$4;
             return content.substring(0, endIndex);
           };
 
-
           let pageData = null;
-
 
           try {
             if (_unsafeWindow.param) {
@@ -9404,7 +9129,6 @@ const AuthorWords = _sfc_main$4;
               pageData = _unsafeWindow.mArg;
             }
           } catch (e) {}
-
 
           if (!pageData) {
             try {
@@ -9428,17 +9152,13 @@ const AuthorWords = _sfc_main$4;
             } catch (e) {}
           }
 
-
           const documentsToTry = [];
-
 
           if (iframeDocument) {
             documentsToTry.push({ name: 'iframeDocument', doc: iframeDocument });
           }
 
-
           documentsToTry.push({ name: 'currentWindow', doc: _unsafeWindow.document });
-
 
           try {
             if (_unsafeWindow.top && _unsafeWindow.top.document) {
@@ -9473,7 +9193,6 @@ const AuthorWords = _sfc_main$4;
                 }
               }
 
-
               if (!pageData && name === 'topWindow') {
                 for (let i = 0; i < scripts.length; i++) {
                   const content = scripts[i].innerHTML;
@@ -9494,7 +9213,6 @@ const AuthorWords = _sfc_main$4;
                       }
                     }
 
-
                     const clazzIdMatch = content.match(/stu_clazzId\s*=\s*["'](\d+)["']/);
                     const courseIdMatch = content.match(/stu_CourseId\s*=\s*["'](\d+)["']/);
                     const knowledgeIdMatch = content.match(/stu_knowledgeId\s*=\s*["'](\d+)["']/);
@@ -9508,7 +9226,6 @@ const AuthorWords = _sfc_main$4;
                       };
                     }
                   }
-
 
                   if (!pageData && content.indexOf('"attachments"') !== -1) {
                     const jsonMatch = content.match(/\{[\s\S]*?"attachments"[\s\S]*?\}/);
@@ -9525,7 +9242,6 @@ const AuthorWords = _sfc_main$4;
               logStore.addLog(`[${name}] 获取失败: ${e.message}`, "warning");
             }
           }
-
 
           if (!pageData || (pageData.defaults && !pageData.defaults.reportUrl)) {
             try {
@@ -9571,7 +9287,6 @@ const AuthorWords = _sfc_main$4;
             logStore.addLog(`无法获取mArg数据，回退到普通播放模式`, "warning");
           }
 
-
           if (pageData) {
 
             if (pageData.defaults) {
@@ -9580,7 +9295,6 @@ const AuthorWords = _sfc_main$4;
               reportUrl = pageData.defaults.reportUrl || '';
 
             }
-
 
             if (pageData.attachments && pageData.attachments.length > 0) {
 
@@ -9594,12 +9308,10 @@ const AuthorWords = _sfc_main$4;
                 srcObjectId = iframe.getAttribute('objectid') || iframe.getAttribute('data-objectid') || null;
               }
 
-
               for (const attachment of pageData.attachments) {
 
                 if (attachment.isPassed === true && !reviewMode) continue;
                 if (completedSimulatedIds.has(attachment.property?.objectid)) continue;
-
 
                 const moduleType = attachment.property?.module || '';
                 const isVideo = moduleType === 'video' || moduleType === 'insertvideo' || attachment.type === 'video';
@@ -9626,7 +9338,6 @@ const AuthorWords = _sfc_main$4;
                 }
               }
 
-
               if (!objectId) {
                 for (const attachment of pageData.attachments) {
 
@@ -9650,14 +9361,11 @@ const AuthorWords = _sfc_main$4;
             }
           }
 
-
           if (!objectId) {
             const iframeSrc = iframe.src || '';
 
-
             const objectIdMatch = iframeSrc.match(REGEX.OBJECT_ID);
             objectId = objectIdMatch ? objectIdMatch[1] : null;
-
 
             if (!objectId) {
               const dataAttrs = ['data-objectid', 'data-object-id', 'objectid'];
@@ -9669,7 +9377,6 @@ const AuthorWords = _sfc_main$4;
                 }
               }
             }
-
 
             if (!objectId) {
               const nameOrId = iframe.name || iframe.id || '';
@@ -9692,8 +9399,6 @@ const AuthorWords = _sfc_main$4;
           processingSimulatedId.current = objectId;
           simulateVideoPlay._currentObjectId = objectId;
 
-
-
           if (!dtoken || !duration) {
             const videoInfo = await getVideoInfo(objectId);
             duration = videoInfo.duration;
@@ -9707,24 +9412,20 @@ const AuthorWords = _sfc_main$4;
 
           logStore.addLog(`视频时长: ${formatDuration(duration)}秒`, "primary");
 
-
           if (!uid) {
             uid = cachedUid;
           }
-
 
           if (!classId) {
             const taskParams = getTaskParams();
             classId = taskParams?.clazzId || taskParams?.classId;
           }
 
-
           if (!classId) {
             const pageUrl = window.location.href;
             const classIdMatch = pageUrl.match(/clazzId=(\d+)/) || pageUrl.match(/classId=(\d+)/);
             classId = classIdMatch ? classIdMatch[1] : null;
           }
-
 
           if (!jobId) {
 
@@ -9758,17 +9459,14 @@ const AuthorWords = _sfc_main$4;
             return safeResolve(await playMediaDirectly(mediaType, iframeDocument));
           }
 
-
-          const autoMaxRate = cxVideoParamValue("自动倍速", false);
-          let playbackRate = cxVideoParamValue("播放倍速", 1);
+          const autoMaxRate = cxVideoParamValue(PP_KEY.AUTO_RATE, false);
+          let playbackRate = cxVideoParamValue(PP_KEY.RATE, 1);
           const maxRate = getMaxPlaybackRate(iframeDocument, false);
           const speedDisabled = maxRate === 1;
 
-
           window.__maxPlaybackRate = maxRate;
 
-
-          const playbackRateParam = cxVideoParam("播放倍速");
+          const playbackRateParam = cxVideoParam(PP_KEY.RATE);
           playbackRateParam.max = autoMaxRate ? maxRate : 3;
 
           if (speedDisabled) {
@@ -9786,15 +9484,11 @@ const AuthorWords = _sfc_main$4;
           }
           logStore.addLog(`播放倍速: ${playbackRate}x`, "primary");
 
-
-
           const host = window.location.host;
           const protocol = window.location.protocol;
 
-
           const videojs_id = String(parseInt(Math.random() * 9999999));
           document.cookie = 'videojs_id=' + videojs_id + ';path=/';
-
 
           const evasionEnabled = cxVideoParamValue("规避检测", false);
 
@@ -10040,11 +9734,9 @@ const AuthorWords = _sfc_main$4;
             reportUrl = '/multimedia/v2';
           }
 
-
           if (mediaType === 'audio') {
             rt = '';
           }
-
 
           const rtValue = parseFloat(rt) || 1.0;
           let targetDuration = reviewMode ? duration : Math.ceil(duration * rtValue);
@@ -10053,13 +9745,10 @@ const AuthorWords = _sfc_main$4;
             logStore.addLog('复习模式：完整重刷，从 0 秒播放至 100%', "primary");
           }
 
-
-
           if (window._currentMediaInterval) {
             clearInterval(window._currentMediaInterval);
             window._currentMediaInterval = null;
           }
-
 
           progressStore.update({
             taskName: videoName,
@@ -10071,7 +9760,6 @@ const AuthorWords = _sfc_main$4;
             isPlaying: true,
             speedDisabled: speedDisabled
           });
-
 
           let playTime = 0;
           let playsTime = 0;
@@ -10162,7 +9850,6 @@ const AuthorWords = _sfc_main$4;
           const loopCallback = async () => {
             if (isReporting) return;
 
-
             if (!window._simulateActive) {
               logStore.addLog('模拟播放已被停止，结束处理', 'warning');
               if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
@@ -10188,7 +9875,7 @@ const AuthorWords = _sfc_main$4;
               return;
             }
 
-            const autoMaxRateNow = cxVideoParamValue("自动倍速", false);
+            const autoMaxRateNow = cxVideoParamValue(PP_KEY.AUTO_RATE, false);
             let playbackRateNow = autoMaxRateNow ? maxRate : Math.min(playbackRateParam.value || playbackRate, 3);
             let effectiveRate = playbackRateNow;
 
@@ -10255,7 +9942,6 @@ const AuthorWords = _sfc_main$4;
                 logStore.addLog(`📤 上报进度: ${percent}%（${Math.round(playTime)}/${Math.round(duration)}s）`, "info");
                 lastLoggedPercent = percent;
               }
-
 
               if (rtBoundaryHit) {
                 rtAttempted = true;
@@ -10344,12 +10030,6 @@ const AuthorWords = _sfc_main$4;
       });
     };
 
-
-
-
-
-
-
     const playMediaDirectly = async (mediaType, iframeDocument) => {
       return new Promise((resolve) => {
         const mediaName = (() => {
@@ -10363,11 +10043,10 @@ const AuthorWords = _sfc_main$4;
         })();
         logStore.addLog(`正在尝试播放${mediaName || mediaType}，请稍等5s`, "primary");
 
-        const autoMaxRate = cxVideoParamValue("自动倍速", false);
-        const playbackRateParam = cxVideoParam("播放倍速");
+        const autoMaxRate = cxVideoParamValue(PP_KEY.AUTO_RATE, false);
+        const playbackRateParam = cxVideoParam(PP_KEY.RATE);
         let playbackRate = playbackRateParam.value || 1;
         const maxRate = getMaxPlaybackRate(iframeDocument);
-
 
         let videoQuizStopped = false;
         const videoQuizEnabled = cxVideoParamValue("视频答题", false);
@@ -10405,9 +10084,7 @@ const AuthorWords = _sfc_main$4;
           loop();
         }
 
-
-
-        const simulatePlayEnabled = cxVideoParamValue("模拟播放", false);
+        const simulatePlayEnabled = cxVideoParamValue(PP_KEY.SIMULATE, false);
         if (!simulatePlayEnabled) {
 
           playbackRateParam.max = maxRate;
@@ -10503,8 +10180,6 @@ const AuthorWords = _sfc_main$4;
       });
     };
 
-
-
     const getMaxPlaybackRate = (iframeDocument, showLog = true) => {
       try {
         const menuItems = iframeDocument.querySelectorAll('.vjs-playback-rate .vjs-menu-content .vjs-menu-item');
@@ -10529,10 +10204,9 @@ const AuthorWords = _sfc_main$4;
       }
     };
 
-
     const handleMediaContent = async (mediaType, iframeDocument, iframe) => {
 
-      const useSimulatePlay = cxVideoParamValue("模拟播放", false);
+      const useSimulatePlay = cxVideoParamValue(PP_KEY.SIMULATE, false);
 
       if (useSimulatePlay) {
         return simulateVideoPlay(iframe, iframeDocument, mediaType);
@@ -10548,7 +10222,7 @@ const AuthorWords = _sfc_main$4;
         if (!iframeDocument)
           return resolve();
 
-        decodeCipherFont(iframeDocument);
+        decodeCipherFontSafe(iframeDocument);
         logStore.addLog(`题目列表获取成功`, "primary");
         const handler = new CxQuestionHandler("zj", iframe);
         await handler.init();
@@ -10563,7 +10237,7 @@ const AuthorWords = _sfc_main$4;
           addLog: (msg, type) => logStore.addLog(msg, type),
           pageLabel: "章节/作业/测验",
           platformKey: "cx",
-          autoSubmit: readCxParamValue("章节/作业/测验设置", "自动提交", false),
+          autoSubmit: readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, false),
           filled: Number(handler.correctNum) || 0,
           total: Number(handler.questions?.length) || 0,
           skipped: Number(handler.skippedCount) || 0,
@@ -10591,14 +10265,12 @@ const AuthorWords = _sfc_main$4;
     const handleSlideshow = async (iframeWindow) => {
       logStore.addLog("发现一个PPT，正在解析", "warning");
 
-
       if (typeof iframeWindow.finishJob === "function") {
         iframeWindow.finishJob();
         await delay(3);
         logStore.addLog("PPT阅读完成", "success");
         return Promise.resolve();
       }
-
 
       const swiperContainer = iframeWindow.document.querySelector(".swiper-container");
       if (swiperContainer) {
@@ -10620,7 +10292,6 @@ const AuthorWords = _sfc_main$4;
         return Promise.resolve();
       }
 
-
       const pptWindow = iframeWindow.document.querySelector("#panView")?.contentWindow;
       if (pptWindow) {
         await pptWindow.scrollTo({ top: pptWindow.document.body.scrollHeight, behavior: "smooth" });
@@ -10636,7 +10307,6 @@ const AuthorWords = _sfc_main$4;
       logStore.addLog("阅读完成", "success");
       return Promise.resolve();
     };
-
 
     const handleBookReader = async (iframeWindow, iframeDoc) => {
       logStore.addLog("发现一个书籍阅读任务，正在完成", "warning");
@@ -10703,7 +10373,6 @@ const AuthorWords = _sfc_main$4;
       });
     };
 
-
     const classifyFrame = async (iframe) => {
       const iframeSrc = iframe.src;
       const iframeDocument = iframe.contentDocument;
@@ -10719,8 +10388,7 @@ const AuthorWords = _sfc_main$4;
 
       await awaitFrameReady(iframe);
 
-
-      const reviewMode = readCxParamValue("模式设置", "复习模式", false);
+      const reviewMode = readCxParamValue(PP_KEY.MODE, PP_KEY.REVIEW, false);
 
       if (reviewMode && isCompletedAnswerTaskPoint(iframe)) {
         logStore.addLog("复习模式：答题任务点已完成，跳过", "primary");
@@ -10747,14 +10415,12 @@ const AuthorWords = _sfc_main$4;
         }
       }
 
-
       if (!reviewMode && iframeSrc.includes("api/work")) {
         try {
           const pageContent = iframeDocument.documentElement.innerText || "";
           if (pageContent.includes("已完成") || pageContent.includes("待批阅")) return 'skip';
         } catch (e) {}
       }
-
 
       if (!reviewMode) {
         const checkElement = iframe.closest(".ans-job-icon") || iframe.parentElement?.querySelector(".ans-job-icon");
@@ -10772,7 +10438,6 @@ const AuthorWords = _sfc_main$4;
       const matchSrcAttr = _src.includes("api/work");
       const isMediaIframe = iframeSrc.includes("video") || iframeSrc.includes("audio");
 
-
       if (matchSrcAttr && !matchSrc) {
         if (!isMediaIframe) {
           return 'skip';
@@ -10780,11 +10445,9 @@ const AuthorWords = _sfc_main$4;
 
       }
 
-
       if (matchSrc && !isMediaIframe) {
         return 'assignment';
       }
-
 
       const ansJobIcon = iframe.parentElement?.querySelector(".ans-job-icon");
       if (ansJobIcon) {
@@ -10805,14 +10468,13 @@ const AuthorWords = _sfc_main$4;
       return 'skip';
     };
 
-
     const executeFrame = async (iframe, frameType) => {
       const iframeSrc = iframe.src;
       const iframeDocument = iframe.contentDocument;
       const iframeWindow = iframe.contentWindow;
 
-      const onlyVideo = readCxParamValue("模式设置", "仅视频", false);
-      const onlyAnswer = readCxParamValue("模式设置", "仅答题", false);
+      const onlyVideo = readCxParamValue(PP_KEY.MODE, PP_KEY.ONLY_VIDEO, false);
+      const onlyAnswer = readCxParamValue(PP_KEY.MODE, PP_KEY.ONLY_ANSWER, false);
 
       switch (frameType) {
         case 'assignment':
@@ -10880,17 +10542,12 @@ const AuthorWords = _sfc_main$4;
     monitorIframes();
     watchUrlChanges();
 
-
     const afkEnabledGlobal = readGlobalAfk();
     if (afkEnabledGlobal) {
       FakeMediaPlayer.start();
       logStore.addLog('🖥️ 全局挂机模式已启用', 'success');
     }
   };
-
-
-
-
 
   const clickOption = (element) => {
     element.focus();
@@ -10914,12 +10571,6 @@ const AuthorWords = _sfc_main$4;
     return Boolean(icon && /已完成/.test(icon.getAttribute('aria-label') || ''));
   };
 
-
-
-
-
-
-
   const useStuActiveLogic = async () => {
 
     try {
@@ -10933,9 +10584,7 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog(`检测到用户进入到随堂练习页面`, "primary");
     logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
 
-
-    decodeCipherFont(document);
-
+    decodeCipherFontSafe(document);
 
     let questionItems = null;
     for (let i = 0; i < 60; i++) {
@@ -10949,7 +10598,6 @@ const AuthorWords = _sfc_main$4;
       logStore.addLog("请刷新页面重试", "warning");
       return;
     }
-
 
     const questionTypeMapping = {
       "单选题": "0",
@@ -11033,11 +10681,11 @@ const AuthorWords = _sfc_main$4;
       detail: `第 0 / ${answerTotal} 题`
     });
 
-    const answerParamsPart = configStore.platformParams.cx?.parts.find(p => p.name === "答题参数");
-    const skipAnswered = answerParamsPart?.params.find(p => p.name === "跳过已答")?.value || false;
-    const answerInterval = answerParamsPart?.params.find(p => p.name === "答题间隔")?.value || 1;
-    const useSimilarity = answerParamsPart?.params.find(p => p.name === "相似匹配")?.value || false;
-    const simulateDelay = answerParamsPart?.params.find(p => p.name === "模拟延迟")?.value ?? true;
+    const answerParamsPart = configStore.platformParams.cx?.parts.find(p => p.name === PP_KEY.ANSWER);
+    const skipAnswered = answerParamsPart?.params.find(p => p.name === PP_KEY.SKIP_ANSWERED)?.value || false;
+    const answerInterval = answerParamsPart?.params.find(p => p.name === PP_KEY.ANSWER_GAP)?.value || 1;
+    const useSimilarity = answerParamsPart?.params.find(p => p.name === PP_KEY.SIMILAR)?.value || false;
+    const simulateDelay = answerParamsPart?.params.find(p => p.name === PP_KEY.SIM_DELAY)?.value ?? true;
 
     let skippedCount = 0;
     let failedCount = 0;
@@ -11071,7 +10719,6 @@ const AuthorWords = _sfc_main$4;
         question.source = answerData.data.source;
         question.sourceName = answerData.data.sourceName || "";
         let filledOk = false;
-
 
         if (question.type === "0" || question.type === "1" || question.type === "3") {
           const optionList = getOptionList(question);
@@ -11186,7 +10833,6 @@ const AuthorWords = _sfc_main$4;
           question.source = "error";
           question.answer[0] = answerData.msg;
         } else if (answerData.code === 403 && answerData.data && answerData.data.sponsorUrl) {
-          triggerWelfarePromo();
           const sponsorUrl = answerData.data.sponsorUrl;
           const sponsorLink = `<a href="${sponsorUrl}" target="_blank" style="color:#667eea;text-decoration:underline;">点我赞助获取新token</a>`;
           const msgHtml = answerData.msg.includes('[可切换赞助获取token，不限制账户]')
@@ -11238,7 +10884,7 @@ const AuthorWords = _sfc_main$4;
       addLog: (msg, type) => logStore.addLog(msg, type),
       pageLabel: "随堂练习",
       platformKey: "cx",
-      autoSubmit: readCxParamValue("章节/作业/测验设置", "自动提交", false),
+      autoSubmit: readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, false),
       filled: filledCount,
       total: answerTotal,
       skipped: skippedCount,
@@ -11265,13 +10911,9 @@ const AuthorWords = _sfc_main$4;
           await delay(0.2);
         }
 
-
       },
     });
   };
-
-
-
 
   const useCxWorkLogic = async () => {
     const logStore = useLogStore();
@@ -11282,8 +10924,6 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog("作业页面无自动提交能力：仅填涂，不自动提交，请检查后手动保存", "primary");
   };
 
-
-
   const answerExamPreview = async () => {
     const logStore = useLogStore();
     logStore.addLog(`检测到用户进入到考试预览页面`, "primary");
@@ -11293,17 +10933,9 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog("答题完成，请自行检查后保存或提交", "primary");
   };
 
-
-
-
-
-
-
-
   const useCxExamLogic = async () => {
     const logStore = useLogStore();
     const configStore = useConfigStore();
-
 
     const inSequentialMode = _GM_getValue('pp_exam_sequential', false);
 
@@ -11311,7 +10943,6 @@ const AuthorWords = _sfc_main$4;
 
       logStore.addLog(`检测到用户进入到考试页面`, "primary");
       logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
-
 
       const markInfo = _unsafeWindow.document.querySelector('.mark_info');
       const disallowPreview = markInfo?.textContent?.includes('不允许整卷预览');
@@ -11322,21 +10953,17 @@ const AuthorWords = _sfc_main$4;
         await delay(3);
         _unsafeWindow.topreview();
 
-
         await delay(5);
         await answerExamPreview();
         return;
       }
-
 
       logStore.addLog(`当前考试不允许整卷预览，进入逐题答题模式`, "warning");
       logStore.addLog(`在考完前禁止手动切换题目，否则会导致重复答题！`, "warning");
       _GM_setValue('pp_exam_sequential', true);
     }
 
-
-
-    const autoSwitch = readCxParamValue("考试设置", "自动切换", true);
+    const autoSwitch = readCxParamValue(PP_KEY.EXAM, PP_KEY.AUTO_NEXT, true);
 
     logStore.addLog(`正在解析题目, 请等待5s`, "warning");
     await new CxQuestionHandler("ks").init();
@@ -11361,7 +10988,6 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog(`第${currentQuestionNum}题已完成，正在前往下一题`, "success");
     await delay(3);
 
-
     const nextBtn = _unsafeWindow.document.querySelector('.nextDiv a.jb_btn');
     if (nextBtn) {
       nextBtn.click();
@@ -11373,13 +10999,7 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-
-
-
   const useCxExamPreviewLogic = answerExamPreview;
-
-
-
 
   const useCxPlazaTipLogic = () => {
     const logStore = useLogStore();
@@ -11388,15 +11008,10 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog("课程完成后请手动切换章节，自动跳转可能出现乱跳", "warning");
   };
 
-
-
-
-
   const useCxAutoReadLogic = async () => {
     const logStore = useLogStore();
     const configStore = useConfigStore();
     const currentUrl = window.location.href;
-
 
     if (!currentUrl.includes('/ztnodedetailcontroller/visitnodedetail')) {
       logStore.addLog(`检测到用户进入到课程目录页面`, "primary");
@@ -11410,10 +11025,8 @@ const AuthorWords = _sfc_main$4;
       return;
     }
 
-
     logStore.addLog(`检测到用户进入到阅读页面`, "primary");
     logStore.addLog(`阅读任务次日才会统计阅读时长`, "warning");
-
 
     const scrollDuration = 63;
     const step = (document.documentElement.scrollHeight - window.innerHeight) / 60;
@@ -11434,7 +11047,6 @@ const AuthorWords = _sfc_main$4;
       }, 1000);
     });
 
-
     await delay(1);
     const nextChapter = document.querySelector('.nodeItem.r i');
     if (nextChapter) {
@@ -11443,7 +11055,7 @@ const AuthorWords = _sfc_main$4;
       nextChapter.click();
     } else {
 
-      const restartAfterFinish = readCxParamValue("章节/作业/测验设置", "无限阅读", false);
+      const restartAfterFinish = readCxParamValue(PP_KEY.CHAPTER, PP_KEY.UNLIMITED_READ, false);
       if (restartAfterFinish) {
         logStore.addLog(`已是最后一章，即将从头重新阅读`, "primary");
         await delay(3);
@@ -11455,15 +11067,11 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-
-
-
   class ZhsQuestionHandler extends QuestionProcessor {
     constructor() {
       super();
 
       __publicField(this, "isZhsQuestionAnswered", (question) => {
-
 
         const reverseTypeMapping = {
           "0": "单选题",
@@ -11478,11 +11086,9 @@ const AuthorWords = _sfc_main$4;
 
         const questionTypeText = reverseTypeMapping[question.type] || question.type;
 
-
         if (questionTypeText === "单选题" || questionTypeText === "多选题") {
           for (const key in question.options) {
             const optionElement = question.options[key];
-
 
             if (optionElement.classList.contains("cur") ||
                 optionElement.classList.contains("selected") ||
@@ -11514,8 +11120,8 @@ const AuthorWords = _sfc_main$4;
         const progressStore = useProgressStore();
         const configStore = useConfigStore();
 
-        const _answerParamsPart2 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数");
-        const skipAnswered = _answerParamsPart2?.params.find(p => p.name === "跳过已答")?.value || false;
+        const _answerParamsPart2 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === PP_KEY.ANSWER);
+        const skipAnswered = _answerParamsPart2?.params.find(p => p.name === PP_KEY.SKIP_ANSWERED)?.value || false;
 
         const waitForPageReady = async () => {
           const startedAt = Date.now();
@@ -11678,11 +11284,9 @@ const AuthorWords = _sfc_main$4;
               question.source = answerData.data.source;
               question.sourceName = answerData.data.sourceName || "";
 
-
               this.addQuestion(question);
 
               await new Promise(r => setTimeout(r, 100));
-
 
               const filledOk = (await this.fillQuestion(question)) === true;
               if (filledOk) {
@@ -11749,8 +11353,7 @@ const AuthorWords = _sfc_main$4;
 
           if (typeNum === "0" || typeNum === "1") {
             const configStore = useConfigStore();
-            const useSimilarity = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === "答题参数")?.params.find(p => p.name === "相似匹配")?.value || false;
-
+            const useSimilarity = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === PP_KEY.ANSWER)?.params.find(p => p.name === PP_KEY.SIMILAR)?.value || false;
 
             let hasDeselected = false;
             for (const key in question.options) {
@@ -11761,15 +11364,9 @@ const AuthorWords = _sfc_main$4;
               }
             }
 
-
             if (hasDeselected) {
               await new Promise(r => setTimeout(r, 500));
             }
-
-
-
-
-
 
             let answers = question.answer;
             if (typeof question.answer === 'string') {
@@ -11818,7 +11415,6 @@ const AuthorWords = _sfc_main$4;
             let judgeClicked = false;
             for (const key in question.options) {
               const optionElement = question.options[key];
-
 
               const isTrueOption = REGEX.JUDGE_TRUE.test(key);
               const isFalseOption = REGEX.JUDGE_FALSE.test(key);
@@ -11875,31 +11471,6 @@ const AuthorWords = _sfc_main$4;
              !!optionElement.querySelector(".onChecked") ||
              !!optionElement.querySelector(".cur") ||
              !!optionElement.querySelector(".selected");
-    }
-    extractOptions(optionElements, optionSelector) {
-      const optionsObject = {};
-      const optionTexts = [];
-      const optionsList = [];
-      const allElements = Array.from(optionElements || []);
-      const topElements = allElements.filter(
-        (el) => !allElements.some((other) => other !== el && other.contains(el)),
-      );
-      topElements.forEach((optionElement) => {
-        var _a;
-        const inner = optionElement.querySelector(optionSelector) || optionElement;
-        const optionTextContent = this.stripTags(this.htmlWithAbsoluteImages(inner));
-        if (!optionTextContent) return;
-        optionsList.push({ text: optionTextContent, el: optionElement });
-        let key = optionTextContent;
-        let suffix = 2;
-        while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
-          key = optionTextContent + "#" + suffix;
-          suffix += 1;
-        }
-        optionsObject[key] = optionElement;
-        optionTexts.push(optionTextContent);
-      });
-      return [optionsObject, optionTexts, optionsList];
     }
     addQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
@@ -11991,7 +11562,6 @@ const AuthorWords = _sfc_main$4;
       })();
       const questionTypeText = ((_b = (_a = questionElement == null ? void 0 : questionElement.querySelector(".subject_type span")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.slice(1, 4)) || "";
 
-
       const zhsTypeMapping = {
         "单选": "单选题",
         "多选": "多选题",
@@ -12003,9 +11573,7 @@ const AuthorWords = _sfc_main$4;
         "计算": "计算题"
       };
 
-
       const fullQuestionType = zhsTypeMapping[questionTypeText] || questionTypeText;
-
 
       const numericType = this.typeMap.get(fullQuestionType) || "999";
 
@@ -12064,9 +11632,6 @@ const AuthorWords = _sfc_main$4;
     }
   }
 
-
-
-
   const ppfxGuardTrustTimers = () => {
     const ppfxNativeInterval = _unsafeWindow.setInterval;
     const ppfxNativeTimeout = _unsafeWindow.setTimeout;
@@ -12084,10 +11649,6 @@ const AuthorWords = _sfc_main$4;
       return ppfxFromTrustCheck() ? -1 : ppfxNativeTimeout.apply(this, args);
     };
   };
-
-
-
-
 
   class XMLHttpRequestInterceptor {
     constructor(urlList, callback) {
@@ -12115,9 +11676,6 @@ const AuthorWords = _sfc_main$4;
       };
     }
   }
-
-
-
 
   const useZhsAnswerLogic = async () => {
     ppfxGuardTrustTimers();
@@ -12174,17 +11732,12 @@ const AuthorWords = _sfc_main$4;
     return matched ? parseInt(matched[1], 10) : 0;
   };
 
+  // 智慧树题型文案 → 题库 type 码，H5 / examloop / 新形态三套页面共用
+  const ppZhTypeCodeOf = (label) => ppTypeCodeOf(label);
+
   const ppZhH5TypeCode = (root) => {
     const label = zhTxtOf(zhPick(PP_ZH_H5_SELECTORS.label, root)) || ppZhH5NumberText(root);
-    if (/多选|多项选择/.test(label)) return "1";
-    if (/判断/.test(label)) return "3";
-    if (/填空/.test(label)) return "2";
-    if (/简答/.test(label)) return "4";
-    if (/名词/.test(label)) return "5";
-    if (/论述/.test(label)) return "6";
-    if (/计算/.test(label)) return "7";
-    if (/单选|单项选择/.test(label)) return "0";
-    return "999";
+    return ppZhTypeCodeOf(label);
   };
 
   const ppZhH5OptionText = (node) => {
@@ -12294,529 +11847,12 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  const useZhExamLoopLogic = async () => {
-    if (window.__ppZhExamLoopBusy) return;
-    window.__ppZhExamLoopBusy = true;
-    const logStore = useLogStore();
-    const progressStore = useProgressStore();
-    const questionStore = useQuestionStore();
-    try {
-      if (!zhStudyTuning().answerOn) {
-        logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
-        return;
-      }
-      const rootSelector = ".question-area-content";
-      const getRoot = () => document.querySelector(rootSelector);
-      const startAt = Date.now();
-      while (Date.now() - startAt < 30000 && !getRoot()) await afkWait(250);
-      const root0 = getRoot();
-      if (!root0) {
-        logStore.addLog("未找到题目区域，请刷新页面重试", "danger");
-        return;
-      }
-      logStore.addLog("检测到智慧树作业/考试页面（examloop）", "primary");
-
-      const configStore = useConfigStore();
-      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === "答题参数");
-      const skipAnswered = answerParams?.params.find((param) => param.name === "跳过已答")?.value || false;
-
-      const getBlock = (root) => root.querySelector(":scope > .flex-1") || root;
-      const getOptionBox = (block) => block.querySelector("label")?.parentElement || block;
-      const STEM_SELECTORS = [
-        "div.flex-1 .mb-\\[32px\\] .text-mainText.font-medium",
-        ".text-mainText.font-medium",
-        "[class*='text-mainText'][class*='font-medium']",
-        "[class*='question'][class*='title']"
-      ];
-      const cleanText = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
-      const getStemText = (root) => {
-        const scope = root || getRoot();
-        for (const selector of STEM_SELECTORS) {
-          let el = null;
-          try { el = scope.querySelector(selector); } catch (e) { el = null; }
-          const text = el ? cleanText(el.textContent) : "";
-          if (text && !/^\d+\s*[、.．]$/.test(text)) return text;
-        }
-        return "";
-      };
-      const waitForStem = async (timeoutMs = 10000) => {
-        const startedAt = Date.now();
-        while (Date.now() - startedAt < timeoutMs) {
-          if (getStemText()) return true;
-          await afkWait(300);
-        }
-        return false;
-      };
-      const getNumberText = (block) => {
-        const first = Array.from(block.querySelectorAll("span")).map((el) => (el.textContent || "").trim()).find((text) => /^\d+\s*[、.]/.test(text));
-        const match = first && first.match(/^(\d+)/);
-        return match ? match[1] : "";
-      };
-      const getTypeText = (block) => {
-        const texts = Array.from(block.querySelectorAll("span")).map((el) => (el.textContent || "").trim());
-        return texts.find((text) => /^(单选题|多选题|判断题|填空题|简答题|名词解释|论述题|计算题|多项选择)/.test(text)) || "";
-      };
-      const typeCodeOf = (label) => {
-        if (/多选|多项选择/.test(label)) return "1";
-        if (/判断/.test(label)) return "3";
-        if (/填空/.test(label)) return "2";
-        if (/简答/.test(label)) return "4";
-        if (/名词/.test(label)) return "5";
-        if (/论述/.test(label)) return "6";
-        if (/计算/.test(label)) return "7";
-        if (/单选|单项选择/.test(label)) return "0";
-        return "999";
-      };
-      const optionNodes = (block) => Array.from(getOptionBox(block).querySelectorAll(":scope > label"));
-      const optionText = (label) => {
-        const span = label.querySelector("span");
-        return (span || label).textContent.replace(/\s+/g, " ").trim();
-      };
-      const optionPicked = (label) => {
-        try {
-          if (!label) return false;
-          if (label.getAttribute("aria-checked") === "true") return true;
-          if (label.querySelector("input:checked")) return true;
-          const marked = (el) => {
-            const cls = String((el && el.className) || "");
-            return /(^|\s)(bg-mainBg|border-mainBg)(\/\d+)?(\s|$)/.test(cls) || /(^|\s)(is-checked|is-selected)(\s|$)/.test(cls);
-          };
-          if (marked(label)) return true;
-          if (Array.from(label.querySelectorAll("div, span")).some(marked)) return true;
-          const text = String((label.querySelector("span") || {}).className || "");
-          return /(^|\s)text-mainBg(\s|$)/.test(text);
-        } catch (e) {
-          return false;
-        }
-      };
-      const answerCardState = (number) => {
-        try {
-          const key = String(number || "").trim();
-          if (!key) return "";
-          const btn = Array.from(document.querySelectorAll("button")).find((item) => (item.textContent || "").trim() === key);
-          if (!btn) return "";
-          const cls = String(btn.className || "");
-          if (/bg-mainBg\/10/.test(cls)) return "answered";
-          if (/(^|\s)bg-mainBg(\s|$)/.test(cls)) return "current";
-          return "empty";
-        } catch (e) {
-          return "";
-        }
-      };
-      const clickOption = async (label) => {
-        try { label.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
-        const before = optionPicked(label);
-        try { label.click(); } catch (e) {}
-        await afkWait(140);
-        if (optionPicked(label) !== before) return true;
-        try { label.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } catch (e) {}
-        await afkWait(140);
-        return true;
-      };
-      const total = (() => {
-        const numbers = Array.from(document.querySelectorAll("button"))
-          .map((btn) => (btn.textContent || "").trim())
-          .filter((text) => /^\d+$/.test(text))
-          .map((text) => Number(text));
-        return numbers.length ? Math.max(...numbers) : 0;
-      })();
-      const findNext = () => Array.from(document.querySelectorAll("button")).find((btn) => (btn.textContent || "").trim() === "下一题");
-      const nextQuestion = async () => {
-        const btn = findNext();
-        if (!btn || btn.disabled || /disabled/.test(String(btn.className))) return false;
-        const before = getStemText() + "|" + optionNodes(getBlock(getRoot())).map(optionText).join("|");
-        btn.click();
-        const startedAt = Date.now();
-        while (Date.now() - startedAt < 6000) {
-          await afkWait(200);
-          const block = getBlock(getRoot());
-          const after = getStemText() + "|" + optionNodes(block).map(optionText).join("|");
-          if (after && after !== before) return true;
-        }
-        return false;
-      };
-
-      let handled = 0;
-      let filled = 0;
-      let skipped = 0;
-      let failed = 0;
-      const seen = new Set();
-
-      for (let step = 0; step < 200; step += 1) {
-        const root = getRoot();
-        if (!root) {
-          await afkWait(300);
-          continue;
-        }
-        if (!getStemText(root)) {
-          await waitForStem(10000);
-          if (!getStemText(root)) {
-            await afkWait(250);
-            continue;
-          }
-        }
-        const block = getBlock(root);
-        const stem = getStemText(root);
-        if (!stem) {
-          await afkWait(250);
-          continue;
-        }
-        const options = optionNodes(block);
-        const key = `${getNumberText(block)}|${stem}|${options.map(optionText).join("|")}`;
-        if (seen.has(key)) break;
-        seen.add(key);
-        handled += 1;
-
-        progressStore.update({
-          taskName: "智慧树答题",
-          type: "答题",
-          isPlaying: true,
-          questionTotal: total || handled,
-          questionIndex: handled,
-          percent: total ? Math.min(99, Math.round((handled - 1) / total * 100)) : 0,
-          detail: `第 ${handled} / ${total || "?"} 题`
-        });
-
-        const typeLabel = getTypeText(block);
-        const typeCode = typeCodeOf(typeLabel);
-        logStore.addLog(`第${handled}题（${stem.slice(0, 26)}）`, "info");
-
-        const cardAnswered = answerCardState(getNumberText(block)) === "answered";
-        if (skipAnswered && (cardAnswered || options.some(optionPicked))) {
-          skipped += 1;
-          const skippedQuestion = {
-            element: root,
-            html: root.outerHTML,
-            workType: "zhs",
-            refer: location.href,
-            type: typeCode,
-            title: stem,
-            optionsText: options.map(optionText),
-            skipped: true
-          };
-          questionStore.addQuestion(skippedQuestion);
-          logStore.addLog(`第${handled}题已作答，跳过`, "warning");
-          if (!(await nextQuestion())) break;
-          continue;
-        }
-
-        const question = {
-          element: root,
-          html: root.outerHTML,
-          workType: "zhs",
-          refer: location.href,
-          type: typeCode,
-          title: stem,
-          optionsText: options.map(optionText)
-        };
-
-        let answerData = null;
-        try {
-          answerData = await queryAnswer(question);
-        } catch (e) {
-          answerData = null;
-        }
-
-        if (answerData && answerData.code === 200) {
-          const rawAnswers = answerData.data?.answer;
-          const answers = Array.isArray(rawAnswers) ? rawAnswers : [rawAnswers];
-          let ok = false;
-          if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
-            const list = options.map((el) => ({ text: optionText(el), el }));
-            const wanted = new Set();
-            answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
-            if (wanted.size) {
-              if (typeCode === "1") {
-                for (let i = 0; i < options.length; i += 1) {
-                  const shouldPick = wanted.has(i);
-                  if (optionPicked(options[i]) !== shouldPick) {
-                    await clickOption(options[i]);
-                    await afkWait(120);
-                  }
-                }
-              } else {
-                const target = options[Array.from(wanted)[0]];
-                if (target && !optionPicked(target)) await clickOption(target);
-              }
-              ok = true;
-            }
-          } else {
-            ok = ppZhH5WriteText(block, answers.map((ans) => String(ans == null ? "" : ans)));
-          }
-          if (ok) {
-            filled += 1;
-            const sourceTag = answerData.data?.source === "ai" ? "（AI）" : "";
-            logStore.addLog(`第${handled}题已填涂${sourceTag}`, "success");
-          } else {
-            failed += 1;
-            logStore.addLog(`第${handled}题未匹配到可点击选项`, "warning");
-          }
-          question.answer = answers;
-          question.source = answerData.data?.source || "";
-          questionStore.addQuestion(question);
-        } else {
-          failed += 1;
-          const msg = answerData && answerData.msg ? answerData.msg : "查询失败";
-          question.answer = [msg];
-          question.source = "error";
-          questionStore.addQuestion(question);
-          logStore.addLog(`第${handled}题搜索失败：${msg}`, "danger");
-        }
-
-        if (!(await nextQuestion())) break;
-        await afkWait(350);
-      }
-
-      progressStore.update({
-        filledCount: filled,
-        fillRate: total ? Math.round((filled + skipped) / total * 100) : 0,
-        questionIndex: handled,
-        percent: 100,
-        isPlaying: false,
-        detail: `已完成 ${handled} / ${total || "?"} 题`
-      });
-      logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
-      logStore.addLog("智慧树作业页面不自动提交，请检查后手动提交", "primary");
-    } catch (error) {
-      logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
-    } finally {
-      window.__ppZhExamLoopBusy = false;
-    }
-  };
-
-  const useZhSmartAnswerLogic = async () => {
-    if (window.__ppZhSmartBusy) return;
-    window.__ppZhSmartBusy = true;
-    const logStore = useLogStore();
-    const progressStore = useProgressStore();
-    const questionStore = useQuestionStore();
-    try {
-      if (!zhStudyTuning().answerOn) {
-        logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
-        return;
-      }
-      const profiles = [
-        {
-          name: "新形态作业考试",
-          root: ".questionBox",
-          type: ".questionTit",
-          title: ".questionContent",
-          options: ".optionUl label",
-          next: "span.Topicswitchingbtn:nth-child(2)"
-        },
-        {
-          name: "新形态掌握度",
-          root: ".questionContent",
-          type: ".questionName",
-          title: ".questionName .centent-pre",
-          options: ".radio-view li.clearfix, .checkbox-views label.el-checkbox, .checkbox-view label.el-checkbox",
-          next: ".pre-next .next-topic"
-        },
-        {
-          name: "AI掌握度",
-          root: ".exam-item",
-          type: ".quest-type",
-          title: ".quest-title .option-name",
-          options: "label",
-          next: null
-        }
-      ];
-      const profile = profiles.find((item) => document.querySelector(item.root));
-      if (!profile) {
-        logStore.addLog("未识别到智慧树题目区域，请刷新页面或手动进入答题页", "warning");
-        return;
-      }
-      logStore.addLog(`检测到智慧树答题页面（${profile.name}）`, "primary");
-
-      const configStore = useConfigStore();
-      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === "答题参数");
-      const skipAnswered = answerParams?.params.find((param) => param.name === "跳过已答")?.value || false;
-      const clean = (text) => String(text == null ? "" : text).replace(/\s+/g, " ").trim();
-      const getRoot = () => document.querySelector(profile.root);
-      const getTitle = (root) => clean((root.querySelector(profile.title) || {}).textContent || "");
-      const getTypeText = (root) => clean((root.querySelector(profile.type) || {}).textContent || "");
-      const typeCodeOf = (label) => {
-        if (/多选|多项/.test(label)) return "1";
-        if (/判断|是非/.test(label)) return "3";
-        if (/填空/.test(label)) return "2";
-        if (/简答/.test(label)) return "4";
-        if (/名词/.test(label)) return "5";
-        if (/论述/.test(label)) return "6";
-        if (/计算/.test(label)) return "7";
-        if (/单选|单项/.test(label)) return "0";
-        return "999";
-      };
-      const optionNodes = (root) => Array.from(root.querySelectorAll(profile.options)).filter((el) => clean(el.textContent));
-      const optionText = (el) => clean(el.textContent).replace(/^[A-Za-z][.、．)）]\s*/, "");
-      const optionPicked = (el) => {
-        try {
-          if (el.getAttribute("aria-checked") === "true") return true;
-          if (el.querySelector("input:checked")) return true;
-          return /(^|\s)(is-checked|checked|selected|active)(\s|$)/.test(String(el.className || ""));
-        } catch (e) {
-          return false;
-        }
-      };
-      const clickOption = async (el) => {
-        try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
-        const before = optionPicked(el);
-        try { el.click(); } catch (e) {}
-        await afkWait(140);
-        if (optionPicked(el) !== before) return true;
-        try { el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } catch (e) {}
-        await afkWait(140);
-        return true;
-      };
-      const findNext = () => {
-        if (profile.next) {
-          const btn = document.querySelector(profile.next);
-          if (btn && !/noNext|disabled/.test(String(btn.className || ""))) return btn;
-        }
-        return Array.from(document.querySelectorAll("button")).find((btn) => {
-          const text = clean(btn.textContent);
-          return !btn.disabled && (/^(下一题|下一題|保存并下一题)$/.test(text) || text.includes("下一题"));
-        });
-      };
-      const nextQuestion = async () => {
-        const btn = findNext();
-        if (!btn) return false;
-        const before = getTitle(getRoot());
-        btn.click();
-        const start = Date.now();
-        while (Date.now() - start < 6000) {
-          await afkWait(200);
-          const nextTitle = getTitle(getRoot());
-          if (nextTitle && nextTitle !== before) return true;
-        }
-        return false;
-      };
-
-      let handled = 0;
-      let filled = 0;
-      let skipped = 0;
-      let failed = 0;
-      const seen = new Set();
-      for (let step = 0; step < 200; step += 1) {
-        const root = getRoot();
-        if (!root) {
-          await afkWait(300);
-          continue;
-        }
-        const title = getTitle(root);
-        if (!title) {
-          await afkWait(250);
-          continue;
-        }
-        const options = optionNodes(root);
-        const key = `${title}|${options.map(optionText).join("|")}`;
-        if (seen.has(key)) break;
-        seen.add(key);
-        handled += 1;
-        progressStore.update({
-          taskName: "智慧树答题",
-          type: "答题",
-          isPlaying: true,
-          questionIndex: handled,
-          detail: `第 ${handled} 题`
-        });
-        const typeLabel = getTypeText(root);
-        const typeCode = typeCodeOf(typeLabel);
-        logStore.addLog(`第${handled}题（${title.slice(0, 26)}）`, "info");
-
-        if (skipAnswered && options.some(optionPicked)) {
-          skipped += 1;
-          questionStore.addQuestion({
-            element: root,
-            html: root.outerHTML,
-            workType: "zhs",
-            refer: location.href,
-            type: typeCode,
-            title,
-            optionsText: options.map(optionText),
-            skipped: true
-          });
-          logStore.addLog(`第${handled}题已作答，跳过`, "warning");
-          if (!(await nextQuestion())) break;
-          continue;
-        }
-
-        const question = {
-          element: root,
-          html: root.outerHTML,
-          workType: "zhs",
-          refer: location.href,
-          type: typeCode,
-          title,
-          optionsText: options.map(optionText)
-        };
-        let answerData = null;
-        try {
-          answerData = await queryAnswer(question);
-        } catch (e) {
-          answerData = null;
-        }
-        if (answerData && answerData.code === 200) {
-          const rawAnswers = answerData.data?.answer;
-          const answers = Array.isArray(rawAnswers) ? rawAnswers : [rawAnswers];
-          let ok = false;
-          if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
-            const list = options.map((el) => ({ text: optionText(el), el }));
-            const wanted = new Set();
-            answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
-            if (wanted.size) {
-              if (typeCode === "1") {
-                for (let i = 0; i < options.length; i += 1) {
-                  if (optionPicked(options[i]) !== wanted.has(i)) await clickOption(options[i]);
-                }
-              } else {
-                const target = options[Array.from(wanted)[0]];
-                if (target && !optionPicked(target)) await clickOption(target);
-              }
-              ok = true;
-            }
-          } else {
-            ok = ppZhH5WriteText(root, answers.map((ans) => String(ans == null ? "" : ans)));
-          }
-          if (ok) {
-            filled += 1;
-            logStore.addLog(`第${handled}题已填涂${answerData.data?.source === "ai" ? "（AI）" : ""}`, "success");
-          } else {
-            failed += 1;
-            logStore.addLog(`第${handled}题未找到可填涂区域`, "warning");
-          }
-          question.answer = answers;
-          question.source = answerData.data?.source || "";
-          questionStore.addQuestion(question);
-        } else {
-          failed += 1;
-          const msg = answerData && answerData.msg ? answerData.msg : "查询失败";
-          question.answer = [msg];
-          question.source = "error";
-          questionStore.addQuestion(question);
-          logStore.addLog(`第${handled}题搜索失败：${msg}`, "danger");
-        }
-        if (!(await nextQuestion())) break;
-        await afkWait(350);
-      }
-      progressStore.update({
-        filledCount: filled,
-        questionIndex: handled,
-        percent: 100,
-        isPlaying: false,
-        detail: `已完成 ${handled} 题`
-      });
-      logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
-      logStore.addLog("智慧树答题页不自动提交，请检查后手动提交", "primary");
-    } catch (error) {
-      logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
-    } finally {
-      window.__ppZhSmartBusy = false;
-    }
-  };
-
-  const useZhsExamH5Logic = async () => {
-    if (window.__ppZhH5Busy) return;
-    window.__ppZhH5Busy = true;
+  // 智慧树三条答题流程（examloop / 新形态·掌握度 / H5）共用同一个引擎：
+  // 引擎负责「查答案 → 填涂 → 记录 → 下一题 → 汇总」和统一日志，
+  // 各页面只提供 DOM 适配器（找题根、读题干、读选项、判断已选、点击、下一题）。
+  const zhAnswerFlow = async (cfg) => {
+    if (window[cfg.busyKey]) return;
+    window[cfg.busyKey] = true;
     const logStore = useLogStore();
     const progressStore = useProgressStore();
     const questionStore = useQuestionStore();
@@ -12826,68 +11862,69 @@ const AuthorWords = _sfc_main$4;
         return;
       }
       const waitStart = Date.now();
-      while (Date.now() - waitStart < 30000 && !ppZhH5Root()) await afkWait(250);
-      if (!ppZhH5Root()) {
-        logStore.addLog("未找到题目区域，请刷新页面重试", "danger");
+      while (cfg.waitRootMs && Date.now() - waitStart < cfg.waitRootMs && !cfg.findRoot()) await afkWait(250);
+      if (!cfg.findRoot()) {
+        logStore.addLog(cfg.notFoundLog, "danger");
         return;
       }
-      logStore.addLog("检测到智慧树作业/考试页面", "primary");
+      logStore.addLog(cfg.detectLog(), "primary");
 
       const configStore = useConfigStore();
-      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === "答题参数");
-      const skipAnswered = answerParams?.params.find((param) => param.name === "跳过已答")?.value || false;
+      const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === PP_KEY.ANSWER);
+      const skipAnswered = answerParams?.params.find((param) => param.name === PP_KEY.SKIP_ANSWERED)?.value || false;
 
-      const questionTotal = ppZhH5Total() || document.querySelectorAll(PP_ZH_H5_SELECTORS.root).length;
-      progressStore.update({
-        taskName: "智慧树答题",
-        type: "答题",
-        isPlaying: true,
-        questionTotal,
-        questionIndex: 0,
-        percent: 0,
-        currentTime: 0,
-        totalTime: 0,
-        detail: `第 0 / ${questionTotal} 题`
-      });
+      const total = cfg.total ? cfg.total() : 0;
+      if (cfg.onStart) cfg.onStart({ total, progressStore });
 
       let handled = 0;
       let filled = 0;
       let skipped = 0;
       let failed = 0;
-      let waiting = 0;
       const seen = new Set();
 
-      for (let step = 0; step < 120; step += 1) {
-        const root = ppZhH5Root();
+      for (let step = 0; step < (cfg.maxSteps || 200); step += 1) {
+        const root = cfg.findRoot();
         if (!root) {
           await afkWait(300);
           continue;
         }
-        const typeCode = ppZhH5TypeCode(root);
-        const stem = ppZhH5StemText(root);
-        if (!stem && waiting < 20) {
-          waiting += 1;
-          await afkWait(200);
-          continue;
+        let stem = cfg.getStem(root);
+        if (!stem) {
+          const proceed = cfg.awaitStem ? await cfg.awaitStem(root) : false;
+          if (!proceed) {
+            await afkWait(cfg.stemRetryMs || 250);
+            continue;
+          }
+          stem = cfg.getStem(root);
         }
-        waiting = 0;
-        const optionNodes = ppZhH5OptionNodes(root, typeCode);
-        const key = [ppZhH5Tag(root), typeCode, optionNodes.map(ppZhH5OptionText).join("|")].join("#");
+        const typeCode = cfg.getTypeCode(root);
+        const options = cfg.getOptions(root, typeCode);
+        const key = cfg.getKey(root, stem, options, typeCode);
         if (seen.has(key)) break;
         seen.add(key);
         handled += 1;
 
-        progressStore.update({
-          questionIndex: handled,
-          percent: Math.min(99, Math.round((handled - 1) / questionTotal * 100)),
-          detail: `第 ${handled} / ${questionTotal} 题`
-        });
+        if (cfg.onStepReady) cfg.onStepReady({ root, stem });
+        progressStore.update(cfg.perQuestion({ handled, total }));
         logStore.addLog(`第${handled}题（${stem.slice(0, 26)}）`, "info");
 
-        if (skipAnswered && optionNodes.some(ppZhH5Picked)) {
+        const answered = (cfg.isExtraAnswered ? cfg.isExtraAnswered(root) : false) || options.some(cfg.isPicked);
+        if (skipAnswered && answered) {
           skipped += 1;
+          if (cfg.recordSkipped) {
+            questionStore.addQuestion({
+              element: root,
+              html: root.outerHTML,
+              workType: "zhs",
+              refer: location.href,
+              type: typeCode,
+              title: stem,
+              optionsText: options.map((el, idx) => cfg.getOptionText(el, idx)),
+              skipped: true
+            });
+          }
           logStore.addLog(`第${handled}题已作答，跳过`, "warning");
-          if (!(await ppZhH5Next())) break;
+          if (!(await cfg.next())) break;
           continue;
         }
 
@@ -12898,7 +11935,7 @@ const AuthorWords = _sfc_main$4;
           refer: location.href,
           type: typeCode,
           title: stem,
-          optionsText: optionNodes.map(ppZhH5OptionText)
+          optionsText: options.map((el, idx) => cfg.getOptionText(el, idx))
         };
 
         let answerData = null;
@@ -12913,37 +11950,40 @@ const AuthorWords = _sfc_main$4;
           const answers = Array.isArray(rawAnswers) ? rawAnswers : [rawAnswers];
           let ok = false;
           if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
-            const list = optionNodes.map((node) => ({ text: ppZhH5OptionText(node), el: node }));
+            const list = options.map((el, idx) => ({ text: cfg.getOptionText(el, idx), el }));
             const wanted = new Set();
             answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
             if (wanted.size) {
               if (typeCode === "1") {
-                for (let i = 0; i < optionNodes.length; i += 1) {
-                  const shouldPick = wanted.has(i);
-                  if (ppZhH5Picked(optionNodes[i]) !== shouldPick) {
-                    await ppZhH5Press(optionNodes[i]);
-                    await afkWait(150);
+                for (let i = 0; i < options.length; i += 1) {
+                  if (cfg.isPicked(options[i]) !== wanted.has(i)) {
+                    await cfg.pick(options[i]);
+                    if (cfg.pickGapMs) await afkWait(cfg.pickGapMs);
                   }
                 }
               } else {
-                const target = optionNodes[Array.from(wanted)[0]];
-                if (target && !ppZhH5Picked(target)) await ppZhH5Press(target);
+                const target = options[Array.from(wanted)[0]];
+                if (target && !cfg.isPicked(target)) await cfg.pick(target);
               }
               ok = true;
             }
           } else {
-            ok = ppZhH5WriteText(root, answers.map((ans) => String(ans == null ? "" : ans)));
+            ok = cfg.writeText(root, answers.map((ans) => String(ans == null ? "" : ans)));
           }
           if (ok) {
             filled += 1;
-            const sourceTag = answerData.data?.source === "ai" ? "（AI）" : "";
-            logStore.addLog(`第${handled}题已填涂${sourceTag}`, "success");
-            if (answerData.data?.cost !== undefined) {
+            logStore.addLog(`第${handled}题已填涂${answerData.data?.source === "ai" ? "（AI）" : ""}`, "success");
+            if (cfg.showCost && answerData.data?.cost !== undefined) {
               logStore.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
             }
           } else {
             failed += 1;
-            logStore.addLog(`第${handled}题未匹配到可点击选项`, "warning");
+            // 选择题填不上通常是「答案和选项对不上」，别一律报成「找不到填涂区域」，否则会误判成 DOM 问题
+            const isChoice = typeCode === "0" || typeCode === "1" || typeCode === "3";
+            const reason = isChoice
+              ? (answers.length ? "答案与页面选项对不上" : "未返回答案")
+              : (cfg.fillFailLog || "未匹配到可点击选项");
+            logStore.addLog(`第${handled}题${reason}`, "warning");
           }
           question.answer = answers;
           question.source = answerData.data?.source || "";
@@ -12957,27 +11997,586 @@ const AuthorWords = _sfc_main$4;
           logStore.addLog(`第${handled}题搜索失败：${msg}`, "danger");
         }
 
-        if (!(await ppZhH5Next())) break;
-        await afkWait(400);
+        if (!(await cfg.next())) break;
+        if (cfg.stepGapMs) await afkWait(cfg.stepGapMs);
       }
 
-      progressStore.update({
-        filledCount: filled,
-        fillRate: Math.round((filled + skipped) / questionTotal * 100),
-        questionIndex: handled,
-        percent: 100,
-        isPlaying: false,
-        detail: `已完成 ${handled} / ${questionTotal} 题`
-      });
-      logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
-      logStore.addLog("智慧树作业页面不自动提交，请检查后手动提交", "primary");
+      cfg.onFinish({ handled, filled, skipped, failed, total, progressStore, logStore });
     } catch (error) {
       logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
     } finally {
-      window.__ppZhH5Busy = false;
+      window[cfg.busyKey] = false;
     }
   };
 
+  // ===== 智慧树答题：接口探针 =====
+  // 平台接口里的题型、题数、选项正文最准（选项天然不带 A/B 角标），DOM 只负责定位元素；
+  // 接口没抓到就退回页面文案，两层兜底。
+  const ZH_PAPER_API_TAGS = ["getExamSheetInfo", "getExamQuestionInfo"];
+  const ZH_PAPER_CACHE_KEY = "__ppZhPaperCache";
+  const ZH_PAPER_CACHE_LIMIT = 24;
+  // 平台题型码 → 题库 type 码：1 单选 / 2 多选 / 3 判断 / 4 填空 / 5 简答 / 14 判断
+  const ZH_PAPER_TYPE_CODES = { 1: "0", 2: "1", 3: "3", 4: "2", 5: "4", 14: "3" };
+
+  const ppZhPaperCache = () => {
+    const win = _unsafeWindow || window;
+    let cache = null;
+    try { cache = win[ZH_PAPER_CACHE_KEY]; } catch (e) { cache = null; }
+    if (!cache || typeof cache !== "object") cache = {};
+    if (!Array.isArray(cache.questions)) cache.questions = [];
+    if (!(Number(cache.sheetTotal) > 0)) cache.sheetTotal = 0;
+    try { win[ZH_PAPER_CACHE_KEY] = cache; } catch (e) {}
+    return cache;
+  };
+
+  const ppZhApiText = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+
+  // 题干指纹：去掉标点和空白再比，页面与接口的全半角/换行差异不会影响命中
+  const ppZhApiKey = (value) => ppZhApiText(value)
+    .replace(/[\s，。！？；：、（）【】《》〈〉「」『』,.:;!?'"()[\]<>·…—-]/g, "")
+    .toLowerCase();
+
+  // 试卷题数：接口直接给 questionCount，分部结构按分部累加
+  const ppZhSheetTotalOf = (payload) => {
+    if (!payload || typeof payload !== "object") return 0;
+    const direct = Number(payload.questionCount);
+    if (direct > 0) return direct;
+    const parts = Array.isArray(payload.partSheetVos) ? payload.partSheetVos : [];
+    let sum = 0;
+    parts.forEach((part) => {
+      if (!part || typeof part !== "object") return;
+      const list = Array.isArray(part.questionSheetVos) ? part.questionSheetVos : [];
+      if (list.length) {
+        sum += list.length;
+        return;
+      }
+      const count = Number(part.questionCount);
+      if (count > 0) sum += count;
+    });
+    return sum;
+  };
+
+  // 接口选项正文：按 sort 排好取正文，顺手剥掉可能自带的字母前缀
+  const ppZhApiOptionsOf = (payload) => {
+    if (!payload || typeof payload !== "object") return [];
+    const list = payload.optionVos || payload.questionOptions || payload.optionList || payload.options;
+    if (!Array.isArray(list)) return [];
+    return list
+      .slice()
+      .sort((a, b) => (Number(a && a.sort) || 0) - (Number(b && b.sort) || 0))
+      .map((item) => {
+        if (item == null) return "";
+        if (typeof item === "string") return ppZhApiText(item).replace(/^[A-Za-z][.、．)）]\s*/, "");
+        const body = item.content || item.option || item.optionContent || item.text || item.name || "";
+        return ppZhApiText(body).replace(/^[A-Za-z][.、．)）]\s*/, "");
+      })
+      .filter(Boolean);
+  };
+
+  // 接口题型：先认中文题型名，再认平台数字码
+  const ppZhApiTypeCodeOf = (info) => {
+    if (!info) return "";
+    const byName = ppTypeCodeOf(info.typeName || "");
+    if (byName && byName !== "999") return byName;
+    const code = ZH_PAPER_TYPE_CODES[String(info.typeCode == null ? "" : info.typeCode)];
+    return code || "";
+  };
+
+  // 收下接口响应：试卷信息只留题数，题目信息按题干指纹缓存
+  const ppZhTakePaperPayload = (address, text) => {
+    if (!text) return;
+    let raw = null;
+    try { raw = typeof text === "string" ? JSON.parse(text) : text; } catch (e) { return; }
+    if (!raw || typeof raw !== "object") return;
+    const payload = raw.data && typeof raw.data === "object" ? raw.data : raw;
+    if (!payload || typeof payload !== "object") return;
+    const url = String(address == null ? "" : address);
+    const cache = ppZhPaperCache();
+    if (url.indexOf("getExamSheetInfo") >= 0) {
+      const total = ppZhSheetTotalOf(payload);
+      if (total > 0) cache.sheetTotal = total;
+      return;
+    }
+    if (url.indexOf("getExamQuestionInfo") < 0) return;
+    const stem = ppZhApiText(payload.content || payload.questionContent || payload.stem || "");
+    const options = ppZhApiOptionsOf(payload);
+    if (!stem && !options.length) return;
+    const info = {
+      stem,
+      typeName: ppZhApiText(payload.questionTypeName || payload.questionTypeStr || ""),
+      typeCode: payload.questionType,
+      options
+    };
+    const key = ppZhApiKey(stem);
+    cache.questions = cache.questions.filter((item) => ppZhApiKey(item && item.stem) !== key);
+    cache.questions.push(info);
+    if (cache.questions.length > ZH_PAPER_CACHE_LIMIT) {
+      cache.questions.splice(0, cache.questions.length - ZH_PAPER_CACHE_LIMIT);
+    }
+  };
+
+  // 在页面主世界挂 fetch / XHR 探针，只认这两个接口，其它请求原样放行
+  const installZhPaperProbe = () => {
+    const win = _unsafeWindow || window;
+    if (!win || win.__ppZhPaperProbe) return;
+    try { win.__ppZhPaperProbe = true; } catch (e) { return; }
+    ppZhPaperCache();
+    const wanted = (address) => {
+      const text = String(address == null ? "" : address);
+      return ZH_PAPER_API_TAGS.some((tag) => text.indexOf(tag) >= 0);
+    };
+    try {
+      const nativeFetch = win.fetch;
+      if (typeof nativeFetch === "function") {
+        win.fetch = function (...args) {
+          const pending = nativeFetch.apply(this, args);
+          try {
+            const input = args[0];
+            const address = input && typeof input === "object" ? input.url || "" : input;
+            if (wanted(address) && pending && typeof pending.then === "function") {
+              pending
+                .then((response) => {
+                  try { return response.clone().text(); } catch (e) { return ""; }
+                })
+                .then((text) => ppZhTakePaperPayload(address, text))
+                .catch(() => {});
+            }
+          } catch (e) {}
+          return pending;
+        };
+      }
+    } catch (e) {}
+    try {
+      const NativeXhr = win.XMLHttpRequest;
+      if (typeof NativeXhr === "function" && !NativeXhr.__ppZhPaperProbe) {
+        NativeXhr.__ppZhPaperProbe = true;
+        const nativeOpen = NativeXhr.prototype.open;
+        const nativeSend = NativeXhr.prototype.send;
+        NativeXhr.prototype.open = function (method, address, ...rest) {
+          try { this.__ppZhPaperAddress = String(address == null ? "" : address); } catch (e) {}
+          return nativeOpen.call(this, method, address, ...rest);
+        };
+        NativeXhr.prototype.send = function (...args) {
+          try {
+            this.addEventListener("load", function () {
+              try {
+                const address = String(this.responseURL || this.__ppZhPaperAddress || "");
+                if (wanted(address)) ppZhTakePaperPayload(address, this.responseText);
+              } catch (e) {}
+            });
+          } catch (e) {}
+          return nativeSend.apply(this, args);
+        };
+      }
+    } catch (e) {}
+  };
+
+  const ppZhPaperInfoOf = (stem) => {
+    const key = ppZhApiKey(stem);
+    if (!key) return null;
+    const cache = ppZhPaperCache();
+    for (let i = cache.questions.length - 1; i >= 0; i -= 1) {
+      const item = cache.questions[i];
+      if (item && ppZhApiKey(item.stem) === key) return item;
+    }
+    return null;
+  };
+
+  const ppZhPaperTotal = () => {
+    const total = Number(ppZhPaperCache().sheetTotal);
+    return total > 0 ? total : 0;
+  };
+
+  // ===== 智慧树答题：页面档案 =====
+  const zhPaperClean = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+
+  const zhPaperTextOf = (scope, selectors) => {
+    if (!scope) return "";
+    const list = Array.isArray(selectors) ? selectors : [selectors];
+    for (const selector of list) {
+      if (!selector) continue;
+      let el = null;
+      try { el = scope.querySelector(selector); } catch (e) { el = null; }
+      const text = el ? zhPaperClean(el.textContent) : "";
+      if (text) return text;
+    }
+    return "";
+  };
+
+  const zhPaperButtons = () => Array.from(document.querySelectorAll("button"));
+
+  const zhPaperCardNumbers = () => zhPaperButtons()
+    .map((btn) => zhPaperClean(btn.textContent))
+    .filter((text) => /^\d+$/.test(text))
+    .map((text) => Number(text));
+
+  // 答题卡「第 1 题」按钮：优先答题卡网格，其次整页里 3 个以上数字按钮中的 1
+  const zhPaperFirstCard = () => {
+    let grid = null;
+    try { grid = document.querySelector(".grid.grid-cols-7 > button"); } catch (e) { grid = null; }
+    if (grid) return grid;
+    const buttons = zhPaperButtons().filter((btn) => /^\d+$/.test(zhPaperClean(btn.textContent)));
+    if (buttons.length < 3) return null;
+    return buttons.find((btn) => zhPaperClean(btn.textContent) === "1") || null;
+  };
+
+  // 正式考试页先归位到第 1 题，保证答题卡顺序、接口顺序和页面顺序一致
+  const zhPaperJumpToFirst = async () => {
+    const btn = zhPaperFirstCard();
+    if (!btn) return;
+    if (zhPaperClean(btn.textContent) === "1" && /(^|\s)bg-mainBg(\s|$)/.test(String(btn.className || ""))) return;
+    try { btn.click(); } catch (e) { return; }
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 8000) {
+      await afkWait(250);
+      const root = document.querySelector(".question-area-content");
+      if (root && zhPaperClean(root.textContent)) return;
+    }
+  };
+
+  // 选项「已选」判定：覆盖 element-ui、原生 radio/checkbox、新形态 tailwind 三套标记
+  const zhPaperPicked = (node) => {
+    try {
+      if (!node) return false;
+      if (ppZhH5Picked(node)) return true;
+      if (node.getAttribute("aria-checked") === "true") return true;
+      if (node.querySelector("input:checked")) return true;
+      const cls = String(node.className || "");
+      if (/(^|\s)(is-checked|checked|selected|active)(\s|$)/.test(cls)) return true;
+      const tailwind = (el) => {
+        const value = String((el && el.className) || "");
+        return /(^|\s)(bg-mainBg|border-mainBg)(\/\d+)?(\s|$)/.test(value) || /(^|\s)(is-checked|is-selected)(\s|$)/.test(value);
+      };
+      if (tailwind(node)) return true;
+      if (Array.from(node.querySelectorAll("div, span")).some(tailwind)) return true;
+      const spanCls = String((node.querySelector("span") || {}).className || "");
+      return /(^|\s)text-mainBg(\s|$)/.test(spanCls);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // 点选项：先 click，状态没变化再补一发 MouseEvent
+  const zhPaperPress = async (node) => {
+    if (!node) return false;
+    try { node.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
+    const before = zhPaperPicked(node);
+    try { node.click(); } catch (e) {}
+    await afkWait(140);
+    if (zhPaperPicked(node) !== before) return true;
+    try { node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); } catch (e) {}
+    await afkWait(140);
+    return true;
+  };
+
+  // 翻页：档案给的按钮优先，没有就找文案含「下一题」的按钮；点完等题干变化
+  const zhPaperGoNext = async (profile) => {
+    let btn = null;
+    try { btn = profile && profile.nextButton ? profile.nextButton() : null; } catch (e) { btn = null; }
+    if (!btn) {
+      btn = zhPaperButtons().find((item) => !item.disabled && zhPaperClean(item.textContent).indexOf("下一题") >= 0) || null;
+    }
+    if (!btn || btn.disabled || /disabled|noNext/.test(String(btn.className || ""))) return false;
+    const before = profile && profile.signature ? profile.signature() : "";
+    try { btn.click(); } catch (e) { return false; }
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 6000) {
+      await afkWait(200);
+      const after = profile && profile.signature ? profile.signature() : "";
+      if (after && after !== before) return true;
+    }
+    return false;
+  };
+
+  // 新形态考试（examloop）的题干候选，从精确到宽泛
+  const ZH_EXAMLOOP_STEM = [
+    "div.flex-1 .mb-\\[32px\\] .text-mainText.font-medium",
+    ".text-mainText.font-medium",
+    "[class*='text-mainText'][class*='font-medium']",
+    "[class*='question'][class*='title']"
+  ];
+
+  const zhExamLoopScope = (root) => (root ? root.querySelector(":scope > .flex-1") || root : null);
+
+  const zhExamLoopStem = (scope) => {
+    if (!scope) return "";
+    for (const selector of ZH_EXAMLOOP_STEM) {
+      let el = null;
+      try { el = scope.querySelector(selector); } catch (e) { el = null; }
+      const text = el ? zhPaperClean(el.textContent) : "";
+      if (text && !/^\d+\s*[、.．]$/.test(text)) return text;
+    }
+    return "";
+  };
+
+  const zhExamLoopTypeText = (scope) => {
+    if (!scope) return "";
+    return Array.from(scope.querySelectorAll("span"))
+      .map((el) => zhPaperClean(el.textContent))
+      .find((text) => /^(单选题|多选题|判断题|填空题|简答题|名词解释|论述题|计算题|多项选择|不定项)/.test(text)) || "";
+  };
+
+  const zhExamLoopNumber = (scope) => {
+    if (!scope) return "";
+    const first = Array.from(scope.querySelectorAll("span"))
+      .map((el) => zhPaperClean(el.textContent))
+      .find((text) => /^\d+\s*[、.]/.test(text));
+    const matched = first && first.match(/^(\d+)/);
+    return matched ? matched[1] : "";
+  };
+
+  const zhExamLoopOptionNodes = (scope) => {
+    if (!scope) return [];
+    const box = scope.querySelector("label")?.parentElement || scope;
+    return box ? Array.from(box.querySelectorAll(":scope > label")) : [];
+  };
+
+  const zhExamLoopOptionText = (label) => {
+    if (!label) return "";
+    const span = label.querySelector("span");
+    return zhPaperClean((span || label).textContent);
+  };
+
+  // 答题卡题号状态：已作答 / 当前 / 空
+  const zhExamLoopCardState = (number) => {
+    try {
+      const key = String(number || "").trim();
+      if (!key) return "";
+      const btn = zhPaperButtons().find((item) => zhPaperClean(item.textContent) === key);
+      if (!btn) return "";
+      const cls = String(btn.className || "");
+      if (/bg-mainBg\/10/.test(cls)) return "answered";
+      if (/(^|\s)bg-mainBg(\s|$)/.test(cls)) return "current";
+      return "empty";
+    } catch (e) {
+      return "";
+    }
+  };
+
+  // 页面档案：只描述「怎么找、怎么读、怎么翻页」，流程统一交给 zhAnswerFlow
+  const ZH_PAPER_PROFILES = [
+    {
+      id: "examloop",
+      name: "新形态考试",
+      roots: [".question-area-content"],
+      prepare: zhPaperJumpToFirst,
+      scope: zhExamLoopScope,
+      stem: zhExamLoopStem,
+      typeCode: (scope) => ppZhTypeCodeOf(zhExamLoopTypeText(scope)),
+      optionNodes: zhExamLoopOptionNodes,
+      optionText: zhExamLoopOptionText,
+      nextButton: () => {
+        const btn = zhPaperButtons().find((item) => zhPaperClean(item.textContent) === "下一题");
+        return btn && !btn.disabled && !/disabled/.test(String(btn.className || "")) ? btn : null;
+      },
+      signature: () => {
+        const scope = zhExamLoopScope(document.querySelector(".question-area-content"));
+        if (!scope) return "";
+        return [zhExamLoopStem(scope), zhExamLoopOptionNodes(scope).map(zhExamLoopOptionText).join("|")].join("#");
+      },
+      extraAnswered: (root) => zhExamLoopCardState(zhExamLoopNumber(zhExamLoopScope(root))) === "answered",
+      pickGapMs: 120,
+      recordSkipped: true
+    },
+    {
+      id: "questionbox",
+      name: "新形态作业考试",
+      roots: [".questionBox"],
+      stem: (scope) => zhPaperTextOf(scope, [".questionContent"]),
+      typeCode: (scope) => ppZhTypeCodeOf(zhPaperTextOf(scope, [".questionTit"])),
+      optionNodes: (scope) => (scope ? Array.from(scope.querySelectorAll(".optionUl label")) : []),
+      optionText: (node) => zhPaperClean((node || {}).textContent || ""),
+      nextButton: () => document.querySelector("span.Topicswitchingbtn:nth-child(2)"),
+      signature: () => {
+        const root = document.querySelector(".questionBox");
+        if (!root) return "";
+        const options = Array.from(root.querySelectorAll(".optionUl label")).map((node) => zhPaperClean(node.textContent));
+        return [zhPaperTextOf(root, [".questionContent"]), options.join("|")].join("#");
+      },
+      recordSkipped: true
+    },
+    {
+      id: "paper",
+      name: "作业/考试",
+      roots: [".questionContent"],
+      stem: (scope) => (scope ? ppZhH5StemText(scope) : ""),
+      typeCode: (scope) => (scope ? ppZhH5TypeCode(scope) : "999"),
+      optionNodes: (scope, typeCode) => (scope ? ppZhH5OptionNodes(scope, typeCode) : []),
+      optionText: (node) => ppZhH5OptionText(node),
+      nextButton: () => {
+        const btn = document.querySelector(".pre-next .next-topic");
+        return btn && !/noNext|disabled/.test(String(btn.className || "")) ? btn : null;
+      },
+      signature: () => {
+        const root = document.querySelector(".questionContent");
+        return root ? ppZhH5Tag(root) : "";
+      },
+      pickGapMs: 150,
+      recordSkipped: false,
+      showCost: true
+    },
+    {
+      id: "examitem",
+      name: "AI掌握度",
+      roots: [".exam-item"],
+      stem: (scope) => zhPaperTextOf(scope, [".quest-title .option-name", ".quest-title"]),
+      typeCode: (scope) => ppZhTypeCodeOf(zhPaperTextOf(scope, [".quest-type"])),
+      optionNodes: (scope) => (scope ? Array.from(scope.querySelectorAll("label")) : []),
+      optionText: (node) => zhPaperClean((node || {}).textContent || ""),
+      nextButton: () => null,
+      signature: () => "",
+      recordSkipped: true
+    }
+  ];
+
+  // ===== 智慧树答题：统一入口 =====
+  // 八套答题页（新形态考试/作业考试/掌握度/H5 作业考试/AI掌握度）共用这一条流程，
+  // 页面差异全部收敛到上面的档案里，不再按 URL 分叉。
+  const useZhsPaperAnswerLogic = async () => {
+    installZhPaperProbe();
+    if (window.__ppZhPaperBusy) return;
+    let profile = null;
+    let stemWaits = 0;
+    let currentInfo = null;
+    let domOptionCount = 0;
+
+    const matchProfile = () => ZH_PAPER_PROFILES.find((item) => item.roots.some((selector) => {
+      try { return Boolean(document.querySelector(selector)); } catch (e) { return false; }
+    })) || null;
+
+    const findRoot = () => {
+      profile = matchProfile();
+      if (!profile) return null;
+      for (const selector of profile.roots) {
+        let el = null;
+        try { el = document.querySelector(selector); } catch (e) { el = null; }
+        if (el) return el;
+      }
+      return null;
+    };
+
+    // 先等题根出来；正式考试页再归位到第 1 题。仅视频模式不动页面。
+    if (zhStudyTuning().answerOn) {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 30000 && !findRoot()) await afkWait(250);
+      if (profile && typeof profile.prepare === "function") {
+        try { await profile.prepare(); } catch (e) {}
+        findRoot();
+      }
+    }
+
+    const scopeOf = (root) => (profile && profile.scope ? profile.scope(root) : root);
+
+    // 接口信息按当前题干取，取不到就交给 DOM 兜底
+    const rememberApi = (root) => {
+      const scope = scopeOf(root);
+      const stem = profile && scope ? profile.stem(scope) : "";
+      currentInfo = ppZhPaperInfoOf(stem);
+      return currentInfo;
+    };
+
+    await zhAnswerFlow({
+      busyKey: "__ppZhPaperBusy",
+      findRoot,
+      notFoundLog: "未识别到智慧树题目区域，请刷新页面或手动进入答题页",
+      detectLog: () => `检测到智慧树答题页面（${profile ? profile.name : "通用"}）`,
+      total: () => {
+        const byApi = ppZhPaperTotal();
+        if (byApi > 0) return byApi;
+        const byHeader = ppZhH5Total();
+        if (byHeader > 0) return byHeader;
+        const numbers = zhPaperCardNumbers();
+        return numbers.length ? Math.max(...numbers) : 0;
+      },
+      getStem: (root) => {
+        const scope = scopeOf(root);
+        return profile && scope ? profile.stem(scope) : "";
+      },
+      awaitStem: () => {
+        const scope = scopeOf(findRoot());
+        if (profile && scope && profile.stem(scope)) return true;
+        if (stemWaits < 20) {
+          stemWaits += 1;
+          return false;
+        }
+        return true;
+      },
+      stemRetryMs: 200,
+      onStepReady: ({ root }) => {
+        stemWaits = 0;
+        rememberApi(root);
+      },
+      getOptions: (root, typeCode) => {
+        rememberApi(root);
+        const scope = scopeOf(root);
+        const nodes = profile && scope ? profile.optionNodes(scope, typeCode) : [];
+        domOptionCount = nodes.length;
+        return nodes;
+      },
+      getOptionText: (node, index) => {
+        if (currentInfo && currentInfo.options.length && currentInfo.options.length === domOptionCount) {
+          const text = currentInfo.options[index];
+          if (text) return text;
+        }
+        return profile ? profile.optionText(node) : zhPaperClean((node || {}).textContent || "");
+      },
+      getTypeCode: (root) => {
+        rememberApi(root);
+        const byApi = ppZhApiTypeCodeOf(currentInfo);
+        if (byApi) return byApi;
+        const scope = scopeOf(root);
+        return profile && scope ? profile.typeCode(scope) : "999";
+      },
+      getKey: (root, stem, options, typeCode) => {
+        const signature = profile && profile.signature ? profile.signature() : "";
+        return [profile ? profile.id : "", signature, typeCode, stem].join("#");
+      },
+      isPicked: zhPaperPicked,
+      pick: (node) => zhPaperPress(node),
+      pickGapMs: profile && profile.pickGapMs ? profile.pickGapMs : 140,
+      isExtraAnswered: (root) => Boolean(profile && profile.extraAnswered && profile.extraAnswered(root)),
+      recordSkipped: !profile || profile.recordSkipped !== false,
+      writeText: (root, answers) => ppZhH5WriteText(scopeOf(root), answers),
+      next: () => zhPaperGoNext(profile),
+      maxSteps: 200,
+      stepGapMs: 400,
+      showCost: Boolean(profile && profile.showCost),
+      onStart: ({ total: questionTotal, progressStore }) => {
+        progressStore.update({
+          taskName: "智慧树答题",
+          type: "答题",
+          isPlaying: true,
+          questionTotal,
+          questionIndex: 0,
+          percent: 0,
+          currentTime: 0,
+          totalTime: 0,
+          detail: `第 0 / ${questionTotal || "?"} 题`
+        });
+      },
+      perQuestion: ({ handled, total: questionTotal }) => ({
+        taskName: "智慧树答题",
+        type: "答题",
+        isPlaying: true,
+        questionTotal: questionTotal || handled,
+        questionIndex: handled,
+        percent: questionTotal ? Math.min(99, Math.round((handled - 1) / questionTotal * 100)) : 0,
+        detail: `第 ${handled} / ${questionTotal || "?"} 题`
+      }),
+      onFinish: ({ handled, filled, skipped, failed, total: questionTotal, progressStore, logStore }) => {
+        progressStore.update({
+          filledCount: filled,
+          fillRate: questionTotal ? Math.round((filled + skipped) / questionTotal * 100) : 0,
+          questionIndex: handled,
+          percent: 100,
+          isPlaying: false,
+          detail: `已完成 ${handled} / ${questionTotal || "?"} 题`
+        });
+        logStore.addLog(`本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}、失败 ${failed}`, filled > 0 ? "success" : "warning");
+        logStore.addLog("智慧树答题页不自动提交，请检查后手动提交", "primary");
+      }
+    });
+  };
   const ZH_SPEED_CEILING = 1.5;
 
   let _zhSpeedCeilingCache = 0;
@@ -12996,7 +12595,7 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {}
     return _zhSpeedCeilingCache || ZH_SPEED_CEILING;
   };
-  const ZH_STUDY_PART = "视频设置";
+  const ZH_STUDY_PART = PP_KEY.VIDEO;
 
   const zhSleep = (sec) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(sec) || 0) * 1e3));
   const zhPick = (sel, root) => {
@@ -13069,7 +12668,49 @@ const AuthorWords = _sfc_main$4;
     lastQuizAt: 0,
     lastAdvanceAt: 0,
     quizSignature: "",
-    booted: false
+    booted: false,
+    // 复习模式：本轮已重刷过的节点（按「档案 + 节点标题」记，刷新页面会重置）
+    restudy: new Set()
+  };
+
+  // 复习模式的节点标记：优先用节点标题，标题取不到时退回列表下标
+  const zhRestudyKey = (stage, el, list) => {
+    const text = zhTxtOf(el, "").slice(0, 80);
+    if (text) return `${stage.id}|${text}`;
+    const at = Array.isArray(list) ? list.indexOf(el) : -1;
+    return `${stage.id}|#${at}`;
+  };
+  const zhRestudySeen = (stage, el, list) => Boolean(el) && zhRuntime.restudy.has(zhRestudyKey(stage, el, list));
+  const zhRestudyMark = (stage, el, list) => {
+    if (el) zhRuntime.restudy.add(zhRestudyKey(stage, el, list));
+  };
+  const zhRestudyReset = () => {
+    zhRuntime.restudy.clear();
+  };
+
+  // 视频播完后的统一处理：
+  //   已完成 → 复习模式先回到 0 重刷一遍，刷过之后再切走；正常模式直接切走
+  //   未完成 → 回到开头补齐时长（平台按实际观看时长计分）
+  const zhResolveEnded = (stage, tune, log, media, current, done, options) => {
+    const opts = options || {};
+    const list = opts.list || (typeof stage.chapters === "function" ? stage.chapters() : []);
+    if (done && current) {
+      if (!tune.restudy) return "advance";
+      if (zhRestudySeen(stage, current, list)) return "advance";
+      zhRestudyMark(stage, current, list);
+      zhLogCadence(log, "restudy-" + stage.id, "复习模式：已完成节点从 0 重新播放", "primary", 60);
+      try {
+        media.currentTime = 0;
+      } catch (e) {}
+      return "play";
+    }
+    if (opts.replayLog) {
+      zhLogCadence(log, opts.replayKey || ("replay-" + stage.id), opts.replayLog, "warning", 25);
+    }
+    try {
+      media.currentTime = 1;
+    } catch (e) {}
+    return "play";
   };
 
   const zhLogCadence = (log, key, message, type, gapSec) => {
@@ -13092,22 +12733,30 @@ const AuthorWords = _sfc_main$4;
         return fallback;
       }
     };
-    const speedRaw = Number(readParam(ZH_STUDY_PART, "播放倍速", zhSpeedCeiling())) || zhSpeedCeiling();
-    const onlyAnswer = readParam("模式设置", "仅答题", false) === true;
-    const onlyVideo = readParam("模式设置", "仅视频", false) === true;
+    const speedRaw = Number(readParam(ZH_STUDY_PART, PP_KEY.RATE, zhSpeedCeiling())) || zhSpeedCeiling();
+    // 四种模式（与学习通一致）：正常 / 仅视频 / 仅答题 / 复习
+    const mode = (() => {
+      const on = (key) => readParam(PP_KEY.MODE, key, false) === true;
+      if (on(PP_KEY.ONLY_ANSWER)) return "answer";
+      if (on(PP_KEY.ONLY_VIDEO)) return "video";
+      if (on(PP_KEY.REVIEW)) return "review";
+      return "normal";
+    })();
+    const restudy = mode === "review";
     return {
-      modeOn: !onlyAnswer,
-      answerOn: !onlyVideo,
-      autoPlay: readParam(ZH_STUDY_PART, "正常播放", true) !== false,
-      autoSpeed: readParam(ZH_STUDY_PART, "自动倍速", true) !== false,
+      mode,
+      restudy,
+      modeOn: mode !== "answer",
+      answerOn: mode !== "video",
+      autoPlay: readParam(ZH_STUDY_PART, PP_KEY.NORMAL_PLAY, true) !== false,
+      autoSpeed: readParam(ZH_STUDY_PART, PP_KEY.AUTO_RATE, true) !== false,
       speed: Math.min(Math.max(1, speedRaw), zhSpeedCeiling()),
-      autoNext: readParam(ZH_STUDY_PART, "自动切换", true) !== false,
+      autoNext: readParam(ZH_STUDY_PART, PP_KEY.AUTO_NEXT, true) !== false,
       quizAuto: readParam(ZH_STUDY_PART, "弹题作答", true) !== false,
       ignoreHabit: readParam(ZH_STUDY_PART, "忽略习惯弹窗", false) === true,
       captchaNotify: true
     };
   };
-
 
   const zhNativeRateSetter = (() => {
     try {
@@ -13211,7 +12860,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-
   const zhVmChainOf = (node) => {
     const chain = [];
     let cursor = node;
@@ -13268,7 +12916,6 @@ const AuthorWords = _sfc_main$4;
     }
     return true;
   };
-
 
   const zhQuizRoot = () => {
     const legacy = zhPick("#playTopic-dialog");
@@ -13349,7 +12996,6 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
-
   const zhCaptchaNode = () => {
     const onScreen = (el) => {
       if (!el || !zhVisible(el)) return false;
@@ -13401,7 +13047,6 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
-
   const zhHabitNode = () =>
     zhPickAll(".el-overlay, .el-dialog__wrapper, .el-message-box__wrapper").find(
       (el) => zhVisible(el) && zhTxtOf(el).indexOf("保持良好的学习习惯") >= 0
@@ -13425,7 +13070,6 @@ const AuthorWords = _sfc_main$4;
     await zhSleep(1);
     return true;
   };
-
 
   const zhClearNoise = () => {
     zhPickAll(".v-modal, .brush-warning").forEach((el) => {
@@ -13497,7 +13141,6 @@ const AuthorWords = _sfc_main$4;
     return { done, total };
   };
 
-
   const zhStageLegacyShare = {
     id: "legacy-share",
     label: "共享课",
@@ -13511,11 +13154,11 @@ const AuthorWords = _sfc_main$4;
       if (media) {
         if (media.ended) {
           const current = this.current();
-          if (current && this.isDone(current)) return await this.advance(tune, log);
-          zhLogCadence(log, "legacy-replay", "视频播放结束但未计入完成，重播补齐时长", "warning", 25);
-          try {
-            media.currentTime = 1;
-          } catch (e) {}
+          const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)), {
+            replayKey: "legacy-replay",
+            replayLog: "视频播放结束但未计入完成，重播补齐时长"
+          });
+          if (plan === "advance") return await this.advance(tune, log);
         }
         await zhKeepPlaying(media, tune);
         return true;
@@ -13528,12 +13171,22 @@ const AuthorWords = _sfc_main$4;
     async advance(tune, log) {
       if (!tune.autoNext) return false;
       const list = this.chapters();
-      const pending = list.filter((el) => !this.isDone(el));
+      const pending = tune.restudy
+        ? list.filter((el) => !zhRestudySeen(this, el, list))
+        : list.filter((el) => !this.isDone(el));
       if (!pending.length) {
-        zhLogCadence(log, "legacy-all", "本页任务点已全部完成", "success", 300);
+        zhLogCadence(
+          log,
+          tune.restudy ? "legacy-restudy-all" : "legacy-all",
+          tune.restudy ? "复习模式：本页任务点已全部重刷完成" : "本页任务点已全部完成",
+          "success",
+          300
+        );
         return false;
       }
       const current = this.current();
+      // 复习模式：离开这一节就算刷过，保证一轮能走完、不会来回打转
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
       const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(zhPick(".catalogue_title", target), "下一个视频")}`, "primary");
@@ -13556,10 +13209,8 @@ const AuthorWords = _sfc_main$4;
       if (media) {
         if (media.ended) {
           const current = this.current();
-          if (current && this.isDone(current)) return await this.advance(tune, log);
-          try {
-            media.currentTime = 1;
-          } catch (e) {}
+          const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)));
+          if (plan === "advance") return await this.advance(tune, log);
         }
         await zhKeepPlaying(media, tune);
         return true;
@@ -13572,12 +13223,21 @@ const AuthorWords = _sfc_main$4;
     async advance(tune, log) {
       if (!tune.autoNext) return false;
       const list = this.chapters();
-      const pending = list.filter((el) => !this.isDone(el));
+      const pending = tune.restudy
+        ? list.filter((el) => !zhRestudySeen(this, el, list))
+        : list.filter((el) => !this.isDone(el));
       if (!pending.length) {
-        zhLogCadence(log, "newshare-all", "本页任务点已全部完成", "success", 300);
+        zhLogCadence(
+          log,
+          tune.restudy ? "newshare-restudy-all" : "newshare-all",
+          tune.restudy ? "复习模式：本页任务点已全部重刷完成" : "本页任务点已全部完成",
+          "success",
+          300
+        );
         return false;
       }
       const current = this.current();
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
       const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(target.parentElement, "下一节")}`, "primary");
@@ -13615,14 +13275,11 @@ const AuthorWords = _sfc_main$4;
       if (media) {
         if (media.ended) {
           const current = this.current();
-          if (!current || !this.isDone(current)) {
-            zhLogCadence(log, "wisdom-replay", "当前节点未出现完成标记，重新播放补齐时长", "warning", 25);
-            try {
-              media.currentTime = 1;
-            } catch (e) {}
-          } else {
-            return await this.advance(tune, log);
-          }
+          const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)), {
+            replayKey: "wisdom-replay",
+            replayLog: "当前节点未出现完成标记，重新播放补齐时长"
+          });
+          if (plan === "advance") return await this.advance(tune, log);
         }
         await zhKeepPlaying(media, tune);
         return true;
@@ -13635,12 +13292,21 @@ const AuthorWords = _sfc_main$4;
     async advance(tune, log) {
       if (!tune.autoNext) return false;
       const list = this.chapters();
-      const pending = list.filter((el) => !this.isDone(el));
+      const pending = tune.restudy
+        ? list.filter((el) => !zhRestudySeen(this, el, list))
+        : list.filter((el) => !this.isDone(el));
       if (!pending.length) {
-        zhLogCadence(log, "wisdom-all", "本页任务点已全部完成", "success", 300);
+        zhLogCadence(
+          log,
+          tune.restudy ? "wisdom-restudy-all" : "wisdom-all",
+          tune.restudy ? "复习模式：本页任务点已全部重刷完成" : "本页任务点已全部完成",
+          "success",
+          300
+        );
         return false;
       }
       const current = this.current();
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
       const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(target, "下一节")}`, "primary");
@@ -13689,10 +13355,8 @@ const AuthorWords = _sfc_main$4;
       if (media) {
         if (media.ended) {
           const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
-          if (current && this.chapterDone(current)) return await this.chapterAdvance(tune, log);
-          try {
-            media.currentTime = 1;
-          } catch (e) {}
+          const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.chapterDone(current)));
+          if (plan === "advance") return await this.chapterAdvance(tune, log);
         }
         await zhKeepPlaying(media, tune);
         return true;
@@ -13702,12 +13366,21 @@ const AuthorWords = _sfc_main$4;
     async chapterAdvance(tune, log) {
       if (!tune.autoNext) return false;
       const list = this.chapters();
-      const pending = list.filter((el) => !this.chapterDone(el));
+      const pending = tune.restudy
+        ? list.filter((el) => !zhRestudySeen(this, el, list))
+        : list.filter((el) => !this.chapterDone(el));
       if (!pending.length) {
-        zhLogCadence(log, "fusion-chapter-all", "本页任务点已全部完成", "success", 300);
+        zhLogCadence(
+          log,
+          tune.restudy ? "fusion-chapter-restudy-all" : "fusion-chapter-all",
+          tune.restudy ? "复习模式：本页任务点已全部重刷完成" : "本页任务点已全部完成",
+          "success",
+          300
+        );
         return false;
       }
       const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
       const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(zhPick(".title", target) || zhPick(".catalogue_title", target) || target, "下一个视频")}`, "primary");
@@ -13729,10 +13402,8 @@ const AuthorWords = _sfc_main$4;
         const media = await zhFindMedia(["#vjs_container video", ".video-player-wrapper video", "video"], 6);
         if (media) {
           if (media.ended) {
-            if (card && zhCardDone(card)) return await this.advance(tune, log);
-            try {
-              media.currentTime = 1;
-            } catch (e) {}
+            const plan = zhResolveEnded(this, tune, log, media, card, !!(card && zhCardDone(card)), { list: zhCardList() });
+            if (plan === "advance") return await this.advance(tune, log);
           }
           await zhKeepPlaying(media, tune);
           return true;
@@ -13755,8 +13426,13 @@ const AuthorWords = _sfc_main$4;
       if (!zhCardList().length) return await this.chapterAdvance(tune, log);
       const cards = zhCardList();
       const activeIndex = cards.findIndex((card) => /(^|\s)active(\s|$)/.test(card.className || ""));
-      const pending = cards.filter((card) => !zhCardDone(card));
+      const activeCard = activeIndex >= 0 ? cards[activeIndex] : null;
+      const pending = tune.restudy
+        ? cards.filter((card) => !zhRestudySeen(this, card, cards))
+        : cards.filter((card) => !zhCardDone(card));
       if (pending.length) {
+        // 复习模式：离开当前资源就算刷过，保证一轮能走完
+        if (tune.restudy && activeCard) zhRestudyMark(this, activeCard, cards);
         const after = pending.find((card) => cards.indexOf(card) > activeIndex);
         const target = after || pending[0];
         log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(".common-text, .video-title, .basic-info-video-card-container")) || "下一个资源"}`, "primary");
@@ -13766,7 +13442,13 @@ const AuthorWords = _sfc_main$4;
       }
       const sections = zhPickAll(".section-item-collapse-info");
       if (!sections.length) {
-        zhLogCadence(log, "card-all", "本页任务点已全部完成", "success", 300);
+        zhLogCadence(
+          log,
+          tune.restudy ? "card-restudy-all" : "card-all",
+          tune.restudy ? "复习模式：本页任务点已全部重刷完成" : "本页任务点已全部完成",
+          "success",
+          300
+        );
         return false;
       }
       const activeSection = sections.find((el) => /(^|\s)active(\s|$)/.test(el.className || ""));
@@ -13866,14 +13548,12 @@ const AuthorWords = _sfc_main$4;
         if (media.ended) {
           const current = this.current(profile);
           const progress = zhTxtOf(zhPick(profile.rate, current));
-          if (current && !this.isDone(profile, current)) {
-            zhLogCadence(log, "practice-replay", `播放结束但未计入完成${progress ? `（当前进度 ${progress}）` : ""}，重播补齐`, "warning", 25);
-            try {
-              media.currentTime = 1;
-            } catch (e) {}
-          } else {
-            return await this.advance(profile, tune, log);
-          }
+          const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(profile, current)), {
+            list: this.items(profile),
+            replayKey: "practice-replay",
+            replayLog: `播放结束但未计入完成${progress ? `（当前进度 ${progress}）` : ""}，重播补齐`
+          });
+          if (plan === "advance") return await this.advance(profile, tune, log);
         }
         await zhKeepPlaying(media, tune);
         return true;
@@ -13883,12 +13563,21 @@ const AuthorWords = _sfc_main$4;
     async advance(profile, tune, log) {
       if (!tune.autoNext) return false;
       const list = this.items(profile);
-      const pending = list.filter((item) => !this.isDone(profile, item));
+      const pending = tune.restudy
+        ? list.filter((item) => !zhRestudySeen(this, item, list))
+        : list.filter((item) => !this.isDone(profile, item));
       if (!pending.length) {
-        zhLogCadence(log, "practice-all", "本页任务点已全部完成", "success", 300);
+        zhLogCadence(
+          log,
+          tune.restudy ? "practice-restudy-all" : "practice-all",
+          tune.restudy ? "复习模式：本页任务点已全部重刷完成" : "本页任务点已全部完成",
+          "success",
+          300
+        );
         return false;
       }
       const current = this.current(profile);
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
       const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(profile.title) || target, "下一个资源")}`, "primary");
@@ -13900,7 +13589,9 @@ const AuthorWords = _sfc_main$4;
 
   const ZH_CLASSROOM_STAGES = [zhStageLegacyShare, zhStageNewShare, zhStageCard, zhStageWisdomMooc, zhStagePractice];
 
-  const zhStageLooksDone = (stage) => {
+  const zhStageLooksDone = (stage, tune) => {
+    // 复习模式：已完成也当作没完成，交给各档案的 step 从 0 重刷一遍
+    if (tune && tune.restudy) return false;
     try {
       if (stage.id === "practice") {
         const profile = stage.profile();
@@ -13918,7 +13609,6 @@ const AuthorWords = _sfc_main$4;
       return false;
     }
   };
-
 
   const zhEntryHint = () => {
     const host = location.hostname;
@@ -13939,6 +13629,7 @@ const AuthorWords = _sfc_main$4;
     if (zhRuntime.booted) return;
     zhRuntime.booted = true;
     zhRuntime.epoch += 1;
+    zhRestudyReset();
     const epoch = zhRuntime.epoch;
     log.addLog(`检测到用户进入到${stage.label}学习页面`, "primary");
     log.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
@@ -13954,7 +13645,7 @@ const AuthorWords = _sfc_main$4;
         if (await zhCaptchaHold(tune, log)) continue;
         if (await zhHabitStep(tune, log)) continue;
         if (await zhQuizStep(tune, log)) continue;
-        if (zhStageLooksDone(stage)) {
+        if (zhStageLooksDone(stage, tune)) {
           if (Date.now() - zhRuntime.lastAdvanceAt > 2200 && (await stage.advance(tune, log))) {
             zhRuntime.lastAdvanceAt = Date.now();
             continue;
@@ -14004,11 +13695,6 @@ const AuthorWords = _sfc_main$4;
     zhBootClassroom(stage, log);
   };
 
-
-
-
-
-
   const readYktParam = (partName, paramName, fallback = false) => {
     try {
       const parts = useConfigStore().platformParams?.ykt?.parts || [];
@@ -14035,7 +13721,9 @@ const AuthorWords = _sfc_main$4;
     forumStatus: ".learning-space-control-unit .control-right .f12",
     forumInput: ".forum-publish textarea.el-textarea__inner",
     forumComment: ".forum-content .forum-item .comment-text",
-    forumSend: ".prompt-send-btn:not(.disabled)"
+    forumSend: ".prompt-send-btn:not(.disabled)",
+    exerciseFrame: ".detail-container .lms-graph-exercise iframe#iframeExerciseId",
+    encryptedFont: ".xuetangx-com-encrypted-font"
   };
 
   const yktJobs = () => Array.from(document.querySelectorAll(YKT_SEL.job));
@@ -14078,14 +13766,6 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {
       return false;
     }
-  };
-
-  const forceMediaMute = (media) => {
-    if (!media || media.__ppMuteLocked) return false;
-    media.__ppMuteLocked = true;
-    media.__ppMutedOnce = true;
-    try { media.muted = true; } catch (e) {}
-    return true;
   };
 
   const yktMediaFinished = (media, epsilon = 0.75) => {
@@ -14133,10 +13813,8 @@ const AuthorWords = _sfc_main$4;
     };
     forceMediaRate(media, currentRate);
     try { media.loop = false; } catch (e) {}
-    const muteMedia = () => {
-      forceMediaMute(media);
-    };
-    muteMedia();
+    // 默认静音，不强制：只按一次，用户自己开声音不会被改回来
+    ppMuteOnce(media);
     const verifyRate = () => {
       try {
         const actual = Number(media.playbackRate) || 1;
@@ -14171,7 +13849,6 @@ const AuthorWords = _sfc_main$4;
           try { useLogStore().addLog(`倍速已更新：${currentRate}x`, "info"); } catch (e) {}
         }
         forceMediaRate(media, currentRate);
-        muteMedia();
         syncSpeedLabel();
         if (media.paused && !media.ended) media.play().catch(() => {});
         if (media.currentTime !== lastTime) {
@@ -14194,6 +13871,58 @@ const AuthorWords = _sfc_main$4;
         } catch (e) {}
       })
       .catch(() => {});
+  });
+
+  /**
+   * 数字人视频专用：温和播放。
+   *
+   * 数字人播放器是自定义组件，自带一套控制逻辑。每秒强推倍速/静音会跟它打架，
+   * 轻则被它改回去，重则打断加载。所以这里只在开始时设一次，
+   * 之后只管「别让它停」和「播完就收工」，不做倍速强制、也不判卡顿超时。
+   */
+  const yktPlayMediaCalm = (media, opts) => new Promise((resolve) => {
+    let settled = false;
+    let ticker = null;
+    const finish = (reason) => {
+      if (settled) return;
+      settled = true;
+      if (ticker) {
+        try { ticker.stop(); } catch (e) {}
+      }
+      try {
+        media.onended = null;
+        media.onpause = null;
+      } catch (e) {}
+      resolve(reason);
+    };
+    let rate = 1;
+    try {
+      const raw = typeof opts.getRate === "function" ? opts.getRate() : opts.rate;
+      const num = Number(raw);
+      if (Number.isFinite(num) && num > 0) rate = num;
+    } catch (e) {}
+    try { media.currentTime = 1; } catch (e) {}
+    try { media.playbackRate = rate; } catch (e) {}
+    // 默认静音，不强制：只按一次
+    ppMuteOnce(media);
+    media.onended = () => finish("ended");
+    media.onpause = () => {
+      if (media.ended || settled) return;
+      setTimeout(() => {
+        try { media.play(); } catch (e) {}
+      }, 900);
+    };
+    try {
+      useLogStore().addLog(`数字人视频开始播放，倍速 ${rate}x`, "primary");
+    } catch (e) {}
+    Promise.resolve(media.play()).catch(() => {});
+    ticker = afkIntervalHandle(() => {
+      try {
+        if (!media.isConnected) return finish("switched");
+        if (yktMediaFinished(media)) return finish("ended");
+        if (media.paused && !media.ended) media.play().catch(() => {});
+      } catch (e) {}
+    }, 2000);
   });
 
   const yktWaitFor = async (getter, timeoutSeconds = 20, periodMs = 500) => {
@@ -14244,12 +13973,718 @@ const AuthorWords = _sfc_main$4;
     return switched;
   };
 
+  // ============================================================
+  // 雨课堂 · 作业自动答题
+  //
+  // 题目在 `.lms-graph-exercise iframe#iframeExerciseId` 里，实测结构：
+  //   .container-problem .subject-item         当前题（同时刻只有 1 个）
+  //   .item-type                               题型，文本形如 "1.多选题 (2分)"
+  //   .problem-body                            题干
+  //   ul[class*="list-unstyled"] li label      选项（多选 el-checkbox / 判断 el-radio）
+  //     .checkboxText / .radioText             选项正文（判断题没有，只有 svg 图标）
+  //     input[value="A"|"true"|"false"]        选项值，判断题靠 true/false 区分对错
+  //   .problem-box button.el-button--primary   提交按钮（未选时 disabled）
+  //   .problems-aside .subject-item.J_order    左侧题目导航
+  //
+  // 字体：雨课堂每次渲染都会换一份 exam_font_<hash>.ttf 和配套密文，
+  // 所以**每道题**都要重新读 @font-face 重建映射（库内按 URL 缓存）。
+  // ============================================================
+  const PP_YKT_WORK = {
+    item: ".container-problem .subject-item",
+    typeLabel: ".item-type",
+    body: ".problem-body",
+    options: 'ul[class*="list-unstyled"] li label',
+    blankInput: 'input.blank-item-dynamic, input[placeholder="输入答案"]',
+    ueditor: 'iframe[id^="ueditor_"]',
+    textarea: "textarea",
+    navItem: ".problems-aside .subject-item.J_order",
+    submit: ".problem-box button.el-button--primary",
+    captcha: "#homework-automation-risk-challenge",
+    dialogs: ".homework-problem-change-guard-dialog, .homework-problem-batch-submit-dialog",
+  };
+
+  const ppYktFlat = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+
+  /** `.item-type` 文本 → 题型码 */
+  const ppYktKind = (text) => {
+    const t = String(text || "");
+    if (/多选|多项选择|不定项/.test(t)) return "1";
+    if (/单选|单项选择/.test(t)) return "0";
+    if (/判断|是非/.test(t)) return "3";
+    if (/填空/.test(t)) return "2";
+    if (/简答|问答|主观|论述|名词|计算/.test(t)) return "4";
+    return "";
+  };
+
+  /** 选项正文：判断题没有文字，按 input 的 true/false 归一成 对/错 */
+  const ppYktOptionLabel = (label) => {
+    try {
+      const input = label.querySelector("input");
+      const val = String((input && input.value) || "").toLowerCase();
+      if (val === "true") return "对";
+      if (val === "false") return "错";
+      let node = label.querySelector(".radioText, .checkboxText");
+      if (!node) node = label.querySelector(".el-radio__label, .el-checkbox__label") || label;
+      return ppYktFlat(node.textContent).replace(/^[A-Za-z][.、)．:：]\s*/, "");
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const ppYktOptionChosen = (label) => {
+    try {
+      const input = label.querySelector("input");
+      if (input && input.checked) return true;
+      const cls = `${label.className || ""} ${(label.querySelector(".el-radio__inner, .el-checkbox__inner") || {}).className || ""}`;
+      return /is-checked/.test(cls);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const ppYktChooseOption = async (label) => {
+    try {
+      label.scrollIntoView({ block: "center", inline: "nearest" });
+    } catch (e) {}
+    const before = ppYktOptionChosen(label);
+    try {
+      label.click();
+    } catch (e) {}
+    await delay(0.15);
+    if (ppYktOptionChosen(label) !== before) return true;
+    try {
+      label.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    } catch (e) {}
+    await delay(0.15);
+    return true;
+  };
+
+  /**
+   * 这道题是不是已经答过了（用于「跳过已答」开关）。
+   * 选项被勾上、输入框有内容、富文本有内容，任意一条成立即视为已答。
+   */
+  const ppYktHasAnswer = (item, optionSelector) => {
+    try {
+      const sel = optionSelector || PP_YKT_WORK.options;
+      if (Array.from(item.querySelectorAll(sel)).some(ppYktOptionChosen)) return true;
+      const fields = Array.from(item.querySelectorAll(`${PP_YKT_WORK.blankInput}, ${PP_YKT_WORK.textarea}`));
+      if (fields.some((f) => String(f.value == null ? "" : f.value).trim())) return true;
+      const frames = Array.from(item.querySelectorAll(PP_YKT_WORK.ueditor));
+      for (const frame of frames) {
+        try {
+          const body = frame.contentDocument && frame.contentDocument.body;
+          if (body && String(body.textContent || "").trim()) return true;
+        } catch (e) {}
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  /**
+   * 页面顶部常驻提醒条（不自动消失，关掉/解决后调用返回的函数移除）。
+   * 自绘 DOM，不依赖任何 UI 库的样式表，保证在最外层窗口可见。
+   * @returns {Function} 移除函数
+   */
+  const ppYktLoudHint = (text, tone) => {
+    let node = null;
+    try {
+      let win = window;
+      try {
+        if (window.top && window.top.document && window.top !== window) win = window.top;
+      } catch (e) {}
+      const doc = (win && win.document) || document;
+      const host = doc.body || doc.documentElement;
+      if (!host) return () => {};
+      const color = tone === "success" ? "#16a34a" : tone === "danger" ? "#dc2626" : "#f59e0b";
+      node = doc.createElement("div");
+      node.setAttribute("data-pp-ykt-hint", "1");
+      node.style.cssText = [
+        "position:fixed",
+        "left:50%",
+        "top:20px",
+        "transform:translateX(-50%)",
+        "z-index:2147483647",
+        "max-width:min(600px,92vw)",
+        "padding:12px 20px",
+        "border-radius:10px",
+        "background:" + color,
+        "color:#fff",
+        "font-size:14px",
+        "line-height:1.6",
+        "font-family:system-ui,-apple-system,'Microsoft YaHei',sans-serif",
+        "text-align:center",
+        "white-space:pre-wrap",
+        "box-shadow:0 10px 28px rgba(0,0,0,.28)",
+        "pointer-events:none",
+      ].join(";");
+      node.textContent = text;
+      host.appendChild(node);
+    } catch (e) {
+      node = null;
+    }
+    return () => {
+      try {
+        if (node && node.parentNode) node.parentNode.removeChild(node);
+      } catch (e) {}
+    };
+  };
+
+  /** 桌面通知：标签页在后台时也能看见；用户没授权就安静跳过 */
+  const ppYktDeskPing = (title, body) => {
+    try {
+      if (typeof Notification === "undefined") return;
+      const fire = () => {
+        try {
+          new Notification(title, { body, tag: "pp-ykt-notice" });
+        } catch (e) {}
+      };
+      if (Notification.permission === "granted") return fire();
+      if (Notification.permission === "default" && typeof Notification.requestPermission === "function") {
+        Promise.resolve(Notification.requestPermission())
+          .then((p) => {
+            if (p === "granted") fire();
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
+  };
+
+  /** 风控验证码：出现就弹提醒、等人，消失就继续 */
+  const ppYktChallengeHold = async (doc, logStore, timeoutMs = 180000) => {
+    const find = () => {
+      try {
+        return doc.querySelector(PP_YKT_WORK.captcha);
+      } catch (e) {
+        return null;
+      }
+    };
+    const box = find();
+    if (!box) return false;
+    try {
+      box.scrollIntoView({ block: "center", inline: "nearest" });
+    } catch (e) {}
+    logStore.addLog("⚠️ 检测到雨课堂风控验证码，请在页面手动完成，完成后自动继续", "danger");
+    const shut = ppYktLoudHint("雨课堂需要手动验证：请在页面上完成验证码，通过后自动继续答题", "warning");
+    ppYktDeskPing("雨课堂：需要手动验证", "检测到风控验证码，请完成验证后继续答题");
+    const start = Date.now();
+    try {
+      while (Date.now() - start < timeoutMs) {
+        await delay(1);
+        if (!find()) {
+          logStore.addLog("验证码已通过，继续答题", "success");
+          ppYktLoudHint("验证已通过，继续答题", "success");
+          return true;
+        }
+      }
+    } finally {
+      shut();
+    }
+    logStore.addLog("验证码等待超时（3 分钟），跳过本题", "warning");
+    return false;
+  };
+
+  /** 未保存答案 / 批量提交确认弹窗：出现就等人 */
+  const ppYktConfirmHold = async (doc, logStore, timeoutMs = 120000) => {
+    // 两个弹窗在雨课堂里是常驻 DOM 的（隐藏时 wrapper 是 display:none、高度 0），
+    // 所以必须同时看「计算样式」和「实际尺寸」，否则会把自己卡死。
+    const find = () => {
+      try {
+        const list = Array.from(doc.querySelectorAll(PP_YKT_WORK.dialogs));
+        for (const el of list) {
+          const wrap = el.closest ? el.closest(".el-dialog__wrapper") : null;
+          const target = wrap || el;
+          if (!target || !target.offsetHeight) continue;
+          let display = "";
+          try {
+            const view = target.ownerDocument && target.ownerDocument.defaultView;
+            display = view ? view.getComputedStyle(target).display : "";
+          } catch (e) {
+            display = target.style ? target.style.display : "";
+          }
+          if (display && display !== "none") return target;
+        }
+      } catch (e) {}
+      return null;
+    };
+    if (!find()) return false;
+    logStore.addLog("⚠️ 检测到雨课堂确认弹窗，请手动处理后脚本会自动继续", "danger");
+    const shut = ppYktLoudHint("雨课堂弹出确认框：请手动处理（未保存答案/提交确认），处理后自动继续", "warning");
+    ppYktDeskPing("雨课堂：需要确认", "页面上有确认弹窗，请处理后继续");
+    const start = Date.now();
+    try {
+      while (Date.now() - start < timeoutMs) {
+        await delay(1);
+        if (!find()) {
+          logStore.addLog("弹窗已处理，继续", "success");
+          ppYktLoudHint("弹窗已处理，继续答题", "success");
+          return true;
+        }
+      }
+    } finally {
+      shut();
+    }
+    logStore.addLog("弹窗等待超时（2 分钟），跳过", "warning");
+    return false;
+  };
+
+  /** 按题型把答案写进页面，成功返回 true */
+  const ppYktWriteAnswers = async (item, typeCode, answers, optionSelector) => {
+    const list = Array.from(item.querySelectorAll(optionSelector || PP_YKT_WORK.options))
+      .map((el) => ({ el, text: ppYktOptionLabel(el) }))
+      .filter((o) => o.text || o.el.querySelector("input[value='true'], input[value='false']"));
+
+    if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
+      if (!list.length) return false;
+      const wanted = new Set();
+      answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
+      if (!wanted.size) return false;
+      if (typeCode === "1") {
+        for (let i = 0; i < list.length; i += 1) {
+          if (ppYktOptionChosen(list[i].el) !== wanted.has(i)) {
+            await ppYktChooseOption(list[i].el);
+            await delay(0.12);
+          }
+        }
+      } else {
+        const target = list[Array.from(wanted)[0]];
+        if (target && !ppYktOptionChosen(target.el)) await ppYktChooseOption(target.el);
+      }
+      return true;
+    }
+
+    // 填空 / 简答：按顺序写输入框，富文本编辑器单独处理
+    const texts = answers.map((a) => String(a == null ? "" : a).replace(/<[^>]+>/g, "").trim());
+    const fields = [
+      ...Array.from(item.querySelectorAll(PP_YKT_WORK.blankInput)),
+      ...Array.from(item.querySelectorAll(PP_YKT_WORK.textarea)),
+    ].filter((f) => !/checkbox|radio/i.test(String(f.type || "")));
+
+    let written = 0;
+    fields.forEach((field, index) => {
+      const text = texts[index] == null ? texts[0] : texts[index];
+      if (!text) return;
+      try {
+        const proto = field.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+        if (setter) setter.call(field, text);
+        else field.value = text;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        written += 1;
+      } catch (e) {}
+    });
+
+    // 富文本（UEditor）：优先走 UE 官方 API，失败再直接写 iframe body
+    const frames = Array.from(item.querySelectorAll(PP_YKT_WORK.ueditor));
+    frames.forEach((frame, index) => {
+      const text = texts[index] == null ? texts[0] : texts[index];
+      if (!text) return;
+      if (ppYktWriteRichText(frame, text)) written += 1;
+    });
+
+    return written > 0;
+  };
+
+  /**
+   * 填 UEditor 富文本（简答/问答题）。
+   * 先试 UE 官方 API（能触发它的 change 记录），拿不到再直接写 iframe body。
+   */
+  const ppYktWriteRichText = (frame, answer) => {
+    const html = `<p>${String(answer)
+      .trim()
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n+/g, "</p><p>")}</p>`;
+    try {
+      const holder = frame.closest ? frame.closest('[id^="ueditor-"]') : null;
+      const view = frame.ownerDocument && frame.ownerDocument.defaultView;
+      if (holder && holder.id && view && view.UE) {
+        const editor = view.UE.getEditor(holder.id);
+        if (editor) {
+          editor.ready(() => {
+            try {
+              editor.setContent(html);
+            } catch (e) {}
+          });
+          return true;
+        }
+      }
+    } catch (e) {}
+    try {
+      const body = frame.contentDocument && frame.contentDocument.body;
+      if (!body) return false;
+      body.innerHTML = html;
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  /** 挡在导航项上的完成标记（提交成功后会打上） */
+  const ppYktNavFinished = (navEl) => {
+    if (!navEl) return false;
+    try {
+      if (navEl.querySelector(".icon-status")) return true;
+      const status = navEl.querySelector(".text-status");
+      return !!(status && status.textContent && status.textContent.includes("未批改"));
+    } catch (e) {
+      return false;
+    }
+  };
+
+  /**
+   * 点提交并**验证真的提交成功**（照 OCS 的做法）：
+   * 点完之后轮询左侧导航出现完成标记，没出现就再点一次，最多两轮。
+   */
+  const ppYktCommitQuestion = async (doc, logStore) => {
+    const activeNav = () => {
+      const nav = Array.from(doc.querySelectorAll(PP_YKT_WORK.navItem));
+      const idx = nav.findIndex((el) => el.classList.contains("active"));
+      return idx >= 0 ? nav[idx] : null;
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const navEl = activeNav();
+      const btn = Array.from(doc.querySelectorAll(PP_YKT_WORK.submit)).find(
+        (b) =>
+          ppYktFlat(b.textContent).includes("提交") &&
+          !b.disabled &&
+          !b.classList.contains("is-disabled"),
+      );
+      if (!btn) return ppYktNavFinished(navEl);
+      btn.click();
+      await delay(1);
+      const start = Date.now();
+      while (Date.now() - start < 10000) {
+        if (ppYktNavFinished(activeNav())) return true;
+        await delay(0.3);
+      }
+      logStore.addLog("提交后未看到完成标记，重试一次", "warning");
+    }
+    logStore.addLog("本题提交状态未确认，请手动检查", "danger");
+    return false;
+  };
+
+  /** 当前题的稳定标识：题型 + 题干前 60 字（用来判断有没有换题） */
+  const ppYktFingerprint = (doc) => {
+    try {
+      const cur = doc.querySelector(PP_YKT_WORK.item);
+      if (!cur) return "";
+      const type = ppYktFlat((cur.querySelector(PP_YKT_WORK.typeLabel) || {}).textContent);
+      const body = cur.querySelector(PP_YKT_WORK.body);
+      return `${type}|${ppYktFlat(body ? body.textContent : "").slice(0, 60)}`;
+    } catch (e) {
+      return "";
+    }
+  };
+
+  /** 切到下一题，成功返回 true */
+  const ppYktAdvance = async (doc) => {
+    const before = ppYktFingerprint(doc);
+    const nav = Array.from(doc.querySelectorAll(PP_YKT_WORK.navItem));
+    if (!nav.length) return false;
+    const activeIdx = nav.findIndex((el) => el.classList.contains("active"));
+    const next = nav[activeIdx < 0 ? 0 : activeIdx + 1];
+    if (!next) return false;
+    try {
+      next.scrollIntoView({ block: "center" });
+    } catch (e) {}
+    next.click();
+    const start = Date.now();
+    while (Date.now() - start < 8000) {
+      await delay(0.4);
+      const now = keyOf();
+      if (now && now !== before) return true;
+    }
+    return false;
+  };
+
+  /**
+   * 作业答题主循环。
+   * @param {Document} exDoc 题目 iframe 的 document
+   * @param {Function} prepareFont 每道题都要调一次，用于重建当前字体映射
+   */
+  const useYktHomeworkLogic = async (exDoc, logStore, prepareFont) => {
+    if (!exDoc) {
+      logStore.addLog("未找到作业题目区域，请手动点开作业后重试", "warning");
+      return;
+    }
+    const questionStore = useQuestionStore();
+    const progressStore = useProgressStore();
+    const autoSwitch = readYktParam(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
+    const skipAnswered = readYktParam(PP_KEY.ANSWER, PP_KEY.SKIP_ANSWERED, true);
+    const autoSubmit = readYktParam(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, true);
+
+    logStore.addLog("检测到雨课堂作业，开始自动答题", "primary");
+    if (!autoSubmit) logStore.addLog("自动提交已关闭：只填答案，请自己点提交", "warning");
+    let handled = 0;
+    let filled = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (let step = 0; step < 100; step += 1) {
+      await ppYktChallengeHold(exDoc, logStore);
+
+      const item = await yktWaitFor(() => exDoc.querySelector(PP_YKT_WORK.item), 15, 300);
+      if (!item) {
+        logStore.addLog("未等到题目加载，结束本次作答", "warning");
+        break;
+      }
+
+      // 每道题都重建映射：雨课堂每次渲染都换字体
+      if (prepareFont) await prepareFont(exDoc);
+
+      const marker = ppYktFingerprint(exDoc);
+      const stem = ppYktFlat((item.querySelector(PP_YKT_WORK.body) || {}).textContent).slice(0, 40);
+      handled += 1;
+      progressStore.update({ questionIndex: handled, detail: `第 ${handled} 题` });
+      logStore.addLog(`第${handled}题（${stem || "未识别题干"}）`, "info");
+
+      // 跳过已答：用户自己做过的不覆盖
+      if (skipAnswered && ppYktHasAnswer(item)) {
+        skipped += 1;
+        logStore.addLog(`第${handled}题已作答，跳过`, "warning");
+        if (!autoSwitch) break;
+        const jumped = await ppYktAdvance(exDoc);
+        if (!jumped) break;
+        await delay(0.6);
+        continue;
+      }
+
+      // 抓题：克隆 + 解密，原 DOM 不动
+      let html = item.outerHTML;
+      try {
+        const clone = ppDecryptQuestionClone(item, "ykt");
+        if (clone && clone.outerHTML) html = clone.outerHTML;
+      } catch (e) {}
+
+      const typeCode = ppYktKind((item.querySelector(PP_YKT_WORK.typeLabel) || {}).textContent);
+      const options = Array.from(item.querySelectorAll(PP_YKT_WORK.options));
+      const question = {
+        element: item,
+        html,
+        workType: "ykt",
+        refer: exDoc.location ? exDoc.location.href : location.href,
+        type: typeCode,
+        title: stem,
+        optionsText: options.map(ppYktOptionLabel),
+      };
+
+      let answerData = null;
+      try {
+        answerData = await queryAnswer(question);
+      } catch (e) {
+        answerData = null;
+      }
+
+      if (answerData && answerData.code === 200) {
+        const raw = answerData.data && answerData.data.answer;
+        const answers = Array.isArray(raw) ? raw : [raw];
+        const ok = await ppYktWriteAnswers(item, typeCode, answers);
+        question.answer = answers;
+        question.source = (answerData.data && answerData.data.source) || "";
+        try {
+          questionStore.addQuestion(question);
+        } catch (e) {}
+        if (ok) {
+          filled += 1;
+          logStore.addLog(`第${handled}题已填入答案${question.source === "ai" ? "（AI）" : ""}`, "success");
+          if (answerData.data && answerData.data.cost !== undefined) {
+            logStore.addLog(`本题消耗${answerData.data.cost}次，剩余${answerData.data.num}次`, "primary");
+          }
+        } else {
+          failed += 1;
+          logStore.addLog(`第${handled}题答案未能填涂到页面`, "warning");
+        }
+      } else {
+        failed += 1;
+        const msg = (answerData && answerData.msg) || "查询失败";
+        question.answer = [msg];
+        question.source = "error";
+        try {
+          questionStore.addQuestion(question);
+        } catch (e) {}
+        logStore.addLog(
+          answerData && answerData.code === 403
+            ? `第${handled}题：服务端暂不支持雨课堂（${msg}）`
+            : `第${handled}题搜索失败：${msg}`,
+          "danger",
+        );
+      }
+
+      // 交卷（受「自动提交」开关控制）
+      if (autoSubmit) {
+        const submitted = await ppYktCommitQuestion(exDoc, logStore);
+        if (submitted) {
+          await ppYktConfirmHold(exDoc, logStore);
+          logStore.addLog(`第${handled}题已提交`, "success");
+        }
+      } else {
+        logStore.addLog(`第${handled}题已填好，自动提交已关闭，请自己点提交`, "warning");
+      }
+
+      // 提交后页面可能自己就翻页了，这时候再点「下一题」会跳题
+      const markerNow = ppYktFingerprint(exDoc);
+      if (markerNow && markerNow !== marker) {
+        await delay(0.5);
+        continue;
+      }
+
+      if (!autoSwitch) {
+        logStore.addLog("自动切换已关闭，请手动切换到下一题", "warning");
+        break;
+      }
+      const moved = await ppYktAdvance(exDoc);
+      if (!moved) {
+        logStore.addLog("已到最后一题或切换失败，结束本次作答", "primary");
+        break;
+      }
+      await delay(0.6);
+    }
+
+    progressStore.update({ detail: `本份作业：填涂 ${filled} / 跳过 ${skipped} / 处理 ${handled} / 失败 ${failed}` });
+    logStore.addLog(
+      `本次共处理 ${handled} 题：填涂 ${filled}、跳过 ${skipped}（已答过）、失败 ${failed}`,
+      filled > 0 ? "success" : "warning",
+    );
+  };
+
+  // ============================================================
+  // 雨课堂 · 考试（changjiang-exam.yuketang.cn）
+  //
+  // 和作业是两个完全不同的应用，实测结构：
+  //   .exam-main--content
+  //     .exercise-item                 ← 题目根（整页 72 道题全部渲染，无分页）
+  //       .item-type                   ← "1.判断题 (1分)"
+  //       .item-body
+  //         h4.clearfix.exam-font      ← 题干（不是 .problem-body！）
+  //         ul[class*="list-unstyled"] li label   ← 选项
+  //           .radioText / .checkboxText          ← 正文（判断题为图标，无文字）
+  //
+  // 与作业的差异：
+  //   - 没有字体加密（.xuetangx-com-encrypted-font 恒为 0），不需要解密
+  //   - 没有逐题提交，交卷是顶部全局按钮，且顶部有计时器
+  //   ⇒ **只填答案，绝不自动交卷**
+  // ============================================================
+  const PP_YKT_EXAM = {
+    item: ".exercise-item",
+    typeLabel: ".item-type",
+    stem: "h4",
+    options: "label",
+  };
+
+  const useYktExamLogic = async () => {
+    if (window.__ppYktExamBusy) return;
+    window.__ppYktExamBusy = true;
+    const logStore = useLogStore();
+    const progressStore = useProgressStore();
+    const questionStore = useQuestionStore();
+    try {
+      const items = Array.from(document.querySelectorAll(PP_YKT_EXAM.item));
+      if (!items.length) {
+        logStore.addLog("未识别到考试题目，请等页面加载完后刷新重试", "warning");
+        return;
+      }
+      logStore.addLog(`检测到雨课堂考试，共 ${items.length} 道题，开始自动作答`, "primary");
+      logStore.addLog("⚠️ 考试页面不允许自动交卷，只填答案，交卷请自己确认", "warning");
+
+      const skipAnswered = readYktParam(PP_KEY.ANSWER, PP_KEY.SKIP_ANSWERED, true);
+
+      let handled = 0;
+      let filled = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        const labels = Array.from(item.querySelectorAll(PP_YKT_EXAM.options));
+        // 跳过已答：受「跳过已答」开关控制
+        if (skipAnswered && ppYktHasAnswer(item, PP_YKT_EXAM.options)) {
+          skipped += 1;
+          continue;
+        }
+        const typeCode = ppYktKind((item.querySelector(PP_YKT_EXAM.typeLabel) || {}).textContent);
+        const stem = ppYktFlat((item.querySelector(PP_YKT_EXAM.stem) || {}).textContent).slice(0, 40);
+        handled += 1;
+        progressStore.update({ questionIndex: index + 1, detail: `第 ${index + 1} / ${items.length} 题` });
+        if (!stem) {
+          failed += 1;
+          continue;
+        }
+
+        const question = {
+          element: item,
+          html: item.outerHTML,
+          workType: "ykt",
+          refer: location.href,
+          type: typeCode,
+          title: stem,
+          optionsText: labels.map(ppYktOptionLabel),
+        };
+
+        let answerData = null;
+        try {
+          answerData = await queryAnswer(question);
+        } catch (e) {
+          answerData = null;
+        }
+
+        if (answerData && answerData.code === 200) {
+          const raw = answerData.data && answerData.data.answer;
+          const answers = Array.isArray(raw) ? raw : [raw];
+          const ok = await ppYktWriteAnswers(item, typeCode, answers, PP_YKT_EXAM.options);
+          question.answer = answers;
+          question.source = (answerData.data && answerData.data.source) || "";
+          try {
+            questionStore.addQuestion(question);
+          } catch (e) {}
+          if (ok) {
+            filled += 1;
+            logStore.addLog(`第${index + 1}题已填入${question.source === "ai" ? "（AI）" : ""}`, "success");
+          } else {
+            failed += 1;
+            logStore.addLog(`第${index + 1}题答案未能填入`, "warning");
+          }
+        } else {
+          failed += 1;
+          logStore.addLog(`第${index + 1}题查询失败：${(answerData && answerData.msg) || "未知错误"}`, "danger");
+        }
+        await delay(0.3);
+      }
+
+      progressStore.update({ detail: `本次考试：填涂 ${filled} / 跳过 ${skipped} / 失败 ${failed}` });
+      logStore.addLog(
+        `作答完成：填涂 ${filled}、跳过 ${skipped}（已答过）、失败 ${failed}`,
+        filled > 0 ? "success" : "warning",
+      );
+      logStore.addLog("🔴 请自己检查答案后点右上角「交卷」，脚本不会替你交", "warning");
+    } catch (error) {
+      logStore.addLog(`考试作答出错：${error && error.message ? error.message : error}`, "danger");
+    } finally {
+      window.__ppYktExamBusy = false;
+    }
+  };
+
   const useYktCourseLogic = async () => {
     const logStore = useLogStore();
-    const autoPlay = readYktParam("视频设置", "自动播放", true);
-    const restudy = readYktParam("模式设置", "复习模式", false);
-    const autoComment = readYktParam("任务设置", "自动评论", false);
-    const autoSwitch = readYktParam("任务设置", "自动切换", true);
+    const autoPlay = readYktParam(PP_KEY.VIDEO, "自动播放", true);
+    // 四种模式（与学习通一致）：正常 / 仅视频 / 仅答题 / 复习
+    const yktMode = (() => {
+      const on = (key) => readYktParam(PP_KEY.MODE, key, false);
+      if (on(PP_KEY.ONLY_ANSWER)) return "answer";
+      if (on(PP_KEY.ONLY_VIDEO)) return "video";
+      if (on(PP_KEY.REVIEW)) return "review";
+      return "normal";
+    })();
+    const restudy = yktMode === "review";
+    const wantVideo = yktMode !== "answer";
+    const wantAnswer = yktMode !== "video";
+    const autoComment = readYktParam(PP_KEY.CHAPTER, "自动评论", false);
+    const autoSwitch = readYktParam(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
+    let yktRateWarned = false;
     const readYktMaxRate = () => {
       try {
         const listEl = document.querySelector("xt-speedlist");
@@ -14260,15 +14695,22 @@ const AuthorWords = _sfc_main$4;
       return 2;
     };
     const computeEffectiveRate = () => {
-      const autoRate = readYktParam("视频设置", "自动倍速", false);
-      const breakRate = readYktParam("视频设置", "突破倍速", false);
-      const userRate = Number(readYktParam("视频设置", "播放倍速", 1.5)) || 1;
+      const autoRate = readYktParam(PP_KEY.VIDEO, PP_KEY.AUTO_RATE, false);
+      const breakRate = readYktParam(PP_KEY.VIDEO, PP_KEY.BREAK_RATE, false);
+      const userRate = Number(readYktParam(PP_KEY.VIDEO, PP_KEY.RATE, 1.5)) || 1;
       const menuMax = readYktMaxRate();
       if (autoRate) return menuMax;
       if (breakRate) return Math.min(8, Math.max(1, userRate));
       return Math.min(menuMax, Math.max(1, userRate));
     };
-    const studyTags = autoComment ? ["视频", "讨论"] : ["视频"];
+    const studyTags = [];
+    if (wantVideo) studyTags.push("视频", "图文");
+    if (wantAnswer) studyTags.push("作业");
+    if (autoComment && yktMode !== "answer") studyTags.push("讨论");
+    const yktActiveTag = () => {
+      const active = yktJobs().find((el) => el.classList.contains("is-active"));
+      return active ? yktJobTag(active) : "";
+    };
     if (restudy) {
       logStore.addLog("复习模式：已完成的任务点也会重新学习", "primary");
     }
@@ -14296,6 +14738,47 @@ const AuthorWords = _sfc_main$4;
     await delay(1.5);
     await yktExpandTree();
 
+    // ---- 雨课堂字体解密 ----
+    // 实测结论：雨课堂**每次渲染都会重新生成一份混淆字体和配套密文**
+    // （同一道题刷新三次，@font-face 的 exam_font_<hash>.ttf 换了三个，密文也全变）。
+    // 字形轮廓不变、只有 cmap 重排，所以静态表对任意一份都能 100% 命中。
+    // 因此映射必须按「当前字体 URL」取，且每道题都要重新问一次；
+    // font-decrypt.js 内部按 URL 缓存，命中时是微秒级，没命中才解析（约 14ms）。
+    const yktExerciseDoc = () => {
+      try {
+        const frame = document.querySelector(YKT_SEL.exerciseFrame);
+        return frame && frame.contentDocument ? frame.contentDocument : null;
+      } catch (e) {
+        return null;
+      }
+    };
+    /**
+     * 为「当前这道题」准备好字体映射。
+     * @param {Document} target 题目所在文档
+     * @param {boolean} [quiet] 静默模式（不写日志，供轮询时用）
+     * @returns {Promise<boolean>} 是否就绪
+     */
+    const yktPrepareFont = async (target, quiet) => {
+      if (!target) return false;
+      if (!ppFontDecryptAvailable()) {
+        if (!quiet) logStore.addLog("字体解密库未加载，雨课堂题目将不做解密（不影响其他功能）", "warning");
+        return false;
+      }
+      let hasCipher = false;
+      try {
+        hasCipher = !!target.querySelector(YKT_SEL.encryptedFont);
+      } catch (e) {}
+      if (!hasCipher) return true;
+      const ok = await ppYktPrepareFont(target);
+      if (!quiet) {
+        logStore.addLog(
+          ok ? "字体解密表已就绪，题目内容将按明文上传" : "字体解密表准备失败，题目可能带乱码（不影响提交）",
+          ok ? "success" : "warning",
+        );
+      }
+      return ok;
+    };
+
     const pickNext = () => {
       const list = yktJobs();
       const activeIndex = list.findIndex((el) => el.classList.contains("is-active"));
@@ -14310,6 +14793,9 @@ const AuthorWords = _sfc_main$4;
     };
 
     for (let guard = 0; guard < 200; guard++) {
+      // 作业任务点：按当前字体 URL 准备映射（雨课堂每次都重新生成字体，所以不能只做一次）
+      await yktPrepareFont(yktExerciseDoc() || document, true);
+
       const forum = document.querySelector(YKT_SEL.forum);
       if (forum && autoComment) {
         logStore.addLog("发现任务点：讨论，开始自动评论", "primary");
@@ -14321,6 +14807,14 @@ const AuthorWords = _sfc_main$4;
       } else if (document.querySelector(YKT_SEL.pptSlide)) {
         logStore.addLog("发现任务点：课件，开始自动阅读", "primary");
         await useYktPptRead(logStore);
+      } else if (yktActiveTag() === "图文") {
+        logStore.addLog("发现任务点：图文，已自动打开", "success");
+        await delay(1.2);
+      } else if (wantAnswer && (yktActiveTag() === "作业" || yktExerciseDoc())) {
+        logStore.addLog("发现任务点：作业，开始自动答题", "primary");
+        await useYktHomeworkLogic(yktExerciseDoc(), logStore, (target) => yktPrepareFont(target, true));
+      } else if (!wantVideo) {
+        logStore.addLog("仅答题模式：跳过视频与图文任务", "info");
       } else {
         const media = document.querySelector(YKT_SEL.media);
         if (!media) {
@@ -14331,14 +14825,24 @@ const AuthorWords = _sfc_main$4;
           const active = yktJobs().find((el) => el.classList.contains("is-active"));
           logStore.addLog(`发现任务点：${active ? yktJobTitle(active) : "当前视频"}（视频），开始学习`, "primary");
           const initialRate = computeEffectiveRate();
-          if (readYktParam("视频设置", "自动倍速", false)) {
+          if (readYktParam(PP_KEY.VIDEO, PP_KEY.AUTO_RATE, false)) {
             logStore.addLog(`自动倍速：使用播放器最大倍速 ${initialRate}x`, "info");
-          } else if (readYktParam("视频设置", "突破倍速", false)) {
+          } else if (readYktParam(PP_KEY.VIDEO, PP_KEY.BREAK_RATE, false)) {
             logStore.addLog(`突破倍速：强制 ${initialRate}x（上限 8x）`, "info");
-          } else if (readYktParam("视频设置", "手动倍速", false)) {
+          } else if (readYktParam(PP_KEY.VIDEO, PP_KEY.MANUAL_RATE, false)) {
             logStore.addLog(`手动倍速：${initialRate}x（最大 ${readYktMaxRate()}x）`, "info");
           }
-          const reason = await yktPlayMedia(media, { getRate: computeEffectiveRate, title: (() => { try { const act = yktJobs().find((el) => el.classList.contains("is-active")); return act ? yktJobTitle(act) : ""; } catch (e) { return ""; } })() });
+          if (initialRate > 4 && !yktRateWarned) {
+            yktRateWarned = true;
+            logStore.addLog(`⚠️ 当前倍速 ${initialRate}x 偏高，可能被平台判定异常、学习记录被清空，请谨慎使用`, "warning");
+          }
+          const isDigitalHuman = !!document.querySelector(".digital-human-video-element-selector");
+          const reason = isDigitalHuman
+            ? await yktPlayMediaCalm(media, { getRate: computeEffectiveRate, logStore })
+            : await yktPlayMedia(media, {
+                getRate: computeEffectiveRate,
+                title: (() => { try { const act = yktJobs().find((el) => el.classList.contains("is-active")); return act ? yktJobTitle(act) : ""; } catch (e) { return ""; } })(),
+              });
           logStore.addLog(
             reason === "ended" ? "任务点已完成：视频播放完毕" : reason === "stalled" ? "任务点超时，跳过" : "任务点切换，继续下一节",
             reason === "stalled" ? "warning" : "success",
@@ -14411,9 +14915,6 @@ const AuthorWords = _sfc_main$4;
       logStore.addLog("用户悉知：使用脚本即为完全同意用户协议", "success");
       logStore.addLog("请不要多个脚本同时使用；如果脚本出现异常，请使用谷歌浏览器", "warning");
 
-
-
-
       const useCxPracticeIframeWatcher = () => {
     const logStore = useLogStore();
     const practiceKey = "/page/quiz/stu/answerQuestion2";
@@ -14444,6 +14945,7 @@ const AuthorWords = _sfc_main$4;
   };
 
   const urlLogicPairs = [
+        { keyword: "changjiang-exam.yuketang.cn", logic: useYktExamLogic },
         { keyword: "/v2/web/studentLog", logic: useYktCourseLogic },
         { keyword: "/v2/web/student-lesson-report", logic: useYktCourseLogic },
         { keyword: "/ai-workspace/lms-graph", logic: useYktCourseLogic },
@@ -14461,18 +14963,18 @@ const AuthorWords = _sfc_main$4;
         { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "hike-teaching-center.polymas.com", logic: useZhClassroomStudy },
-        { keyword: "examloop.zhihuishu.com/exam/", logic: useZhExamLoopLogic },
-        { keyword: "studentexamcomh5.zhihuishu.com/studentReviewTestOrExam", logic: useZhSmartAnswerLogic },
-        { keyword: "smartcourseexam.zhihuishu.com/ReviewExam", logic: useZhSmartAnswerLogic },
-        { keyword: "fusioncourseh5.zhihuishu.com/exam", logic: useZhSmartAnswerLogic },
-        { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhSmartAnswerLogic },
-        { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhSmartAnswerLogic },
-        { keyword: "ai-smart-course-student-pro.zhihuishu.com/masteryHistory/", logic: useZhSmartAnswerLogic },
-        { keyword: "ai-smart-course-student-pro.zhihuishu.com/point/", logic: useZhSmartAnswerLogic },
-        { keyword: "smartcoursestudent.zhihuishu.com/masteryHistory/", logic: useZhSmartAnswerLogic },
-        { keyword: "smartcoursestudent.zhihuishu.com/point/", logic: useZhSmartAnswerLogic },
-        { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhSmartAnswerLogic },
-        { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsExamH5Logic },
+        { keyword: "examloop.zhihuishu.com/exam/", logic: useZhsPaperAnswerLogic },
+        { keyword: "studentexamcomh5.zhihuishu.com/studentReviewTestOrExam", logic: useZhsPaperAnswerLogic },
+        { keyword: "smartcourseexam.zhihuishu.com/ReviewExam", logic: useZhsPaperAnswerLogic },
+        { keyword: "fusioncourseh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
+        { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
+        { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
+        { keyword: "ai-smart-course-student-pro.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
+        { keyword: "ai-smart-course-student-pro.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
+        { keyword: "smartcoursestudent.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
+        { keyword: "smartcoursestudent.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
+        { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhsPaperAnswerLogic },
+        { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsPaperAnswerLogic },
         { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },
         { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },
         { keyword: "exam/preview", logic: useCxExamPreviewLogic },
@@ -15427,10 +15929,6 @@ const AuthorWords = _sfc_main$4;
     shadow.appendChild(styleEl2);
   };
 
-
-
-
-
   const hookWebpack = () => {
     let originCall = _unsafeWindow.Function.prototype.call;
     _unsafeWindow.Function.prototype.call = function(...args) {
@@ -15616,7 +16114,6 @@ const AuthorWords = _sfc_main$4;
   };
   const url = _unsafeWindow.location.href;
 
-
   if (window.self === window.top) {
     window.addEventListener('message', (event) => {
       if (event.data?.source === 'chaoxing-helper-iframe' && event.data.action === 'closePanel') {
@@ -15632,12 +16129,8 @@ const AuthorWords = _sfc_main$4;
     hookAttachShadow();
     hookOriginFunction();
     installZhsPageBridge();
+    installZhPaperProbe();
   }
-
-
-
-
-
 
   const timer = setInterval(async () => {
     if (document.readyState !== "loading") {
@@ -15662,7 +16155,6 @@ const AuthorWords = _sfc_main$4;
           return app2;
         })()
       );
-
 
       (() => {
         const PPFX_MEDIA_MISS_SLOW = 6;
@@ -15814,7 +16306,6 @@ const AuthorWords = _sfc_main$4;
       setTimeout(() => {
         checkServerNotice();
       }, 500);
-
 
       window.addEventListener('beforeunload', () => {
         if (_urlWatcherInterval) {
