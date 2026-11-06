@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.2
+// @version      4.0.3
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -753,7 +753,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
   'use strict';
 
-  // 平台参数名集中定义：配置项定义端与读取端共用，改名只需改这里
   const PP_KEY = {
     ANSWER: "答题参数",
     MODE: "模式设置",
@@ -1058,7 +1057,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   let globalModelConfig = null;
   let globalPollInterval = 1000;
 
-  // 统一的 GET 请求封装（GM_xmlhttpRequest → Promise），path 不带域名
   const ppHttpGet = (path, timeout = 5000) => new Promise((resolve, reject) => {
     _GM_xmlhttpRequest({
       method: "GET",
@@ -1731,7 +1729,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   zhsParts.unshift(modePart);
                 }
                 if (!Array.isArray(modePart.params)) modePart.params = [];
-                // 老配置里只有一个「答题」开关，先把它翻译成「仅视频」，再补全四模式
                 const legacyAnswer = modePart.params.find((p) => p.name === "答题");
                 if (legacyAnswer) {
                   const legacyOn = legacyAnswer.value !== false;
@@ -1869,7 +1866,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             if (globalConfig.platformParams && !globalConfig.platformParams.ykt) {
               globalConfig.platformParams.ykt = defaultConfig.platformParams.ykt;
             }
-            // 「章节/作业/测验设置」改名为「章节/习题设置」：老配置里改掉名字，保住用户设置
             const LEGACY_CHAPTER_NAME = "章节/作业/测验设置";
             if (globalConfig.platformParams) {
               Object.keys(globalConfig.platformParams).forEach((key) => {
@@ -1880,8 +1876,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 });
               });
             }
-            // 雨课堂配置按学习通的分类对齐（模式设置 / 视频设置 / 答题参数 / 章节·习题设置）。
-            // 老配置里「自动提交」在答题参数、「自动切换」在任务设置，这里搬过去并保留用户已设的值。
             if (globalConfig.platformParams && globalConfig.platformParams.ykt) {
               const yktCfg = globalConfig.platformParams.ykt;
               if (!Array.isArray(yktCfg.parts)) {
@@ -1889,8 +1883,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               } else {
                 const parts = yktCfg.parts;
                 const findPart = (name) => parts.find(p => p && p.name === name);
-                // 老配置只有「仅视频 / 复习」两个模式，补上「正常 / 仅答题」时不能把用户
-                // 原来的选择顶掉：先记下有没有「正常模式」这个参数，没有就是老配置。
                 const modePartBefore = findPart(PP_KEY.MODE);
                 const hadNormalMode = !!(
                   modePartBefore &&
@@ -1906,11 +1898,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   part.params.splice(idx, 1);
                   return value;
                 };
-                // 先把老位置上的值取出来（会从原数组里摘掉）
                 const legacyAutoSubmit = takeParam(PP_KEY.ANSWER, "自动提交");
                 const legacyAutoSwitch = takeParam(PP_KEY.TASK_SETTINGS, PP_KEY.AUTO_NEXT);
                 const legacyAutoComment = takeParam(PP_KEY.TASK_SETTINGS, "自动评论");
-                // 补齐缺失的组**和组里缺失的参数**（只补组不够：章节组改名后已存在，新参数加不进去）
                 defaultConfig.platformParams.ykt.parts.forEach((defPart) => {
                   const part = findPart(defPart.name);
                   if (!part) {
@@ -1923,7 +1913,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                       part.params.push(JSON.parse(JSON.stringify(defParam)));
                     }
                   });
-                  // 组内参数顺序也和默认对齐
                   const paramOrder = defPart.params.map(x => x.name);
                   part.params.sort((a, b) => {
                     const ia = paramOrder.indexOf(a && a.name);
@@ -1931,7 +1920,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
                   });
                 });
-                // 回填到新位置
                 const putValue = (partName, paramName, value) => {
                   if (value === undefined) return;
                   const part = findPart(partName);
@@ -1942,8 +1930,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 putValue(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, legacyAutoSubmit);
                 putValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, legacyAutoSwitch);
                 putValue(PP_KEY.CHAPTER, "自动评论", legacyAutoComment);
-                // 老配置补进「正常模式」后，会和原来的「仅视频 / 复习」同时选中，
-                // 这里保证只有一个模式生效：有旧选择就保留旧的，没有才用正常模式。
                 if (!hadNormalMode) {
                   const modePart = findPart(PP_KEY.MODE);
                   if (modePart && Array.isArray(modePart.params)) {
@@ -1968,12 +1954,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     }
                   }
                 }
-                // 「任务设置」已并入「章节/习题设置」，空了就整组删掉
                 const taskIdx = parts.findIndex(p => p && p.name === PP_KEY.TASK_SETTINGS);
                 if (taskIdx >= 0 && (!parts[taskIdx].params || !parts[taskIdx].params.length)) {
                   parts.splice(taskIdx, 1);
                 }
-                // 老配置的分组顺序可能和学习通不一致，按默认顺序重排（未知分组留在最后）
                 const order = defaultConfig.platformParams.ykt.parts.map(p => p.name);
                 parts.sort((a, b) => {
                   const ia = order.indexOf(a && a.name);
@@ -2947,7 +2931,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
       const hasParam = (part, name) => part.params.some((p) => p.name === name);
       const getParam = (part, name) => part.params.find((p) => p.name === name);
-      // 从播放器「倍速」菜单里读出平台允许的最高倍速并缓存
       const readMaxPlaybackRate = () => {
         let maxRate = window.__maxPlaybackRate;
         if (!maxRate) {
@@ -3658,7 +3641,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const isTokenValid = (value) => /^\d{16}$|^\d{24}$/.test(String(value || "").trim());
 
       const pad2 = (n) => n < 10 ? "0" + n : "" + n;
-      // mode: "datetime" | "date" | "clock"
       const formatTs = (ts, mode) => {
         const num = Number(ts);
         if (!num) return mode === "clock" ? "" : "-";
@@ -6094,12 +6076,6 @@ const AuthorWords = _sfc_main$4;
     return out;
   }
 
-  // ============================================================
-  // 字体解密库适配层（font-decrypt.js，通过 @require 预加载）
-  //
-  // 库负责：学习通 / 雨课堂 两套字形指纹算法 + 两张完整对照表（全部内嵌）。
-  // 主脚本只调用它，本文件内不再保留任何解密实现。
-  // ============================================================
   const ppGetFontDecrypt = () => {
     try {
       if (typeof _unsafeWindow !== "undefined" && _unsafeWindow.FontDecrypt) return _unsafeWindow.FontDecrypt;
@@ -6114,14 +6090,12 @@ const AuthorWords = _sfc_main$4;
     return !!(lib && typeof lib.cxDecode === "function" && typeof lib.yktPrepare === "function");
   };
 
-  /** 学习通：解密统一交给 font-decrypt.js */
   const decodeCipherFontSafe = (doc) => {
     const lib = ppGetFontDecrypt();
     if (!lib || typeof lib.cxDecode !== "function") return;
     return lib.cxDecode(doc);
   };
 
-  /** 雨课堂：预热字体对照表（异步，一次即可）。返回是否就绪 */
   const ppYktPrepareFont = async (doc) => {
     const lib = ppGetFontDecrypt();
     if (!lib || typeof lib.yktPrepare !== "function") return false;
@@ -6133,13 +6107,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  /**
-   * 发题目给服务端之前的统一解密入口。
-   * 在克隆体上解密，原 DOM 一个字节不动。
-   * @param {Element} el 题目根元素
-   * @param {"cx"|"ykt"} platform
-   * @returns {Element} 解密后的克隆体；库不可用时返回原元素
-   */
   const ppDecryptQuestionClone = (el, platform) => {
     const lib = ppGetFontDecrypt();
     if (!lib || typeof lib.cloneDecrypted !== "function") return el;
@@ -6202,7 +6169,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // 题型名 → 题库 type 码：超星隐藏字段按题型名精确匹配，智慧树题面文案再走关键字兜底
   const PP_TYPE_CODE_MAP = new Map([
     ["单选题", "0"], ["A1型题", "0"], ["A1A2型题", "0"],
     ["多选题", "1"], ["X型题", "1"],
@@ -6215,7 +6181,6 @@ const AuthorWords = _sfc_main$4;
     ["排序题", "13"],
     ["连线题", "11"]
   ]);
-  // 题面文案里的常见别名（「多项选择」「是非题」等）
   const PP_TYPE_CODE_ALIASES = [
     [/多选|多项/, "1"],
     [/判断|是非/, "3"],
@@ -6226,9 +6191,6 @@ const AuthorWords = _sfc_main$4;
     [/计算/, "7"],
     [/单选|单项/, "0"]
   ];
-  // 智慧树题面文案 → type 码；只取 0-7，避免把程序题/写作题等超星专有类型带进智慧树
-  // 题型标签经常和题干拼在一起（「4. 单选题 商品零售物价指数的计算中…」），
-  // 所以按出现位置取最靠前的题型词：题干里的「计算」「填空」不会再抢在「单选题」前面
   const ppTypeCodeOf = (label) => {
     const text = String(label == null ? "" : label).trim();
     const exact = PP_TYPE_CODE_MAP.get(text);
@@ -6242,7 +6204,6 @@ const AuthorWords = _sfc_main$4;
     return hit ? hit.code : "999";
   };
 
-  // 选择题选项「已作答」标记：超星 zj/zy 与智慧树共用同一组 DOM 特征
   const ppOptionLooksSelected = (optEl) => {
     if (!optEl) return false;
     if (optEl.getAttribute("aria-checked") === "true") return true;
@@ -11732,7 +11693,6 @@ const AuthorWords = _sfc_main$4;
     return matched ? parseInt(matched[1], 10) : 0;
   };
 
-  // 智慧树题型文案 → 题库 type 码，H5 / examloop / 新形态三套页面共用
   const ppZhTypeCodeOf = (label) => ppTypeCodeOf(label);
 
   const ppZhH5TypeCode = (root) => {
@@ -11847,9 +11807,6 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  // 智慧树三条答题流程（examloop / 新形态·掌握度 / H5）共用同一个引擎：
-  // 引擎负责「查答案 → 填涂 → 记录 → 下一题 → 汇总」和统一日志，
-  // 各页面只提供 DOM 适配器（找题根、读题干、读选项、判断已选、点击、下一题）。
   const zhAnswerFlow = async (cfg) => {
     if (window[cfg.busyKey]) return;
     window[cfg.busyKey] = true;
@@ -11978,7 +11935,6 @@ const AuthorWords = _sfc_main$4;
             }
           } else {
             failed += 1;
-            // 选择题填不上通常是「答案和选项对不上」，别一律报成「找不到填涂区域」，否则会误判成 DOM 问题
             const isChoice = typeCode === "0" || typeCode === "1" || typeCode === "3";
             const reason = isChoice
               ? (answers.length ? "答案与页面选项对不上" : "未返回答案")
@@ -12009,13 +11965,9 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // ===== 智慧树答题：接口探针 =====
-  // 平台接口里的题型、题数、选项正文最准（选项天然不带 A/B 角标），DOM 只负责定位元素；
-  // 接口没抓到就退回页面文案，两层兜底。
   const ZH_PAPER_API_TAGS = ["getExamSheetInfo", "getExamQuestionInfo"];
   const ZH_PAPER_CACHE_KEY = "__ppZhPaperCache";
   const ZH_PAPER_CACHE_LIMIT = 24;
-  // 平台题型码 → 题库 type 码：1 单选 / 2 多选 / 3 判断 / 4 填空 / 5 简答 / 14 判断
   const ZH_PAPER_TYPE_CODES = { 1: "0", 2: "1", 3: "3", 4: "2", 5: "4", 14: "3" };
 
   const ppZhPaperCache = () => {
@@ -12031,12 +11983,10 @@ const AuthorWords = _sfc_main$4;
 
   const ppZhApiText = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
 
-  // 题干指纹：去掉标点和空白再比，页面与接口的全半角/换行差异不会影响命中
   const ppZhApiKey = (value) => ppZhApiText(value)
     .replace(/[\s，。！？；：、（）【】《》〈〉「」『』,.:;!?'"()[\]<>·…—-]/g, "")
     .toLowerCase();
 
-  // 试卷题数：接口直接给 questionCount，分部结构按分部累加
   const ppZhSheetTotalOf = (payload) => {
     if (!payload || typeof payload !== "object") return 0;
     const direct = Number(payload.questionCount);
@@ -12056,7 +12006,6 @@ const AuthorWords = _sfc_main$4;
     return sum;
   };
 
-  // 接口选项正文：按 sort 排好取正文，顺手剥掉可能自带的字母前缀
   const ppZhApiOptionsOf = (payload) => {
     if (!payload || typeof payload !== "object") return [];
     const list = payload.optionVos || payload.questionOptions || payload.optionList || payload.options;
@@ -12073,7 +12022,6 @@ const AuthorWords = _sfc_main$4;
       .filter(Boolean);
   };
 
-  // 接口题型：先认中文题型名，再认平台数字码
   const ppZhApiTypeCodeOf = (info) => {
     if (!info) return "";
     const byName = ppTypeCodeOf(info.typeName || "");
@@ -12082,7 +12030,6 @@ const AuthorWords = _sfc_main$4;
     return code || "";
   };
 
-  // 收下接口响应：试卷信息只留题数，题目信息按题干指纹缓存
   const ppZhTakePaperPayload = (address, text) => {
     if (!text) return;
     let raw = null;
@@ -12115,7 +12062,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // 在页面主世界挂 fetch / XHR 探针，只认这两个接口，其它请求原样放行
   const installZhPaperProbe = () => {
     const win = _unsafeWindow || window;
     if (!win || win.__ppZhPaperProbe) return;
@@ -12187,7 +12133,6 @@ const AuthorWords = _sfc_main$4;
     return total > 0 ? total : 0;
   };
 
-  // ===== 智慧树答题：页面档案 =====
   const zhPaperClean = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
 
   const zhPaperTextOf = (scope, selectors) => {
@@ -12210,7 +12155,6 @@ const AuthorWords = _sfc_main$4;
     .filter((text) => /^\d+$/.test(text))
     .map((text) => Number(text));
 
-  // 答题卡「第 1 题」按钮：优先答题卡网格，其次整页里 3 个以上数字按钮中的 1
   const zhPaperFirstCard = () => {
     let grid = null;
     try { grid = document.querySelector(".grid.grid-cols-7 > button"); } catch (e) { grid = null; }
@@ -12220,7 +12164,6 @@ const AuthorWords = _sfc_main$4;
     return buttons.find((btn) => zhPaperClean(btn.textContent) === "1") || null;
   };
 
-  // 正式考试页先归位到第 1 题，保证答题卡顺序、接口顺序和页面顺序一致
   const zhPaperJumpToFirst = async () => {
     const btn = zhPaperFirstCard();
     if (!btn) return;
@@ -12234,7 +12177,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // 选项「已选」判定：覆盖 element-ui、原生 radio/checkbox、新形态 tailwind 三套标记
   const zhPaperPicked = (node) => {
     try {
       if (!node) return false;
@@ -12256,7 +12198,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // 点选项：先 click，状态没变化再补一发 MouseEvent
   const zhPaperPress = async (node) => {
     if (!node) return false;
     try { node.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) {}
@@ -12269,7 +12210,6 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
-  // 翻页：档案给的按钮优先，没有就找文案含「下一题」的按钮；点完等题干变化
   const zhPaperGoNext = async (profile) => {
     let btn = null;
     try { btn = profile && profile.nextButton ? profile.nextButton() : null; } catch (e) { btn = null; }
@@ -12288,7 +12228,6 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  // 新形态考试（examloop）的题干候选，从精确到宽泛
   const ZH_EXAMLOOP_STEM = [
     "div.flex-1 .mb-\\[32px\\] .text-mainText.font-medium",
     ".text-mainText.font-medium",
@@ -12337,7 +12276,6 @@ const AuthorWords = _sfc_main$4;
     return zhPaperClean((span || label).textContent);
   };
 
-  // 答题卡题号状态：已作答 / 当前 / 空
   const zhExamLoopCardState = (number) => {
     try {
       const key = String(number || "").trim();
@@ -12353,7 +12291,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // 页面档案：只描述「怎么找、怎么读、怎么翻页」，流程统一交给 zhAnswerFlow
   const ZH_PAPER_PROFILES = [
     {
       id: "examloop",
@@ -12429,9 +12366,6 @@ const AuthorWords = _sfc_main$4;
     }
   ];
 
-  // ===== 智慧树答题：统一入口 =====
-  // 八套答题页（新形态考试/作业考试/掌握度/H5 作业考试/AI掌握度）共用这一条流程，
-  // 页面差异全部收敛到上面的档案里，不再按 URL 分叉。
   const useZhsPaperAnswerLogic = async () => {
     installZhPaperProbe();
     if (window.__ppZhPaperBusy) return;
@@ -12455,7 +12389,6 @@ const AuthorWords = _sfc_main$4;
       return null;
     };
 
-    // 先等题根出来；正式考试页再归位到第 1 题。仅视频模式不动页面。
     if (zhStudyTuning().answerOn) {
       const startedAt = Date.now();
       while (Date.now() - startedAt < 30000 && !findRoot()) await afkWait(250);
@@ -12467,7 +12400,6 @@ const AuthorWords = _sfc_main$4;
 
     const scopeOf = (root) => (profile && profile.scope ? profile.scope(root) : root);
 
-    // 接口信息按当前题干取，取不到就交给 DOM 兜底
     const rememberApi = (root) => {
       const scope = scopeOf(root);
       const stem = profile && scope ? profile.stem(scope) : "";
@@ -12669,11 +12601,9 @@ const AuthorWords = _sfc_main$4;
     lastAdvanceAt: 0,
     quizSignature: "",
     booted: false,
-    // 复习模式：本轮已重刷过的节点（按「档案 + 节点标题」记，刷新页面会重置）
     restudy: new Set()
   };
 
-  // 复习模式的节点标记：优先用节点标题，标题取不到时退回列表下标
   const zhRestudyKey = (stage, el, list) => {
     const text = zhTxtOf(el, "").slice(0, 80);
     if (text) return `${stage.id}|${text}`;
@@ -12688,9 +12618,6 @@ const AuthorWords = _sfc_main$4;
     zhRuntime.restudy.clear();
   };
 
-  // 视频播完后的统一处理：
-  //   已完成 → 复习模式先回到 0 重刷一遍，刷过之后再切走；正常模式直接切走
-  //   未完成 → 回到开头补齐时长（平台按实际观看时长计分）
   const zhResolveEnded = (stage, tune, log, media, current, done, options) => {
     const opts = options || {};
     const list = opts.list || (typeof stage.chapters === "function" ? stage.chapters() : []);
@@ -12734,7 +12661,6 @@ const AuthorWords = _sfc_main$4;
       }
     };
     const speedRaw = Number(readParam(ZH_STUDY_PART, PP_KEY.RATE, zhSpeedCeiling())) || zhSpeedCeiling();
-    // 四种模式（与学习通一致）：正常 / 仅视频 / 仅答题 / 复习
     const mode = (() => {
       const on = (key) => readParam(PP_KEY.MODE, key, false) === true;
       if (on(PP_KEY.ONLY_ANSWER)) return "answer";
@@ -13185,7 +13111,6 @@ const AuthorWords = _sfc_main$4;
         return false;
       }
       const current = this.current();
-      // 复习模式：离开这一节就算刷过，保证一轮能走完、不会来回打转
       if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
       const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
@@ -13431,7 +13356,6 @@ const AuthorWords = _sfc_main$4;
         ? cards.filter((card) => !zhRestudySeen(this, card, cards))
         : cards.filter((card) => !zhCardDone(card));
       if (pending.length) {
-        // 复习模式：离开当前资源就算刷过，保证一轮能走完
         if (tune.restudy && activeCard) zhRestudyMark(this, activeCard, cards);
         const after = pending.find((card) => cards.indexOf(card) > activeIndex);
         const target = after || pending[0];
@@ -13590,7 +13514,6 @@ const AuthorWords = _sfc_main$4;
   const ZH_CLASSROOM_STAGES = [zhStageLegacyShare, zhStageNewShare, zhStageCard, zhStageWisdomMooc, zhStagePractice];
 
   const zhStageLooksDone = (stage, tune) => {
-    // 复习模式：已完成也当作没完成，交给各档案的 step 从 0 重刷一遍
     if (tune && tune.restudy) return false;
     try {
       if (stage.id === "practice") {
@@ -13813,7 +13736,6 @@ const AuthorWords = _sfc_main$4;
     };
     forceMediaRate(media, currentRate);
     try { media.loop = false; } catch (e) {}
-    // 默认静音，不强制：只按一次，用户自己开声音不会被改回来
     ppMuteOnce(media);
     const verifyRate = () => {
       try {
@@ -13873,13 +13795,6 @@ const AuthorWords = _sfc_main$4;
       .catch(() => {});
   });
 
-  /**
-   * 数字人视频专用：温和播放。
-   *
-   * 数字人播放器是自定义组件，自带一套控制逻辑。每秒强推倍速/静音会跟它打架，
-   * 轻则被它改回去，重则打断加载。所以这里只在开始时设一次，
-   * 之后只管「别让它停」和「播完就收工」，不做倍速强制、也不判卡顿超时。
-   */
   const yktPlayMediaCalm = (media, opts) => new Promise((resolve) => {
     let settled = false;
     let ticker = null;
@@ -13903,7 +13818,6 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {}
     try { media.currentTime = 1; } catch (e) {}
     try { media.playbackRate = rate; } catch (e) {}
-    // 默认静音，不强制：只按一次
     ppMuteOnce(media);
     media.onended = () => finish("ended");
     media.onpause = () => {
@@ -13973,22 +13887,6 @@ const AuthorWords = _sfc_main$4;
     return switched;
   };
 
-  // ============================================================
-  // 雨课堂 · 作业自动答题
-  //
-  // 题目在 `.lms-graph-exercise iframe#iframeExerciseId` 里，实测结构：
-  //   .container-problem .subject-item         当前题（同时刻只有 1 个）
-  //   .item-type                               题型，文本形如 "1.多选题 (2分)"
-  //   .problem-body                            题干
-  //   ul[class*="list-unstyled"] li label      选项（多选 el-checkbox / 判断 el-radio）
-  //     .checkboxText / .radioText             选项正文（判断题没有，只有 svg 图标）
-  //     input[value="A"|"true"|"false"]        选项值，判断题靠 true/false 区分对错
-  //   .problem-box button.el-button--primary   提交按钮（未选时 disabled）
-  //   .problems-aside .subject-item.J_order    左侧题目导航
-  //
-  // 字体：雨课堂每次渲染都会换一份 exam_font_<hash>.ttf 和配套密文，
-  // 所以**每道题**都要重新读 @font-face 重建映射（库内按 URL 缓存）。
-  // ============================================================
   const PP_YKT_WORK = {
     item: ".container-problem .subject-item",
     typeLabel: ".item-type",
@@ -14005,7 +13903,6 @@ const AuthorWords = _sfc_main$4;
 
   const ppYktFlat = (value) => String(value == null ? "" : value).replace(/\s+/g, " ").trim();
 
-  /** `.item-type` 文本 → 题型码 */
   const ppYktKind = (text) => {
     const t = String(text || "");
     if (/多选|多项选择|不定项/.test(t)) return "1";
@@ -14016,7 +13913,6 @@ const AuthorWords = _sfc_main$4;
     return "";
   };
 
-  /** 选项正文：判断题没有文字，按 input 的 true/false 归一成 对/错 */
   const ppYktOptionLabel = (label) => {
     try {
       const input = label.querySelector("input");
@@ -14059,10 +13955,6 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
-  /**
-   * 这道题是不是已经答过了（用于「跳过已答」开关）。
-   * 选项被勾上、输入框有内容、富文本有内容，任意一条成立即视为已答。
-   */
   const ppYktHasAnswer = (item, optionSelector) => {
     try {
       const sel = optionSelector || PP_YKT_WORK.options;
@@ -14082,11 +13974,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  /**
-   * 页面顶部常驻提醒条（不自动消失，关掉/解决后调用返回的函数移除）。
-   * 自绘 DOM，不依赖任何 UI 库的样式表，保证在最外层窗口可见。
-   * @returns {Function} 移除函数
-   */
   const ppYktLoudHint = (text, tone) => {
     let node = null;
     try {
@@ -14131,7 +14018,6 @@ const AuthorWords = _sfc_main$4;
     };
   };
 
-  /** 桌面通知：标签页在后台时也能看见；用户没授权就安静跳过 */
   const ppYktDeskPing = (title, body) => {
     try {
       if (typeof Notification === "undefined") return;
@@ -14151,7 +14037,6 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {}
   };
 
-  /** 风控验证码：出现就弹提醒、等人，消失就继续 */
   const ppYktChallengeHold = async (doc, logStore, timeoutMs = 180000) => {
     const find = () => {
       try {
@@ -14185,10 +14070,7 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  /** 未保存答案 / 批量提交确认弹窗：出现就等人 */
   const ppYktConfirmHold = async (doc, logStore, timeoutMs = 120000) => {
-    // 两个弹窗在雨课堂里是常驻 DOM 的（隐藏时 wrapper 是 display:none、高度 0），
-    // 所以必须同时看「计算样式」和「实际尺寸」，否则会把自己卡死。
     const find = () => {
       try {
         const list = Array.from(doc.querySelectorAll(PP_YKT_WORK.dialogs));
@@ -14229,7 +14111,6 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  /** 按题型把答案写进页面，成功返回 true */
   const ppYktWriteAnswers = async (item, typeCode, answers, optionSelector) => {
     const list = Array.from(item.querySelectorAll(optionSelector || PP_YKT_WORK.options))
       .map((el) => ({ el, text: ppYktOptionLabel(el) }))
@@ -14254,7 +14135,6 @@ const AuthorWords = _sfc_main$4;
       return true;
     }
 
-    // 填空 / 简答：按顺序写输入框，富文本编辑器单独处理
     const texts = answers.map((a) => String(a == null ? "" : a).replace(/<[^>]+>/g, "").trim());
     const fields = [
       ...Array.from(item.querySelectorAll(PP_YKT_WORK.blankInput)),
@@ -14276,7 +14156,6 @@ const AuthorWords = _sfc_main$4;
       } catch (e) {}
     });
 
-    // 富文本（UEditor）：优先走 UE 官方 API，失败再直接写 iframe body
     const frames = Array.from(item.querySelectorAll(PP_YKT_WORK.ueditor));
     frames.forEach((frame, index) => {
       const text = texts[index] == null ? texts[0] : texts[index];
@@ -14287,10 +14166,6 @@ const AuthorWords = _sfc_main$4;
     return written > 0;
   };
 
-  /**
-   * 填 UEditor 富文本（简答/问答题）。
-   * 先试 UE 官方 API（能触发它的 change 记录），拿不到再直接写 iframe body。
-   */
   const ppYktWriteRichText = (frame, answer) => {
     const html = `<p>${String(answer)
       .trim()
@@ -14324,7 +14199,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  /** 挡在导航项上的完成标记（提交成功后会打上） */
   const ppYktNavFinished = (navEl) => {
     if (!navEl) return false;
     try {
@@ -14336,10 +14210,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  /**
-   * 点提交并**验证真的提交成功**（照 OCS 的做法）：
-   * 点完之后轮询左侧导航出现完成标记，没出现就再点一次，最多两轮。
-   */
   const ppYktCommitQuestion = async (doc, logStore) => {
     const activeNav = () => {
       const nav = Array.from(doc.querySelectorAll(PP_YKT_WORK.navItem));
@@ -14368,7 +14238,6 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  /** 当前题的稳定标识：题型 + 题干前 60 字（用来判断有没有换题） */
   const ppYktFingerprint = (doc) => {
     try {
       const cur = doc.querySelector(PP_YKT_WORK.item);
@@ -14381,7 +14250,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  /** 切到下一题，成功返回 true */
   const ppYktAdvance = async (doc) => {
     const before = ppYktFingerprint(doc);
     const nav = Array.from(doc.querySelectorAll(PP_YKT_WORK.navItem));
@@ -14402,11 +14270,6 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  /**
-   * 作业答题主循环。
-   * @param {Document} exDoc 题目 iframe 的 document
-   * @param {Function} prepareFont 每道题都要调一次，用于重建当前字体映射
-   */
   const useYktHomeworkLogic = async (exDoc, logStore, prepareFont) => {
     if (!exDoc) {
       logStore.addLog("未找到作业题目区域，请手动点开作业后重试", "warning");
@@ -14434,7 +14297,6 @@ const AuthorWords = _sfc_main$4;
         break;
       }
 
-      // 每道题都重建映射：雨课堂每次渲染都换字体
       if (prepareFont) await prepareFont(exDoc);
 
       const marker = ppYktFingerprint(exDoc);
@@ -14443,7 +14305,6 @@ const AuthorWords = _sfc_main$4;
       progressStore.update({ questionIndex: handled, detail: `第 ${handled} 题` });
       logStore.addLog(`第${handled}题（${stem || "未识别题干"}）`, "info");
 
-      // 跳过已答：用户自己做过的不覆盖
       if (skipAnswered && ppYktHasAnswer(item)) {
         skipped += 1;
         logStore.addLog(`第${handled}题已作答，跳过`, "warning");
@@ -14454,7 +14315,6 @@ const AuthorWords = _sfc_main$4;
         continue;
       }
 
-      // 抓题：克隆 + 解密，原 DOM 不动
       let html = item.outerHTML;
       try {
         const clone = ppDecryptQuestionClone(item, "ykt");
@@ -14515,7 +14375,6 @@ const AuthorWords = _sfc_main$4;
         );
       }
 
-      // 交卷（受「自动提交」开关控制）
       if (autoSubmit) {
         const submitted = await ppYktCommitQuestion(exDoc, logStore);
         if (submitted) {
@@ -14526,7 +14385,6 @@ const AuthorWords = _sfc_main$4;
         logStore.addLog(`第${handled}题已填好，自动提交已关闭，请自己点提交`, "warning");
       }
 
-      // 提交后页面可能自己就翻页了，这时候再点「下一题」会跳题
       const markerNow = ppYktFingerprint(exDoc);
       if (markerNow && markerNow !== marker) {
         await delay(0.5);
@@ -14552,23 +14410,6 @@ const AuthorWords = _sfc_main$4;
     );
   };
 
-  // ============================================================
-  // 雨课堂 · 考试（changjiang-exam.yuketang.cn）
-  //
-  // 和作业是两个完全不同的应用，实测结构：
-  //   .exam-main--content
-  //     .exercise-item                 ← 题目根（整页 72 道题全部渲染，无分页）
-  //       .item-type                   ← "1.判断题 (1分)"
-  //       .item-body
-  //         h4.clearfix.exam-font      ← 题干（不是 .problem-body！）
-  //         ul[class*="list-unstyled"] li label   ← 选项
-  //           .radioText / .checkboxText          ← 正文（判断题为图标，无文字）
-  //
-  // 与作业的差异：
-  //   - 没有字体加密（.xuetangx-com-encrypted-font 恒为 0），不需要解密
-  //   - 没有逐题提交，交卷是顶部全局按钮，且顶部有计时器
-  //   ⇒ **只填答案，绝不自动交卷**
-  // ============================================================
   const PP_YKT_EXAM = {
     item: ".exercise-item",
     typeLabel: ".item-type",
@@ -14601,7 +14442,6 @@ const AuthorWords = _sfc_main$4;
       for (let index = 0; index < items.length; index += 1) {
         const item = items[index];
         const labels = Array.from(item.querySelectorAll(PP_YKT_EXAM.options));
-        // 跳过已答：受「跳过已答」开关控制
         if (skipAnswered && ppYktHasAnswer(item, PP_YKT_EXAM.options)) {
           skipped += 1;
           continue;
@@ -14671,7 +14511,6 @@ const AuthorWords = _sfc_main$4;
   const useYktCourseLogic = async () => {
     const logStore = useLogStore();
     const autoPlay = readYktParam(PP_KEY.VIDEO, "自动播放", true);
-    // 四种模式（与学习通一致）：正常 / 仅视频 / 仅答题 / 复习
     const yktMode = (() => {
       const on = (key) => readYktParam(PP_KEY.MODE, key, false);
       if (on(PP_KEY.ONLY_ANSWER)) return "answer";
@@ -14738,12 +14577,6 @@ const AuthorWords = _sfc_main$4;
     await delay(1.5);
     await yktExpandTree();
 
-    // ---- 雨课堂字体解密 ----
-    // 实测结论：雨课堂**每次渲染都会重新生成一份混淆字体和配套密文**
-    // （同一道题刷新三次，@font-face 的 exam_font_<hash>.ttf 换了三个，密文也全变）。
-    // 字形轮廓不变、只有 cmap 重排，所以静态表对任意一份都能 100% 命中。
-    // 因此映射必须按「当前字体 URL」取，且每道题都要重新问一次；
-    // font-decrypt.js 内部按 URL 缓存，命中时是微秒级，没命中才解析（约 14ms）。
     const yktExerciseDoc = () => {
       try {
         const frame = document.querySelector(YKT_SEL.exerciseFrame);
@@ -14752,12 +14585,6 @@ const AuthorWords = _sfc_main$4;
         return null;
       }
     };
-    /**
-     * 为「当前这道题」准备好字体映射。
-     * @param {Document} target 题目所在文档
-     * @param {boolean} [quiet] 静默模式（不写日志，供轮询时用）
-     * @returns {Promise<boolean>} 是否就绪
-     */
     const yktPrepareFont = async (target, quiet) => {
       if (!target) return false;
       if (!ppFontDecryptAvailable()) {
@@ -14793,7 +14620,6 @@ const AuthorWords = _sfc_main$4;
     };
 
     for (let guard = 0; guard < 200; guard++) {
-      // 作业任务点：按当前字体 URL 准备映射（雨课堂每次都重新生成字体，所以不能只做一次）
       await yktPrepareFont(yktExerciseDoc() || document, true);
 
       const forum = document.querySelector(YKT_SEL.forum);
