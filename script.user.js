@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.0
+// @version      4.0.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【永久免费题库】【手机平板支持】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【AI自动答题】 【学习通全题型答题】【挑战全网最全题库】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -6607,69 +6607,6 @@ const AuthorWords = _sfc_main$4;
         return clone.innerHTML;
       });
 
-      __publicField(this, "collectAudioUrls", (root) => {
-        const urls = [];
-        const push = (u) => {
-          const s = String(u || "").trim();
-          if (!s || !/^https?:\/\//i.test(s)) return;
-          if (!urls.includes(s)) urls.push(s);
-        };
-        try {
-          root.querySelectorAll('iframe[src*="audioplay"], audio').forEach((node) => {
-            if (String(node.tagName || "").toLowerCase() === "audio") {
-              push(node.src);
-              node.querySelectorAll("source[src]").forEach((s) => push(s.getAttribute("src")));
-              return;
-            }
-            try {
-              const doc = node.contentDocument;
-              if (!doc) return;
-              const audio = doc.querySelector("audio");
-              if (audio && audio.src) push(audio.src);
-              doc.querySelectorAll("audio source[src], source[src]").forEach((s) => {
-                const u = s.getAttribute("src") || "";
-                if (/\.(mp3|m4a|wav|aac)(\?|$)/i.test(u)) push(u);
-              });
-            } catch (e) {}
-          });
-          root.querySelectorAll("[data-url]").forEach((el) => {
-            const u = el.getAttribute("data-url") || "";
-            if (/\.(mp3|m4a|wav|aac)(\?|$)/i.test(u)) push(u);
-          });
-        } catch (e) {}
-        return urls.slice(0, 3);
-      });
-      __publicField(this, "collectVideoUrls", () => {
-        const urls = [];
-        const push = (u) => {
-          const s = String(u || "").trim();
-          if (!s || !/^https?:\/\//i.test(s)) return;
-          if (!urls.includes(s)) urls.push(s);
-        };
-        const scan = (doc, depth) => {
-          if (!doc || depth > 3) return;
-          try {
-            doc.querySelectorAll("video").forEach((v) => push(v.currentSrc || v.src));
-          } catch (e) {}
-          try {
-            doc.querySelectorAll('iframe[src*="video"]').forEach((f) => {
-              try {
-                scan(f.contentDocument, depth + 1);
-              } catch (e) {}
-            });
-          } catch (e) {}
-        };
-        let w = this._window;
-        for (let i = 0; i < 3 && w; i++) {
-          try {
-            scan(w.document, 0);
-          } catch (e) {}
-          if (!w.parent || w.parent === w) break;
-          w = w.parent;
-        }
-        return urls.slice(0, 3);
-      });
-
       __publicField(this, "trimTitle", (str) => {
         return str.replace(REGEX.CLEAN_TITLE, "");
       });
@@ -8502,15 +8439,7 @@ const AuthorWords = _sfc_main$4;
             element: questionElement,
             type: resolvedType,
             title: this.trimTitle(`【${isListening ? "听力题" : "阅读理解"}】\n${passageText}\n\n${subBlocks.join("\n\n")}`),
-            audios: (() => {
-              const list = this.collectAudioUrls(questionElement);
-              if (isListening && list.length === 0) {
-                this.collectVideoUrls().forEach((u) => {
-                  if (!list.includes(u)) list.push(u);
-                });
-              }
-              return list.slice(0, 3);
-            })(),
+            audios: [],
             optionsText: [],
             options: {},
             optionsList: [],
@@ -8545,7 +8474,7 @@ const AuthorWords = _sfc_main$4;
               element: questionElement,
               type: "14",
               title: this.trimTitle(clozeTitle),
-              audios: this.collectAudioUrls(questionElement),
+              audios: [],
               optionsText: [],
               options: {},
               optionsList: [],
@@ -8586,7 +8515,7 @@ const AuthorWords = _sfc_main$4;
               element: questionElement,
               type: "20",
               title: this.trimTitle(sharedStem),
-              audios: this.collectAudioUrls(questionElement),
+              audios: [],
               optionsText: sharedOptions,
               options: {},
               optionsList: [],
@@ -8632,7 +8561,7 @@ const AuthorWords = _sfc_main$4;
               element: questionElement,
               type: "24",
               title: this.trimTitle(stem),
-              audios: this.collectAudioUrls(questionElement),
+              audios: [],
               optionsText: words.map((w) => w.text),
               options: {},
               optionsList: [],
@@ -8732,7 +8661,7 @@ const AuthorWords = _sfc_main$4;
           element: questionElement,
           type: resolvedType,
           title: this.trimTitle(questionTitle),
-          audios: this.collectAudioUrls(questionElement),
+          audios: [],
           optionsText: optionTexts,
           options: optionsObject,
           optionsList: optionsList,
