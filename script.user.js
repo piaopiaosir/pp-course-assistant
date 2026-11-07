@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.5
+// @version      4.0.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -773,7 +773,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     BREAK_RATE: "突破倍速",
     AUTO_NEXT: "自动切换",
     REVIEW: "复习模式",
-    CHAPTER: "章节/习题设置",
+    CHAPTER: "章节设置",
+    YKT_CHAPTER: "章节/习题设置",
     EXAM: "考试设置",
     ANSWER_GAP: "答题间隔",
     SIM_DELAY: "模拟延迟",
@@ -1527,7 +1528,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   { name: PP_KEY.NORMAL_PLAY, value: true, type: "boolean", locked: true },
                   { name: PP_KEY.AUTO_RATE, value: false, type: "boolean", breakBefore: true },
                   { name: "弹题作答", value: true, type: "boolean" },
-                  { name: "忽略习惯弹窗", value: false, type: "boolean" },
                   { name: PP_KEY.RATE, value: 1, type: "number", min: 1, max: 1.5, step: 0.5 }
                 ]
               },
@@ -1586,6 +1586,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     type: "number"
                   }
                 ]
+              },
+              {
+                name: PP_KEY.CHAPTER,
+                params: [
+                  { name: "忽略习惯弹窗", value: false, type: "boolean" },
+                  { name: PP_KEY.AUTO_NEXT, value: true, type: "boolean" }
+                ]
               }
             ]
           },
@@ -1625,11 +1632,21 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               {
                 name: PP_KEY.ANSWER,
                 params: [
-                  { name: PP_KEY.SKIP_ANSWERED, value: true, type: "boolean" }
+                  { name: PP_KEY.NORMAL_MODE, value: true, type: "boolean", exclusiveGroup: "mode" },
+                  { name: PP_KEY.VERIFY, value: false, type: "boolean", exclusiveGroup: "mode" },
+                  { name: PP_KEY.AI_MODE, value: false, type: "boolean", exclusiveGroup: "mode" },
+                  { name: PP_KEY.WEB_SEARCH, value: false, type: "boolean", dependsOn: { param: PP_KEY.AI_MODE, value: true } },
+                  createAiTypeParam(),
+                  createAiModelParam(),
+                  { name: PP_KEY.SKIP_ANSWERED, value: true, type: "boolean" },
+                  { name: PP_KEY.SIMILAR, value: true, type: "boolean" },
+                  { name: PP_KEY.SIM_DELAY, value: true, type: "boolean" },
+                  { name: PP_KEY.ANSWER_GAP, value: 1, type: "number" },
+                  { name: PP_KEY.THRESHOLD, value: 85, type: "number" }
                 ]
               },
               {
-                name: PP_KEY.CHAPTER,
+                name: PP_KEY.YKT_CHAPTER,
                 params: [
                   { name: "自动评论", value: false, type: "boolean" },
                   { name: PP_KEY.AUTO_SUBMIT, value: true, type: "boolean" },
@@ -2774,6 +2791,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         [PP_KEY.VIDEO]: "play",
         [PP_KEY.ANSWER]: "spark",
         [PP_KEY.CHAPTER]: "list",
+        [PP_KEY.YKT_CHAPTER]: "list",
         [PP_KEY.EXAM]: "shield",
         [PP_KEY.ANSWER_SETTINGS]: "spark"
       };
@@ -2794,7 +2812,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         [PP_KEY.MODE]: "选择脚本在当前页面的运行方式，模式之间互斥。",
         [PP_KEY.VIDEO]: "控制播放方式、倍速与视频内答题行为。",
         [PP_KEY.ANSWER]: "选择题库 / AI 答题策略，并控制消耗与准确率。",
-        [PP_KEY.CHAPTER]: "控制章节/习题的自动评论、提交与自动切换。",
+        [PP_KEY.CHAPTER]: "控制章节任务的提交、弹窗忽略与任务点自动切换。",
+        [PP_KEY.YKT_CHAPTER]: "控制雨课堂章节/习题的评论、提交与自动切换。",
         [PP_KEY.EXAM]: "控制考试页面的自动切换行为。",
         [PP_KEY.ANSWER_SETTINGS]: "控制智慧树的答题行为。"
       };
@@ -12723,9 +12742,9 @@ const AuthorWords = _sfc_main$4;
       autoPlay: readParam(ZH_STUDY_PART, PP_KEY.NORMAL_PLAY, true) !== false,
       autoSpeed: readParam(ZH_STUDY_PART, PP_KEY.AUTO_RATE, true) !== false,
       speed: Math.min(Math.max(1, speedRaw), zhSpeedCeiling()),
-      autoNext: readParam(ZH_STUDY_PART, PP_KEY.AUTO_NEXT, true) !== false,
+      autoNext: readParam(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true) !== false,
       quizAuto: readParam(ZH_STUDY_PART, "弹题作答", true) !== false,
-      ignoreHabit: readParam(ZH_STUDY_PART, "忽略习惯弹窗", false) === true,
+      ignoreHabit: readParam(PP_KEY.CHAPTER, "忽略习惯弹窗", false) === true,
       captchaNotify: true
     };
   };
@@ -14083,34 +14102,84 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {}
   };
 
-  const ppYktChallengeHold = async (doc, logStore, timeoutMs = 180000) => {
-    const find = () => {
-      try {
-        return doc.querySelector(PP_YKT_WORK.captcha);
-      } catch (e) {
-        return null;
+  let _ppYktChallengeAlerted = false;
+  let _ppYktChallengeWatchCount = 0;
+
+  const ppYktChallengePresent = (doc) => {
+    try {
+      return !!doc.querySelector(PP_YKT_WORK.captcha);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const ppYktWatchChallenge = (doc, logStore) => {
+    let visible = false;
+    let shut = () => {};
+    _ppYktChallengeWatchCount += 1;
+    const tick = () => {
+      const now = ppYktChallengePresent(doc);
+      if (now === visible) return;
+      visible = now;
+      if (now) {
+        if (_ppYktChallengeAlerted) return;
+        _ppYktChallengeAlerted = true;
+        logStore.addLog("检测到雨课堂风控验证码，请在页面手动完成，完成后自动继续", "danger");
+        shut = ppYktLoudHint("雨课堂需要手动验证：请在页面上完成验证码，通过后自动继续答题", "warning");
+        ppYktDeskPing("雨课堂：需要手动验证", "检测到风控验证码，请完成验证后继续答题");
+      } else {
+        try {
+          shut();
+        } catch (e) {}
+        shut = () => {};
+        if (!_ppYktChallengeAlerted) return;
+        _ppYktChallengeAlerted = false;
+        logStore.addLog("验证码已通过，继续答题", "success");
       }
     };
-    const box = find();
-    if (!box) return false;
+    const timer = setInterval(tick, 400);
+    tick();
+    return {
+      stop: () => {
+        clearInterval(timer);
+        try {
+          shut();
+        } catch (e) {}
+        _ppYktChallengeWatchCount = Math.max(0, _ppYktChallengeWatchCount - 1);
+        _ppYktChallengeAlerted = false;
+      },
+    };
+  };
+
+  const ppYktChallengeHold = async (doc, logStore, timeoutMs = 180000) => {
+    if (!ppYktChallengePresent(doc)) return false;
     try {
-      box.scrollIntoView({ block: "center", inline: "nearest" });
+      const box = doc.querySelector(PP_YKT_WORK.captcha);
+      if (box) box.scrollIntoView({ block: "center", inline: "nearest" });
     } catch (e) {}
-    logStore.addLog("检测到雨课堂风控验证码，请在页面手动完成，完成后自动继续", "danger");
-    const shut = ppYktLoudHint("雨课堂需要手动验证：请在页面上完成验证码，通过后自动继续答题", "warning");
-    ppYktDeskPing("雨课堂：需要手动验证", "检测到风控验证码，请完成验证后继续答题");
+    let shut = () => {};
+    if (!_ppYktChallengeAlerted) {
+      _ppYktChallengeAlerted = true;
+      logStore.addLog("检测到雨课堂风控验证码，请在页面手动完成，完成后自动继续", "danger");
+      shut = ppYktLoudHint("雨课堂需要手动验证：请在页面上完成验证码，通过后自动继续答题", "warning");
+      ppYktDeskPing("雨课堂：需要手动验证", "检测到风控验证码，请完成验证后继续答题");
+    }
     const start = Date.now();
     try {
       while (Date.now() - start < timeoutMs) {
         await delay(1);
-        if (!find()) {
-          logStore.addLog("验证码已通过，继续答题", "success");
-          ppYktLoudHint("验证已通过，继续答题", "success");
+        if (!ppYktChallengePresent(doc)) {
+          if (_ppYktChallengeWatchCount === 0 && _ppYktChallengeAlerted) {
+            _ppYktChallengeAlerted = false;
+            logStore.addLog("验证码已通过，继续答题", "success");
+          }
           return true;
         }
       }
     } finally {
-      shut();
+      try {
+        shut();
+      } catch (e) {}
     }
     logStore.addLog("验证码等待超时（3 分钟），跳过本题", "warning");
     return false;
@@ -14157,15 +14226,51 @@ const AuthorWords = _sfc_main$4;
     return false;
   };
 
-  const ppYktWriteAnswers = async (item, typeCode, answers, optionSelector) => {
-    const list = Array.from(item.querySelectorAll(optionSelector || PP_YKT_WORK.options))
-      .map((el) => ({ el, text: ppYktOptionLabel(el) }))
-      .filter((o) => o.text || o.el.querySelector("input[value='true'], input[value='false']"));
+  const ppYktWriteAnswers = async (item, typeCode, answers, optionSource) => {
+    const list = (Array.isArray(optionSource)
+      ? optionSource.map((o) => ({ el: o.el, text: o.text == null ? ppYktOptionLabel(o.el) : o.text }))
+      : Array.from(item.querySelectorAll(optionSource || PP_YKT_WORK.options)).map((el) => ({
+          el,
+          text: ppYktOptionLabel(el),
+        }))
+    ).filter((o) => o.text || o.el.querySelector("input[value='true'], input[value='false']"));
 
     if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
       if (!list.length) return false;
+      let useSimilarity = true;
+      let threshold = 85;
+      try {
+        const cfg = useConfigStore();
+        const answerPart = cfg.platformParams[cfg.platformName]?.parts.find((p) => p && p.name === PP_KEY.ANSWER);
+        const similarParam = answerPart && answerPart.params.find((p) => p && p.name === PP_KEY.SIMILAR);
+        if (similarParam) useSimilarity = similarParam.value !== false;
+        threshold = resolveAnswerThreshold(cfg.platformName);
+      } catch (e) {}
+      const fuzzyPick = (ans) => {
+        if (!useSimilarity) return -1;
+        const target = String(ans == null ? "" : ans).trim();
+        if (!target) return -1;
+        let best = -1;
+        let bestScore = 0;
+        list.forEach((opt, index) => {
+          const score = computeMatch(target, String(opt.text || ""));
+          if (score > bestScore) {
+            bestScore = score;
+            best = index;
+          }
+        });
+        return bestScore >= threshold ? best : -1;
+      };
       const wanted = new Set();
-      answers.forEach((ans) => ppZhH5Indexes(list, ans, typeCode).forEach((idx) => wanted.add(idx)));
+      answers.forEach((ans) => {
+        const hits = ppZhH5Indexes(list, ans, typeCode);
+        if (hits.length) {
+          hits.forEach((idx) => wanted.add(idx));
+          return;
+        }
+        const fuzzy = fuzzyPick(ans);
+        if (fuzzy >= 0) wanted.add(fuzzy);
+      });
       if (!wanted.size) return false;
       if (typeCode === "1") {
         for (let i = 0; i < list.length; i += 1) {
@@ -14262,20 +14367,28 @@ const AuthorWords = _sfc_main$4;
       const idx = nav.findIndex((el) => el.classList.contains("active"));
       return idx >= 0 ? nav[idx] : null;
     };
+    const targetNav = activeNav();
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const navEl = activeNav();
       const btn = Array.from(doc.querySelectorAll(PP_YKT_WORK.submit)).find(
         (b) =>
           ppYktFlat(b.textContent).includes("提交") &&
           !b.disabled &&
           !b.classList.contains("is-disabled"),
       );
-      if (!btn) return ppYktNavFinished(navEl);
+      if (!btn) return ppYktNavFinished(targetNav);
+      const beforeActive = activeNav();
       btn.click();
       await delay(1);
       const start = Date.now();
       while (Date.now() - start < 10000) {
-        if (ppYktNavFinished(activeNav())) return true;
+        if (ppYktNavFinished(targetNav)) return true;
+        const nowActive = activeNav();
+        if (beforeActive && nowActive && nowActive !== beforeActive) return true;
+        if (ppYktChallengePresent(doc)) {
+          await ppYktChallengeHold(doc, logStore);
+          if (ppYktNavFinished(targetNav)) return true;
+          break;
+        }
         await delay(0.3);
       }
       logStore.addLog("提交后未看到完成标记，重试一次", "warning");
@@ -14374,9 +14487,9 @@ const AuthorWords = _sfc_main$4;
     }
     const questionStore = useQuestionStore();
     const progressStore = useProgressStore();
-    const autoSwitch = readYktParam(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
+    const autoSwitch = readYktParam(PP_KEY.YKT_CHAPTER, PP_KEY.AUTO_NEXT, true);
     const skipAnswered = readYktParam(PP_KEY.ANSWER, PP_KEY.SKIP_ANSWERED, true);
-    const autoSubmit = readYktParam(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, true);
+    const autoSubmit = readYktParam(PP_KEY.YKT_CHAPTER, PP_KEY.AUTO_SUBMIT, true);
 
     let handled = 0;
     let filled = 0;
@@ -14400,6 +14513,8 @@ const AuthorWords = _sfc_main$4;
       detail: paperTotal ? `第 0 / ${paperTotal} 题` : "等待题目加载",
     });
 
+    const challengeWatch = ppYktWatchChallenge(exDoc, logStore);
+
     for (let step = 0; step < 100; step += 1) {
       await ppYktChallengeHold(exDoc, logStore);
 
@@ -14412,7 +14527,14 @@ const AuthorWords = _sfc_main$4;
       if (prepareFont) await prepareFont(exDoc);
 
       const marker = ppYktFingerprint(exDoc);
-      const stem = ppYktFlat((item.querySelector(PP_YKT_WORK.body) || {}).textContent).slice(0, 40);
+      let plain = null;
+      try {
+        plain = ppDecryptQuestionClone(item, "ykt");
+      } catch (e) {
+        plain = null;
+      }
+      const plainRoot = plain || item;
+      const stem = ppYktFlat((plainRoot.querySelector(PP_YKT_WORK.body) || {}).textContent).slice(0, 40);
       handled += 1;
       progressStore.update({
         questionIndex: handled,
@@ -14421,14 +14543,14 @@ const AuthorWords = _sfc_main$4;
       });
       ppLogAnswerQuestion(logStore.addLog, handled, stem);
 
-      let html = item.outerHTML;
-      try {
-        const clone = ppDecryptQuestionClone(item, "ykt");
-        if (clone && clone.outerHTML) html = clone.outerHTML;
-      } catch (e) {}
-
+      const html = (plain && plain.outerHTML) || item.outerHTML;
       const typeCode = ppYktKind((item.querySelector(PP_YKT_WORK.typeLabel) || {}).textContent);
-      const options = Array.from(item.querySelectorAll(PP_YKT_WORK.options));
+      const liveOptions = Array.from(item.querySelectorAll(PP_YKT_WORK.options));
+      const plainOptions = Array.from(plainRoot.querySelectorAll(PP_YKT_WORK.options));
+      const optionList = liveOptions.map((el, index) => ({
+        el,
+        text: ppYktOptionLabel(plainOptions[index] || el),
+      }));
       const question = {
         element: item,
         html,
@@ -14436,7 +14558,7 @@ const AuthorWords = _sfc_main$4;
         refer: exDoc.location ? exDoc.location.href : location.href,
         type: typeCode,
         title: stem,
-        optionsText: options.map(ppYktOptionLabel),
+        optionsText: optionList.map((o) => o.text),
       };
 
       if (skipAnswered && ppYktHasAnswer(item)) {
@@ -14464,7 +14586,7 @@ const AuthorWords = _sfc_main$4;
       if (answerData && answerData.code === 200) {
         const raw = answerData.data && answerData.data.answer;
         const answers = Array.isArray(raw) ? raw : [raw];
-        filledOk = await ppYktWriteAnswers(item, typeCode, answers);
+        filledOk = await ppYktWriteAnswers(item, typeCode, answers, optionList);
         question.answer = answers;
         question.source = (answerData.data && answerData.data.source) || "";
         try {
@@ -14531,6 +14653,9 @@ const AuthorWords = _sfc_main$4;
       }
       await delay(0.6);
     }
+    try {
+      challengeWatch.stop();
+    } catch (e) {}
 
     progressStore.update({
       isPlaying: false,
@@ -14720,8 +14845,8 @@ const AuthorWords = _sfc_main$4;
     const restudy = yktMode === "review";
     const wantVideo = yktMode !== "answer";
     const wantAnswer = yktMode !== "video";
-    const autoComment = readYktParam(PP_KEY.CHAPTER, "自动评论", false);
-    const autoSwitch = readYktParam(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
+    const autoComment = readYktParam(PP_KEY.YKT_CHAPTER, "自动评论", false);
+    const autoSwitch = readYktParam(PP_KEY.YKT_CHAPTER, PP_KEY.AUTO_NEXT, true);
     let yktRateWarned = false;
     const readYktMaxRate = () => {
       try {
@@ -14805,15 +14930,25 @@ const AuthorWords = _sfc_main$4;
       return ok;
     };
 
+    const MAX_JOB_TRIES = 2;
+    const jobTries = new Map();
+    const triesOf = (el) => jobTries.get(el) || 0;
+    const markTried = (el) => {
+      if (!el) return;
+      jobTries.set(el, triesOf(el) + 1);
+    };
     const pickNext = () => {
       const list = yktJobs();
       const activeIndex = list.findIndex((el) => el.classList.contains("is-active"));
-      const from = activeIndex < 0 ? 0 : activeIndex + 1;
-      for (let i = from; i < list.length; i++) {
-        const el = list[i];
-        if (!studyTags.includes(yktJobTag(el))) continue;
-        if (!restudy && yktJobDone(el)) continue;
-        return el;
+      const usable = (el) =>
+        triesOf(el) < MAX_JOB_TRIES &&
+        studyTags.includes(yktJobTag(el)) &&
+        (restudy || !yktJobDone(el));
+      for (let i = activeIndex + 1; i < list.length; i += 1) {
+        if (usable(list[i])) return list[i];
+      }
+      for (let i = 0; i <= activeIndex && i < list.length; i += 1) {
+        if (usable(list[i])) return list[i];
       }
       return null;
     };
@@ -14821,22 +14956,26 @@ const AuthorWords = _sfc_main$4;
     for (let guard = 0; guard < 200; guard++) {
       await yktPrepareFont(yktExerciseDoc() || document, true);
 
+      const activeTag = yktActiveTag();
+      const exerciseDoc = yktExerciseDoc();
+
       const forum = document.querySelector(YKT_SEL.forum);
-      if (forum && autoComment) {
+      if (forum && autoComment && activeTag !== "作业") {
         logStore.addLog("发现任务点：讨论，开始自动评论", "primary");
         try {
           await yktPostComment(forum, logStore);
         } catch (e) {
           logStore.addLog(`自动评论失败：${e.message}`, "warning");
         }
-      } else if (document.querySelector(YKT_SEL.pptSlide)) {
+      } else if (document.querySelector(YKT_SEL.pptSlide) && activeTag !== "作业") {
         logStore.addLog("发现课件，开始阅读", "primary");
         await useYktPptRead(logStore);
-      } else if (yktActiveTag() === "图文") {
+      } else if (activeTag === "图文") {
         logStore.addLog("发现任务点：图文，已自动打开", "success");
         await delay(1.2);
-      } else if (wantAnswer && (yktActiveTag() === "作业" || yktExerciseDoc())) {
-        await useYktHomeworkLogic(yktExerciseDoc(), logStore, (target) => yktPrepareFont(target, true));
+      } else if (wantAnswer && (activeTag === "作业" || (!activeTag && exerciseDoc))) {
+        await useYktHomeworkLogic(exerciseDoc, logStore, (target) => yktPrepareFont(target, true));
+        await delay(1.5);
       } else if (!wantVideo) {
         logStore.addLog("仅答题模式：跳过视频与图文任务", "info");
       } else {
@@ -14874,28 +15013,46 @@ const AuthorWords = _sfc_main$4;
         }
       }
 
+      const activeJob = yktJobs().find((el) => el.classList.contains("is-active"));
+      if (activeJob) markTried(activeJob);
+
       const next = pickNext();
       if (!next) {
         const rest = yktJobs().filter((el) => !yktJobDone(el));
-        if (rest.length) {
-          const brief = rest.slice(0, 3).map((el) => `${yktJobTag(el) || "其他"}·${yktJobTitle(el)}`).join("、");
-          logStore.addLog(
-            `视频任务已处理完，剩余 ${rest.length} 个非视频任务需手动完成：${brief}${rest.length > 3 ? " 等" : ""}`,
-            "warning",
-          );
-        } else {
+        if (!rest.length) {
           logStore.addLog("本页任务点已全部完成", "success");
+          break;
         }
-        break;
+        const brief = rest.slice(0, 3).map((el) => `${yktJobTag(el) || "其他"}·${yktJobTitle(el)}`).join("、");
+        const more = rest.length > 3 ? " 等" : "";
+        if (yktMode === "video") {
+          logStore.addLog(`当前是「仅视频」模式，作业/讨论不会处理。剩余 ${rest.length} 个：${brief}${more}`, "warning");
+          logStore.addLog("要自动做作业，请把模式切换为「正常模式」或「仅答题」，改完刷新页面", "primary");
+        } else {
+          const supported = rest.filter((el) => studyTags.includes(yktJobTag(el)));
+          const triedOut = supported.filter((el) => triesOf(el) >= MAX_JOB_TRIES);
+          if (supported.length === 0) {
+            logStore.addLog(`剩余 ${rest.length} 个任务点不属于当前模式处理的类型：${brief}${more}`, "warning");
+          } else if (triedOut.length === supported.length) {
+            logStore.addLog(
+              `剩余 ${rest.length} 个任务点本轮已尝试 ${MAX_JOB_TRIES} 次仍未完成，请手动处理：${brief}${more}`,
+              "warning",
+            );
+          } else {
+            logStore.addLog(`剩余 ${rest.length} 个任务点未处理：${brief}${more}`, "warning");
+          }
+        }
+      } else {
+        if (!autoSwitch) {
+          logStore.addLog(`自动切换已关闭，请手动切换任务：${yktJobTitle(next)}`, "warning");
+          break;
+        }
+        next.scrollIntoView({ block: "center" });
+        next.click();
+        markTried(next);
+        logStore.addLog(`切换到下一节：${yktJobTitle(next)}`, "primary");
+        await afkWait(3000);
       }
-      if (!autoSwitch) {
-        logStore.addLog(`自动切换已关闭，请手动切换任务：${yktJobTitle(next)}`, "warning");
-        break;
-      }
-      next.scrollIntoView({ block: "center" });
-      next.click();
-      logStore.addLog(`切换到下一节：${yktJobTitle(next)}`, "primary");
-      await afkWait(3000);
     }
   };
 
