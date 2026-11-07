@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.6
+// @version      4.0.7
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -14469,6 +14469,7 @@ const AuthorWords = _sfc_main$4;
     next.click();
     const start = Date.now();
     let guardHandled = false;
+    let retried = false;
     while (Date.now() - start < 8000) {
       if (!guardHandled && ppYktResolveChangeGuard(doc, opts.allowSubmit === true, opts.logStore)) {
         guardHandled = true;
@@ -14476,6 +14477,12 @@ const AuthorWords = _sfc_main$4;
       await delay(0.4);
       const now = ppYktFingerprint(doc);
       if (now && now !== before) return true;
+      if (!retried && Date.now() - start > 3000) {
+        retried = true;
+        try {
+          next.click();
+        } catch (e) {}
+      }
     }
     return false;
   };
@@ -14501,6 +14508,17 @@ const AuthorWords = _sfc_main$4;
       paperTotal = exDoc.querySelectorAll(PP_YKT_WORK.navItem).length;
     } catch (e) {}
     ppLogAnswerBegin(logStore.addLog, { platform: "ykt", scene: "作业", total: paperTotal });
+
+    try {
+      const nav = Array.from(exDoc.querySelectorAll(PP_YKT_WORK.navItem));
+      if (nav.length && !nav[0].classList.contains("active")) {
+        logStore.addLog("从第 1 题开始逐题检查", "primary");
+        nav[0].scrollIntoView({ block: "center" });
+        nav[0].click();
+        await delay(1.2);
+      }
+    } catch (e) {}
+
     progressStore.update({
       taskName: "作业答题",
       type: "答题",
@@ -14570,7 +14588,10 @@ const AuthorWords = _sfc_main$4;
         ppLogAnswerSkipped(logStore.addLog, handled);
         if (!autoSwitch) break;
         const jumped = await ppYktAdvance(exDoc, { allowSubmit: false, logStore });
-        if (!jumped) break;
+        if (!jumped) {
+          logStore.addLog("本题已答，且没有其它未作答的题目了", "info");
+          break;
+        }
         await delay(0.6);
         continue;
       }
@@ -14930,20 +14951,18 @@ const AuthorWords = _sfc_main$4;
       return ok;
     };
 
-    const MAX_JOB_TRIES = 2;
-    const jobTries = new Map();
-    const triesOf = (el) => jobTries.get(el) || 0;
-    const markTried = (el) => {
-      if (!el) return;
-      jobTries.set(el, triesOf(el) + 1);
-    };
+    const visitedJobs = new Set();
+    const jobKey = (el) => `${yktJobTag(el)}|${yktJobTitle(el)}`;
     const pickNext = () => {
       const list = yktJobs();
       const activeIndex = list.findIndex((el) => el.classList.contains("is-active"));
-      const usable = (el) =>
-        triesOf(el) < MAX_JOB_TRIES &&
-        studyTags.includes(yktJobTag(el)) &&
-        (restudy || !yktJobDone(el));
+      const usable = (el) => {
+        if (visitedJobs.has(jobKey(el))) return false;
+        const tag = yktJobTag(el);
+        if (!studyTags.includes(tag)) return false;
+        if (restudy) return tag !== "作业";
+        return !yktJobDone(el);
+      };
       for (let i = activeIndex + 1; i < list.length; i += 1) {
         if (usable(list[i])) return list[i];
       }
@@ -14956,11 +14975,20 @@ const AuthorWords = _sfc_main$4;
     for (let guard = 0; guard < 200; guard++) {
       await yktPrepareFont(yktExerciseDoc() || document, true);
 
+      const activeJob = yktJobs().find((el) => el.classList.contains("is-active"));
       const activeTag = yktActiveTag();
       const exerciseDoc = yktExerciseDoc();
 
-      const forum = document.querySelector(YKT_SEL.forum);
-      if (forum && autoComment && activeTag !== "作业") {
+      const skipActive =
+        (restudy && activeTag === "作业") ||
+        (!restudy && activeJob && studyTags.includes(yktJobTag(activeJob)) && yktJobDone(activeJob));
+      if (skipActive && activeJob) {
+        visitedJobs.add(jobKey(activeJob));
+      }
+
+      const forum = skipActive ? null : document.querySelector(YKT_SEL.forum);
+      if (skipActive) {
+      } else if (forum && autoComment && activeTag !== "作业") {
         logStore.addLog("发现任务点：讨论，开始自动评论", "primary");
         try {
           await yktPostComment(forum, logStore);
@@ -15013,46 +15041,31 @@ const AuthorWords = _sfc_main$4;
         }
       }
 
-      const activeJob = yktJobs().find((el) => el.classList.contains("is-active"));
-      if (activeJob) markTried(activeJob);
+      if (activeJob) visitedJobs.add(jobKey(activeJob));
 
       const next = pickNext();
       if (!next) {
         const rest = yktJobs().filter((el) => !yktJobDone(el));
         if (!rest.length) {
           logStore.addLog("本页任务点已全部完成", "success");
-          break;
-        }
-        const brief = rest.slice(0, 3).map((el) => `${yktJobTag(el) || "其他"}·${yktJobTitle(el)}`).join("、");
-        const more = rest.length > 3 ? " 等" : "";
-        if (yktMode === "video") {
-          logStore.addLog(`当前是「仅视频」模式，作业/讨论不会处理。剩余 ${rest.length} 个：${brief}${more}`, "warning");
-          logStore.addLog("要自动做作业，请把模式切换为「正常模式」或「仅答题」，改完刷新页面", "primary");
         } else {
-          const supported = rest.filter((el) => studyTags.includes(yktJobTag(el)));
-          const triedOut = supported.filter((el) => triesOf(el) >= MAX_JOB_TRIES);
-          if (supported.length === 0) {
-            logStore.addLog(`剩余 ${rest.length} 个任务点不属于当前模式处理的类型：${brief}${more}`, "warning");
-          } else if (triedOut.length === supported.length) {
-            logStore.addLog(
-              `剩余 ${rest.length} 个任务点本轮已尝试 ${MAX_JOB_TRIES} 次仍未完成，请手动处理：${brief}${more}`,
-              "warning",
-            );
-          } else {
-            logStore.addLog(`剩余 ${rest.length} 个任务点未处理：${brief}${more}`, "warning");
-          }
+          const brief = rest.slice(0, 3).map((el) => `${yktJobTag(el) || "其他"}·${yktJobTitle(el)}`).join("、");
+          logStore.addLog(
+            `本轮已走完一遍，剩余 ${rest.length} 个任务点未完成：${brief}${rest.length > 3 ? " 等" : ""}`,
+            "warning",
+          );
         }
-      } else {
-        if (!autoSwitch) {
-          logStore.addLog(`自动切换已关闭，请手动切换任务：${yktJobTitle(next)}`, "warning");
-          break;
-        }
-        next.scrollIntoView({ block: "center" });
-        next.click();
-        markTried(next);
-        logStore.addLog(`切换到下一节：${yktJobTitle(next)}`, "primary");
-        await afkWait(3000);
+        break;
       }
+      if (!autoSwitch) {
+        logStore.addLog(`自动切换已关闭，请手动切换任务：${yktJobTitle(next)}`, "warning");
+        break;
+      }
+      next.scrollIntoView({ block: "center" });
+      next.click();
+      visitedJobs.add(jobKey(next));
+      logStore.addLog(`切换到下一节：${yktJobTitle(next)}`, "primary");
+      await afkWait(3000);
     }
   };
 
