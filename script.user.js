@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.4
+// @version      4.0.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -1798,24 +1798,49 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               globalConfig.platformParams = defaultConfig.platformParams;
             }
             if (globalConfig.platformParams) {
+              const RUNTIME_PARAM_NAMES = [PP_KEY.STANDBY];
               const shapeOf = (cfg) => {
                 if (!cfg || !Array.isArray(cfg.parts)) return null;
                 return cfg.parts
                   .map((part) => {
                     const params = Array.isArray(part && part.params)
-                      ? part.params.map((p) => p && p.name).join(",")
+                      ? part.params
+                          .map((p) => p && p.name)
+                          .filter((name) => name && RUNTIME_PARAM_NAMES.indexOf(name) < 0)
+                          .join(",")
                       : "";
                     return `${(part && part.name) || ""}[${params}]`;
                   })
                   .join("|");
               };
+              const carryOverParams = (fromPlatform, toPlatform) => {
+                if (!fromPlatform || !toPlatform) return;
+                if (!Array.isArray(fromPlatform.parts) || !Array.isArray(toPlatform.parts)) return;
+                fromPlatform.parts.forEach((oldPart) => {
+                  if (!oldPart || !oldPart.name) return;
+                  const newPart = toPlatform.parts.find((p) => p && p.name === oldPart.name);
+                  if (!newPart || !Array.isArray(newPart.params) || !Array.isArray(oldPart.params)) return;
+                  oldPart.params.forEach((oldParam) => {
+                    if (!oldParam || !oldParam.name) return;
+                    const newParam = newPart.params.find((p) => p && p.name === oldParam.name);
+                    if (newParam) {
+                      newParam.value = oldParam.value;
+                      return;
+                    }
+                    if (RUNTIME_PARAM_NAMES.indexOf(oldParam.name) >= 0) {
+                      newPart.params.push(JSON.parse(JSON.stringify(oldParam)));
+                    }
+                  });
+                });
+              };
               const defaults = defaultConfig.platformParams || {};
               Object.keys(defaults).forEach((platform) => {
                 const want = shapeOf(defaults[platform]);
                 const got = shapeOf(globalConfig.platformParams[platform]);
-                if (got !== want) {
-                  globalConfig.platformParams[platform] = JSON.parse(JSON.stringify(defaults[platform]));
-                }
+                if (got === want) return;
+                const merged = JSON.parse(JSON.stringify(defaults[platform]));
+                carryOverParams(globalConfig.platformParams[platform], merged);
+                globalConfig.platformParams[platform] = merged;
               });
             }
             if (!globalConfig.queryApis || !globalConfig.queryApis.length) {
@@ -3232,7 +3257,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (part.name === PP_KEY.ANSWER) {
           const verify = getParam(part, PP_KEY.VERIFY);
           if (verify && verify.value) {
-            hints.push(ppHint("校验模式会同时请求题库与 AI，答题次数双倍消耗、耗时更长", { tone: "warn", icon: "alert" }));
+            hints.push(ppHint("校验模式会同时请求题库与 AI，答题次数多倍消耗、耗时更长", { tone: "warn", icon: "alert" }));
           }
           const web = getParam(part, PP_KEY.WEB_SEARCH);
           if (aiActive(part) && web && web.value) {
@@ -6492,6 +6517,24 @@ const AuthorWords = _sfc_main$4;
     try { addLog(`第${index}题查询失败${reason ? `：${reason}` : ""}`, "danger"); } catch (e) {}
   };
 
+  const PP_REVIEW_FAILED_MESSAGE = "题目命中题库，但AI复查发现题库答案有误，待修正；请自行作答，或使用AI/校验模式作答。";
+
+  const isReviewFailed = (answerData) => Boolean(
+    answerData && answerData.data && answerData.data.review === "failed"
+  );
+
+  const reviewFailedMessage = (answerData) =>
+    (answerData && answerData.data && answerData.data.reviewMessage) || PP_REVIEW_FAILED_MESSAGE;
+
+  const reviewFailedAnswers = (answerData) => {
+    const raw = answerData && answerData.data && answerData.data.answer;
+    return Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  };
+
+  const ppLogAnswerReviewFailed = (addLog, answerData) => {
+    try { addLog(reviewFailedMessage(answerData), "warning"); } catch (e) {}
+  };
+
   const ppLogAnswerSummary = (addLog, stats) => {
     const data = stats || {};
     const num = (value) => Math.max(0, Number(value) || 0);
@@ -7123,6 +7166,12 @@ const AuthorWords = _sfc_main$4;
               if (answerData.data.cost !== undefined) {
                 progressStore.update({ remainingCount: answerData.data.num });
               }
+            } else if (isReviewFailed(answerData)) {
+              failedCount += 1;
+              question._reviewFailed = true;
+              question.source = "error";
+              question.answer = reviewFailedAnswers(answerData);
+              ppLogAnswerReviewFailed((msg, type) => this.addLog(msg, type), answerData);
             } else {
               ppLogAnswerQueryFailed((msg, type) => this.addLog(msg, type), index + 1, answerData.msg);
               if (answerData.data?.sponsorUrl) {
@@ -10699,6 +10748,12 @@ const AuthorWords = _sfc_main$4;
         if (answerData.data.cost !== undefined) {
           progressStore.update({ remainingCount: answerData.data.num });
         }
+      } else if (isReviewFailed(answerData)) {
+        failedCount += 1;
+        question._reviewFailed = true;
+        question.source = "error";
+        question.answer = reviewFailedAnswers(answerData);
+        ppLogAnswerReviewFailed((msg, type) => logStore.addLog(msg, type), answerData);
       } else {
 
         if (answerData.code === 403 && answerData.data && answerData.data.limitedMode) {
@@ -11186,6 +11241,14 @@ const AuthorWords = _sfc_main$4;
               if (answerData.data.cost !== undefined) {
                 progressStore.update({ remainingCount: answerData.data.num });
               }
+            } else if (isReviewFailed(answerData)) {
+              failedCount += 1;
+              question._reviewFailed = true;
+              question.source = "error";
+              question.answer = reviewFailedAnswers(answerData);
+              ppLogAnswerReviewFailed((msg, type) => this.addLog(msg, type), answerData);
+              this.addQuestion(question);
+              await new Promise(r => setTimeout(r, 100));
             } else {
               ppLogAnswerQueryFailed((msg, type) => this.addLog(msg, type), label, answerData.msg);
               if (answerData.data?.sponsorUrl) {
@@ -11874,6 +11937,13 @@ const AuthorWords = _sfc_main$4;
           question.answer = answers;
           question.source = answerData.data?.source || "";
           questionStore.addQuestion(question);
+        } else if (isReviewFailed(answerData)) {
+          failed += 1;
+          question._reviewFailed = true;
+          question.answer = reviewFailedAnswers(answerData);
+          question.source = "error";
+          questionStore.addQuestion(question);
+          ppLogAnswerReviewFailed(logStore.addLog, answerData);
         } else {
           failed += 1;
           const msg = answerData && answerData.msg ? answerData.msg : "查询失败";
@@ -14226,7 +14296,54 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  const ppYktAdvance = async (doc) => {
+  const ppYktChangeGuardDialog = (doc) => {
+    const roots = [doc, document].filter(Boolean);
+    for (const root of roots) {
+      let dialog = null;
+      try {
+        dialog = root.querySelector(".homework-problem-change-guard-dialog");
+      } catch (e) {}
+      if (!dialog) continue;
+      const wrap = dialog.closest ? dialog.closest(".el-dialog__wrapper") : dialog.parentElement;
+      const target = wrap || dialog;
+      let display = "";
+      try {
+        const view = target.ownerDocument && target.ownerDocument.defaultView;
+        display = view ? view.getComputedStyle(target).display : "";
+      } catch (e) {
+        display = target.style ? target.style.display : "";
+      }
+      if (target.offsetHeight && (!display || display !== "none")) return dialog;
+    }
+    return null;
+  };
+
+  const ppYktResolveChangeGuard = (doc, allowSubmit, logStore) => {
+    const dialog = ppYktChangeGuardDialog(doc);
+    if (!dialog) return false;
+    const footer = dialog.querySelector(".el-dialog__footer") || dialog;
+    const primary = footer.querySelector(".homework-problem-change-guard__primary-action");
+    const buttons = Array.from(footer.querySelectorAll(".rain-btn"));
+    const target = allowSubmit ? primary : buttons.find((el) => el !== primary);
+    if (!target) return false;
+    try {
+      target.click();
+    } catch (e) {
+      return false;
+    }
+    if (logStore) {
+      logStore.addLog(
+        allowSubmit
+          ? "检测到未提交提示：已选择「帮我提交」，继续下一题"
+          : "检测到未提交提示：已选择「先不用了」，继续下一题",
+        "primary",
+      );
+    }
+    return true;
+  };
+
+  const ppYktAdvance = async (doc, options = {}) => {
+    const opts = options || {};
     const before = ppYktFingerprint(doc);
     const nav = Array.from(doc.querySelectorAll(PP_YKT_WORK.navItem));
     if (!nav.length) return false;
@@ -14238,9 +14355,13 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {}
     next.click();
     const start = Date.now();
+    let guardHandled = false;
     while (Date.now() - start < 8000) {
+      if (!guardHandled && ppYktResolveChangeGuard(doc, opts.allowSubmit === true, opts.logStore)) {
+        guardHandled = true;
+      }
       await delay(0.4);
-      const now = keyOf();
+      const now = ppYktFingerprint(doc);
       if (now && now !== before) return true;
     }
     return false;
@@ -14326,7 +14447,7 @@ const AuthorWords = _sfc_main$4;
         } catch (e) {}
         ppLogAnswerSkipped(logStore.addLog, handled);
         if (!autoSwitch) break;
-        const jumped = await ppYktAdvance(exDoc);
+        const jumped = await ppYktAdvance(exDoc, { allowSubmit: false, logStore });
         if (!jumped) break;
         await delay(0.6);
         continue;
@@ -14339,16 +14460,17 @@ const AuthorWords = _sfc_main$4;
         answerData = null;
       }
 
+      let filledOk = false;
       if (answerData && answerData.code === 200) {
         const raw = answerData.data && answerData.data.answer;
         const answers = Array.isArray(raw) ? raw : [raw];
-        const ok = await ppYktWriteAnswers(item, typeCode, answers);
+        filledOk = await ppYktWriteAnswers(item, typeCode, answers);
         question.answer = answers;
         question.source = (answerData.data && answerData.data.source) || "";
         try {
           questionStore.addQuestion(question);
         } catch (e) {}
-        if (ok) {
+        if (filledOk) {
           filled += 1;
           ppLogAnswerFilled(logStore.addLog, handled, {
             source: question.source,
@@ -14359,6 +14481,15 @@ const AuthorWords = _sfc_main$4;
           failed += 1;
           ppLogAnswerFillFailed(logStore.addLog, handled, "答案未能写入页面");
         }
+      } else if (isReviewFailed(answerData)) {
+        failed += 1;
+        question._reviewFailed = true;
+        question.answer = reviewFailedAnswers(answerData);
+        question.source = "error";
+        try {
+          questionStore.addQuestion(question);
+        } catch (e) {}
+        ppLogAnswerReviewFailed(logStore.addLog, answerData);
       } else {
         failed += 1;
         const msg = (answerData && answerData.msg) || "查询失败";
@@ -14375,7 +14506,7 @@ const AuthorWords = _sfc_main$4;
         );
       }
 
-      if (autoSubmit) {
+      if (autoSubmit && filledOk) {
         const submitted = await ppYktCommitQuestion(exDoc, logStore);
         if (submitted) {
           await ppYktConfirmHold(exDoc, logStore);
@@ -14393,7 +14524,7 @@ const AuthorWords = _sfc_main$4;
         logStore.addLog("自动切换已关闭，请手动切换到下一题", "warning");
         break;
       }
-      const moved = await ppYktAdvance(exDoc);
+      const moved = await ppYktAdvance(exDoc, { allowSubmit: autoSubmit && filledOk, logStore });
       if (!moved) {
         logStore.addLog("已到最后一题或切换失败，结束本次作答", "primary");
         break;
@@ -14537,6 +14668,15 @@ const AuthorWords = _sfc_main$4;
             failed += 1;
             ppLogAnswerFillFailed(logStore.addLog, index + 1, "答案未能写入页面");
           }
+        } else if (isReviewFailed(answerData)) {
+          failed += 1;
+          question._reviewFailed = true;
+          question.answer = reviewFailedAnswers(answerData);
+          question.source = "error";
+          try {
+            questionStore.addQuestion(question);
+          } catch (e) {}
+          ppLogAnswerReviewFailed(logStore.addLog, answerData);
         } else {
           failed += 1;
           ppLogAnswerQueryFailed(logStore.addLog, index + 1, (answerData && answerData.msg) || "未知错误");
@@ -14767,36 +14907,51 @@ const AuthorWords = _sfc_main$4;
     return "";
   };
 
-  const PP_PAGE_READY_SELECTORS = {
-    cx: [
-      ".chapter-content .chapter-item",
-      ".clearfix.video",
-      "#vjs_container_html5_api",
-      ".questionLi",
-      ".TiMu"
-    ],
-    zhs: [
-      ".questionName .centent-pre",
-      ".prev_title",
-      ".examPaper_subject"
-    ],
-    ykt: [
-      ".detail-container",
-      ".leaf-item",
-      ".exam-main--content",
-      ".exercise-item"
-    ]
-  };
-
-  const ppPageContentReady = () => {
+  const ppPageFullyLoaded = () => {
     try {
-      const list = PP_PAGE_READY_SELECTORS[ppPlatformOf(window.location.href)] || [];
-      if (!list.length) return true;
-      return list.some((sel) => !!document.querySelector(sel));
+      if (document.readyState !== "complete") return false;
+      const body = document.body;
+      if (!body || !body.children.length) return false;
+      const imgs = document.images || [];
+      for (let i = 0; i < imgs.length; i += 1) {
+        if (imgs[i] && imgs[i].complete === false) return false;
+      }
+      if (document.fonts && document.fonts.status === "loading") return false;
+      return true;
     } catch (e) {
       return true;
     }
   };
+
+  const ppWaitPageLoaded = (maxWaitMs = 10000) => new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    let deadline = null;
+    const onLoad = () => {
+      if (ppPageFullyLoaded()) finish("loaded");
+    };
+    const finish = (reason) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearInterval(timer);
+      if (deadline) clearTimeout(deadline);
+      try {
+        document.removeEventListener("load", onLoad, true);
+      } catch (e) {}
+      resolve(reason);
+    };
+    if (ppPageFullyLoaded()) {
+      finish("immediate");
+      return;
+    }
+    try {
+      document.addEventListener("load", onLoad, true);
+    } catch (e) {}
+    timer = setInterval(() => {
+      if (ppPageFullyLoaded()) finish("loaded");
+    }, 100);
+    deadline = setTimeout(() => finish("timeout"), maxWaitMs);
+  });
 
   const ppMuteOnce = (media) => {
     if (!media || media.__ppMutedOnce) return;
@@ -14922,25 +15077,12 @@ const AuthorWords = _sfc_main$4;
             const _ppRunLogic = () => {
               logic();
             };
-            const _ppWaitStart = Date.now();
-            if (document.readyState === "complete" && ppPageContentReady()) {
+            ppWaitPageLoaded(10000).then((reason) => {
+              if (reason === "timeout") {
+                logStore.addLog("页面资源 10 秒内未加载完，先继续执行", "warning");
+              }
               _ppRunLogic();
-            } else {
-              logStore.addLog("正在加载脚本功能...", "primary");
-              const _ppWaitComplete = setInterval(() => {
-                if (document.readyState === "complete" && ppPageContentReady()) {
-                  clearInterval(_ppWaitComplete);
-                  logStore.addLog("加载完成", "success");
-                  _ppRunLogic();
-                  return;
-                }
-                if (Date.now() - _ppWaitStart > 20000) {
-                  clearInterval(_ppWaitComplete);
-                  logStore.addLog("页面内容加载超时，先继续执行", "warning");
-                  _ppRunLogic();
-                }
-              }, 200);
-            }
+            });
             return;
           }
         }
