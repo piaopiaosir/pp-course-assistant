@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.4
+// @version      4.1.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -15429,23 +15429,26 @@ const AuthorWords = _sfc_main$4;
           isShow.value = false;
           return;
         }
-        for (const { keyword, logic } of urlLogicPairs) {
-          if (url22.includes(keyword)) {
-            isShow.value = true;
-            const modeLabel = getCxModeLabel();
-            if (modeLabel) logStore.addLog(modeLabel, "info");
-            startAfkHeartbeat();
-            const _ppRunLogic = () => {
-              logic();
-            };
-            ppWaitPageLoaded(10000).then((reason) => {
-              if (reason === "timeout") {
-                logStore.addLog("页面资源 10 秒内未加载完，先继续执行", "warning");
-              }
-              _ppRunLogic();
-            });
-            return;
-          }
+        let matchedRule = null;
+        for (const rule of urlLogicPairs) {
+          if (!url22.includes(rule.keyword)) continue;
+          if (matchedRule === null || rule.keyword.length > matchedRule.keyword.length) matchedRule = rule;
+        }
+        if (matchedRule) {
+          isShow.value = true;
+          const modeLabel = getCxModeLabel();
+          if (modeLabel) logStore.addLog(modeLabel, "info");
+          startAfkHeartbeat();
+          const _ppRunLogic = () => {
+            matchedRule.logic();
+          };
+          ppWaitPageLoaded(10000).then((reason) => {
+            if (reason === "timeout") {
+              logStore.addLog("页面资源 10 秒内未加载完，先继续执行", "warning");
+            }
+            _ppRunLogic();
+          });
+          return;
         }
 
         if (!url22.includes('/exam-ans/')) {
