@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.1
+// @version      4.1.2
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -1346,12 +1346,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
   };
 
+  const getClientVersion = () => {
+    try {
+      const info = getScriptInfo();
+      const version = String((info && info.version) || "").trim();
+      return version ? Array.from(version).slice(0, 64).join("") : "";
+    } catch (e) {
+      return "";
+    }
+  };
+
   const PP_SCRIPT_CDN_URL = 'https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/script.user.js';
   const PP_SCRIPT_UPDATE_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.user.js';
   const PP_SCRIPT_META_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.meta.js';
   const PP_SCRIPT_VERSION_SOURCES = [
-    { url: PP_SCRIPT_CDN_URL, range: 'bytes=0-8191', updateUrl: PP_SCRIPT_CDN_URL },
     { url: PP_SCRIPT_META_URL, updateUrl: PP_SCRIPT_UPDATE_URL },
+    { url: PP_SCRIPT_CDN_URL, range: 'bytes=0-8191', updateUrl: PP_SCRIPT_CDN_URL },
   ];
 
   const fetchScriptVersion = (callback) => {
@@ -1388,7 +1398,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   const PP_UPDATE_STATE = vue.reactive({
     available: false,
     latestVersion: "",
-    updateUrl: PP_SCRIPT_CDN_URL,
+    updateUrl: PP_SCRIPT_UPDATE_URL,
     message: ""
   });
   const checkScriptUpdate = () => {
@@ -2850,7 +2860,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   <button class="pp-upd-btn primary" id="update-btn" type="button">立即更新
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
                   </button>
-                  <a class="pp-upd-btn secondary" id="update-backup-btn" href="${_ppPublicEscape(PP_SCRIPT_UPDATE_URL)}" target="_blank" rel="noopener noreferrer" title="打开脚本猫链接手动更新">备用链接</a>
+                  <a class="pp-upd-btn secondary" id="update-backup-btn" href="${_ppPublicEscape(PP_SCRIPT_CDN_URL)}" target="_blank" rel="noopener noreferrer" title="打开 CDN 链接手动更新">备用链接</a>
                 </div>
                 <p class="pp-upd-hint" id="pp-upd-hint" aria-live="polite">更新完成后刷新页面即可生效</p>
               </div>
@@ -2870,7 +2880,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (primaryBtn) {
             primaryBtn.addEventListener("click", () => {
               let win = null;
-              try { win = window.open(PP_SCRIPT_CDN_URL, "_blank"); } catch (e) {}
+              try { win = window.open(PP_SCRIPT_UPDATE_URL, "_blank"); } catch (e) {}
               if (win) {
                 try { win.opener = null; } catch (e) {}
                 setHint("已在新标签页打开，安装完成后刷新本页面", "ok");
@@ -5861,6 +5871,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           platform: platformName(),
           pageUrl: pageHref()
         };
+        const clientVersion = getClientVersion();
+        if (clientVersion) payload.clientVersion = clientVersion;
         if (token) payload.token = token;
         communityCta.value = false;
         status.value = "loading";
@@ -6973,6 +6985,7 @@ const AuthorWords = _sfc_main$4;
             checkOnly: checkOnly,
             step1TaskId: step1TaskId || undefined,
             userId: questionData.u,
+            clientVersion: getClientVersion(),
             async: true
           }),
           timeout: timeout,
