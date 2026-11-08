@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.0
+// @version      4.1.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -836,10 +836,57 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 .pp-public-loading{display:flex;align-items:center;gap:9px;min-width:190px;padding:10px 13px;background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:10px;box-shadow:0 10px 28px -10px rgba(15,23,42,.32);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
 .pp-public-spinner{width:16px;height:16px;border:2px solid #e6ecf5;border-top-color:#0052d9;border-right-color:#0052d9;border-radius:50%;animation:ppPublicSpin .8s linear infinite;flex:none;}
 .pp-public-loading-text{font-size:12px;font-weight:500;color:#374151;white-space:nowrap;}
+.pp-upd-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:rgba(15,23,42,.46);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;animation:ppUpdFade .18s ease-out;}
+.pp-upd-card{position:relative;width:min(420px,100%);box-sizing:border-box;background:#fff;border-radius:18px;box-shadow:0 24px 64px -16px rgba(15,23,42,.45),0 2px 8px rgba(15,23,42,.08);overflow:hidden;animation:ppUpdIn .24s cubic-bezier(.22,.8,.32,1);}
+.pp-upd-card *{box-sizing:border-box;}
+.pp-upd-head{display:flex;align-items:center;gap:12px;padding:24px 24px 0;}
+.pp-upd-mark{width:44px;height:44px;border-radius:13px;background:linear-gradient(145deg,#eef4ff,#dbe8ff);color:#2563eb;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 0 0 1px rgba(37,99,235,.10);}
+.pp-upd-mark svg{width:22px;height:22px;display:block;}
+.pp-upd-heading{flex:1;min-width:0;}
+.pp-upd-title{margin:0;font-size:16px;font-weight:600;line-height:1.3;color:#0f172a;letter-spacing:.01em;}
+.pp-upd-sub{margin:4px 0 0;font-size:11px;line-height:1.3;color:#8492a6;}
+.pp-upd-tag{flex:none;padding:4px 9px;border-radius:999px;background:#fef3f2;border:1px solid #fecdca;color:#b42318;font-size:10px;font-weight:600;line-height:1;letter-spacing:.02em;}
+.pp-upd-versions{display:flex;align-items:center;gap:12px;margin:18px 24px 0;padding:12px 16px;border-radius:13px;background:#f5f8fd;border:1px solid #e9eef7;}
+.pp-upd-ver{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.pp-upd-ver-label{font-size:10px;line-height:1;color:#94a3b8;letter-spacing:.07em;}
+.pp-upd-ver-num{font-size:15px;font-weight:600;line-height:1.2;color:#475569;font-variant-numeric:tabular-nums;letter-spacing:.01em;}
+.pp-upd-ver.is-new .pp-upd-ver-num{font-size:16px;color:#2563eb;}
+.pp-upd-arrow{flex:1;min-width:26px;display:flex;align-items:center;color:#b8c4d6;padding:0 2px;}
+.pp-upd-arrow-line{flex:1;height:0;border-top:1px dashed #c5cfdf;}
+.pp-upd-arrow-head{width:12px;height:12px;flex:none;display:block;margin-left:-1px;}
+.pp-upd-body{padding:16px 24px 0;}
+.pp-upd-alert{display:flex;gap:10px;padding:12px 13px;border-radius:12px;background:#fef4f3;border:1px solid #fbd5d1;}
+.pp-upd-alert svg{width:16px;height:16px;flex:none;margin-top:1px;color:#dc2626;}
+.pp-upd-alert-text{min-width:0;font-size:12px;line-height:1.65;color:#b42318;}
+.pp-upd-alert-text b{display:block;font-weight:600;}
+.pp-upd-alert-text span{display:block;color:#c0362c;}
+.pp-upd-actions{display:flex;gap:10px;padding:20px 24px 0;}
+.pp-upd-btn{height:42px;border:0;border-radius:11px;font-family:inherit;font-size:13px;font-weight:600;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;transition:background .16s,box-shadow .16s,transform .12s;outline:none;-webkit-tap-highlight-color:transparent;}
+.pp-upd-btn:active{transform:translateY(1px);}
+.pp-upd-btn:focus-visible{box-shadow:0 0 0 3px rgba(37,99,235,.25);}
+.pp-upd-btn.primary{flex:1;background:linear-gradient(135deg,#2f6bf6,#1d4ed8);color:#fff;box-shadow:0 8px 18px -8px rgba(29,78,216,.7);}
+.pp-upd-btn.primary:hover{background:linear-gradient(135deg,#2a63ea,#1a44c2);}
+.pp-upd-btn.primary svg{width:15px;height:15px;}
+.pp-upd-btn.secondary{padding:0 18px;background:#f2f5fa;color:#475569;border:1px solid #e6ecf5;}
+.pp-upd-btn.secondary:hover{background:#e9eef7;color:#1e293b;}
+.pp-upd-hint{min-height:16px;margin:12px 24px 20px;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center;word-break:break-all;}
+.pp-upd-hint[data-tone="warn"]{color:#b45309;}
+.pp-upd-hint[data-tone="ok"]{color:#15803d;}
+.pp-upd-hint a{color:#2563eb;text-decoration:underline;}
 @keyframes ppPublicSpin{to{transform:rotate(360deg);}}
 @keyframes ppPublicIn{from{opacity:0;transform:translateY(4px) scale(.985);}to{opacity:1;transform:none;}}
+@keyframes ppUpdFade{from{opacity:0;}to{opacity:1;}}
+@keyframes ppUpdIn{from{opacity:0;transform:translateY(8px) scale(.97);}to{opacity:1;transform:none;}}
+@media (max-width:420px){
+  .pp-upd-head{padding:20px 18px 0;}
+  .pp-upd-versions{margin:16px 18px 0;padding:11px 13px;}
+  .pp-upd-body{padding:14px 18px 0;}
+  .pp-upd-actions{padding:16px 18px 0;gap:8px;}
+  .pp-upd-hint{margin:10px 18px 16px;}
+  .pp-upd-btn.secondary{padding:0 14px;}
+}
 @media (prefers-reduced-motion:reduce){
-  .pp-public-overlay,.pp-public-overlay *{animation-duration:.001ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
+  .pp-public-overlay,.pp-public-overlay *,.pp-upd-overlay,.pp-upd-overlay *{animation-duration:.001ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
 }
 `;
   const _ppEnsurePublicStyles = () => {
@@ -1299,12 +1346,49 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
   };
 
+  const PP_SCRIPT_CDN_URL = 'https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/script.user.js';
   const PP_SCRIPT_UPDATE_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.user.js';
+  const PP_SCRIPT_META_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.meta.js';
+  const PP_SCRIPT_VERSION_SOURCES = [
+    { url: PP_SCRIPT_CDN_URL, range: 'bytes=0-8191', updateUrl: PP_SCRIPT_CDN_URL },
+    { url: PP_SCRIPT_META_URL, updateUrl: PP_SCRIPT_UPDATE_URL },
+  ];
+
+  const fetchScriptVersion = (callback) => {
+    let index = 0;
+    const next = () => {
+      if (index >= PP_SCRIPT_VERSION_SOURCES.length) {
+        callback(null);
+        return;
+      }
+      const source = PP_SCRIPT_VERSION_SOURCES[index++];
+      const options = {
+        method: "GET",
+        url: source.range ? source.url : source.url + '?t=' + Date.now(),
+        timeout: 5000,
+        onload: (response) => {
+          try {
+            const versionMatch = String(response.responseText || '').match(/\/\/\s*@version\s+(\d+\.\d+\.\d+)/);
+            if (versionMatch && versionMatch[1]) {
+              callback({ version: versionMatch[1], updateUrl: source.updateUrl });
+              return;
+            }
+          } catch (e) {}
+          next();
+        },
+        onerror: next,
+        ontimeout: next
+      };
+      if (source.range) options.headers = { Range: source.range };
+      _GM_xmlhttpRequest(options);
+    };
+    next();
+  };
 
   const PP_UPDATE_STATE = vue.reactive({
     available: false,
     latestVersion: "",
-    updateUrl: PP_SCRIPT_UPDATE_URL,
+    updateUrl: PP_SCRIPT_CDN_URL,
     message: ""
   });
   const checkScriptUpdate = () => {
@@ -1312,24 +1396,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       if (window.__CLOUD_SCRIPT_LOADED__) return;
       if (typeof _GM_xmlhttpRequest !== "function") return;
       const currentVersion = getScriptInfo().version;
-      _GM_xmlhttpRequest({
-        method: "GET",
-        url: 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.meta.js?t=' + Date.now(),
-        timeout: 5000,
-        onload: (response) => {
-          try {
-            const versionMatch = response.responseText.match(/\/\/\s*@version\s+(\d+\.\d+\.\d+)/);
-            if (!versionMatch || !versionMatch[1]) return;
-            const latestVersion = versionMatch[1];
-            if (compareVersion(currentVersion, latestVersion) < 0) {
-              PP_UPDATE_STATE.latestVersion = latestVersion;
-              PP_UPDATE_STATE.updateUrl = PP_SCRIPT_UPDATE_URL;
-              PP_UPDATE_STATE.message = "有新版本可用，点击更新";
-              PP_UPDATE_STATE.available = true;
-            } else {
-              PP_UPDATE_STATE.available = false;
-            }
-          } catch (e) {}
+      fetchScriptVersion((result) => {
+        if (!result) return;
+        const latestVersion = result.version;
+        if (compareVersion(currentVersion, latestVersion) < 0) {
+          PP_UPDATE_STATE.latestVersion = latestVersion;
+          PP_UPDATE_STATE.updateUrl = result.updateUrl;
+          PP_UPDATE_STATE.message = "有新版本可用，点击更新";
+          PP_UPDATE_STATE.available = true;
+        } else {
+          PP_UPDATE_STATE.available = false;
         }
       });
     } catch (e) {}
@@ -2711,68 +2787,101 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
 
         const currentVersion = _GM_info?.script?.version || '1.1.2';
-        _GM_xmlhttpRequest({
-          method: "GET",
-          url: 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.meta.js?t=' + Date.now(),
-          timeout: 5000,
-          onload: (response) => {
-            try {
+        fetchScriptVersion((result) => {
+          if (!result) return;
+          const latestVersion = result.version;
 
-              const versionMatch = response.responseText.match(/\/\/\s*@version\s+(\d+\.\d+\.\d+)/);
-              if (versionMatch && versionMatch[1]) {
-                const latestVersion = versionMatch[1];
-                const updateUrl = PP_SCRIPT_UPDATE_URL;
-                const updateMessage = '本次更新为重大版本更新，建议更新';
+          if (compareVersion(currentVersion, latestVersion) < 0) {
 
-                if (compareVersion(currentVersion, latestVersion) < 0) {
-
-                  if (isMajorUpdate(currentVersion, latestVersion)) {
-                    showUpdateDialog(latestVersion, updateUrl, updateMessage, currentVersion);
-                  } else {
-                    logStore.addLog(`有新版本 v${latestVersion}，非大版本更新`, 'info');
-                  }
-                } else {
-                  logStore.addLog(`脚本已是最新版本 v${currentVersion}`, 'success');
-                }
-              }
-            } catch (e) {
-
+            if (isMajorUpdate(currentVersion, latestVersion)) {
+              showUpdateDialog(latestVersion, currentVersion);
+            } else {
+              logStore.addLog(`有新版本 v${latestVersion}，非大版本更新`, 'info');
             }
-          },
-
+          } else {
+            logStore.addLog(`脚本已是最新版本 v${currentVersion}`, 'success');
+          }
         });
       };
 
-      const showUpdateDialog = (latestVersion, updateUrl, updateMessage, currentVersion) => {
+      const showUpdateDialog = (latestVersion, currentVersion) => {
         try {
           if (document.getElementById("update-dialog")) return;
           _ppEnsurePublicStyles();
           const current = currentVersion || _GM_info?.script?.version || "";
+          const latestText = _ppPublicEscape(latestVersion);
+          const currentText = _ppPublicEscape(current);
           const dialog = document.createElement("div");
           dialog.id = "update-dialog";
           dialog.innerHTML = `
-            <div class="pp-public-overlay">
-              <div class="pp-public-modal" role="dialog" aria-modal="true" aria-label="发现新版本">
-                <div class="pp-public-head">
-                  <span class="pp-public-ico">↑</span>
-                  <div class="pp-public-titles">
-                    <div class="pp-public-title">发现新版本</div>
-                    <div class="pp-public-sub">网课小助手 · v${_ppPublicEscape(latestVersion)}</div>
+            <div class="pp-upd-overlay">
+              <div class="pp-upd-card" role="dialog" aria-modal="true" aria-labelledby="pp-upd-title">
+                <div class="pp-upd-head">
+                  <div class="pp-upd-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+                  </div>
+                  <div class="pp-upd-heading">
+                    <h2 class="pp-upd-title" id="pp-upd-title">发现新版本</h2>
+                    <p class="pp-upd-sub">网课小助手 · v${latestText}</p>
+                  </div>
+                  <span class="pp-upd-tag">强制更新</span>
+                </div>
+                <div class="pp-upd-versions">
+                  <div class="pp-upd-ver">
+                    <span class="pp-upd-ver-label">当前版本</span>
+                    <span class="pp-upd-ver-num">v${currentText}</span>
+                  </div>
+                  <span class="pp-upd-arrow" aria-hidden="true">
+                    <i class="pp-upd-arrow-line"></i>
+                    <svg class="pp-upd-arrow-head" viewBox="0 0 12 12" fill="none"><path d="m3 1.5 4.5 4.5L3 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <div class="pp-upd-ver is-new">
+                    <span class="pp-upd-ver-label">最新版本</span>
+                    <span class="pp-upd-ver-num">v${latestText}</span>
                   </div>
                 </div>
-                <div class="pp-public-body">
-                  <div class="pp-public-version">当前 v${_ppPublicEscape(current)} → 最新 v${_ppPublicEscape(latestVersion)}</div>
-                  <div>${_ppPublicEscape(updateMessage || "请更新至最新版本后继续使用")}</div>
-                  <p class="pp-public-danger">旧版本已停止使用，必须更新后才能继续使用</p>
+                <div class="pp-upd-body">
+                  <div class="pp-upd-alert" role="alert">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                    <div class="pp-upd-alert-text"><b>旧版本已停止使用</b><span>必须更新后才能继续使用</span></div>
+                  </div>
                 </div>
-                <div class="pp-public-actions">
-                  <button id="update-btn" class="pp-public-btn primary" type="button">立即更新</button>
+                <div class="pp-upd-actions">
+                  <button class="pp-upd-btn primary" id="update-btn" type="button">立即更新
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                  </button>
+                  <a class="pp-upd-btn secondary" id="update-backup-btn" href="${_ppPublicEscape(PP_SCRIPT_UPDATE_URL)}" target="_blank" rel="noopener noreferrer" title="打开脚本猫链接手动更新">备用链接</a>
                 </div>
+                <p class="pp-upd-hint" id="pp-upd-hint" aria-live="polite">更新完成后刷新页面即可生效</p>
               </div>
             </div>
           `;
           document.body.appendChild(dialog);
-          document.getElementById("update-btn").onclick = () => window.open(updateUrl, "_blank");
+
+          const hintEl = dialog.querySelector(".pp-upd-hint");
+          const primaryBtn = dialog.querySelector("#update-btn");
+          const setHint = (text, tone) => {
+            if (!hintEl) return;
+            hintEl.textContent = text;
+            if (tone) hintEl.setAttribute("data-tone", tone);
+            else hintEl.removeAttribute("data-tone");
+          };
+
+          if (primaryBtn) {
+            primaryBtn.addEventListener("click", () => {
+              let win = null;
+              try { win = window.open(PP_SCRIPT_CDN_URL, "_blank"); } catch (e) {}
+              if (win) {
+                try { win.opener = null; } catch (e) {}
+                setHint("已在新标签页打开，安装完成后刷新本页面", "ok");
+              } else {
+                setHint("浏览器拦截了新窗口，请点击「备用链接」手动打开", "warn");
+              }
+            });
+            setTimeout(() => {
+              try { primaryBtn.focus({ preventScroll: true }); } catch (e) {}
+            }, 60);
+          }
         } catch (e) {}
       };
 
