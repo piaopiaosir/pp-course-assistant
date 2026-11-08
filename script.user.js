@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.0.8
+// @version      4.1.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -6812,11 +6812,6 @@ const AuthorWords = _sfc_main$4;
           return "";
         }
       })();
-    }
-
-    if (!isZhs && !isYkt && !window.__ppFontDecryptWarned && String(questionData.questionData || "").includes("font-cxsecret")) {
-      window.__ppFontDecryptWarned = true;
-      logStore.addLog("字体解密未生效，本题将以密文上传，题库匹配和 AI 作答可能失败", "warning");
     }
 
     const startTaskId = window.__getAnswerTaskId__ ? window.__getAnswerTaskId__() : 0;
