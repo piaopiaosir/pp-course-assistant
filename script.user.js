@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.2
+// @version      4.1.3
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -1389,7 +1389,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         onerror: next,
         ontimeout: next
       };
-      if (source.range) options.headers = { Range: source.range };
+      options.headers = { "Cache-Control": "no-cache", "Pragma": "no-cache" };
+      if (source.range) options.headers.Range = source.range;
       _GM_xmlhttpRequest(options);
     };
     next();
