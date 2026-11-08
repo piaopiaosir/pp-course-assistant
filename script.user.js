@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.3
+// @version      4.1.4
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -26,8 +26,8 @@
 // @require      https://lib.baomitu.com/pinia/2.3.1/pinia.iife.min.js
 // @require      https://lib.baomitu.com/rxjs/7.8.2/rxjs.umd.min.js
 // @require      https://lib.baomitu.com/blueimp-md5/2.19.0/js/md5.min.js
-// @require      https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.0.2/font-decrypt.js
 // @resource     ElementPlusStyle  https://lib.baomitu.com/element-plus/2.8.2/index.min.css
+// @resource     fontDecryptLib    https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.0.3/font-decrypt.js
 // @connect      *
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
@@ -1055,6 +1055,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     WHITESPACE: /\s+/g,
     BR_TAG: /<br\s*\/?>/g,
     IMG_TAG: /<img.*?src="(.*?)".*?>/g,
+    MJX_CONTAINER: /<mjx-container\b[\s\S]*?<\/mjx-container>/gi,
+    DATA_LATEX: /data-latex\s*=\s*(?:"([^"]*)"|'([^']*)')/i,
+    MJX_SLOT: /\uE000MJX-(\d+)\uE000/g,
     OBJECT_ID: /objectId=([a-f0-9]+)/i,
     JOB_ID: /[?&]jobid=([^&]+)/i,
     HEX_HASH: /([a-f0-9]{24,})/i,
@@ -6108,10 +6111,67 @@ const AuthorWords = _sfc_main$4;
     return !!(lib && typeof lib.cxDecode === "function" && typeof lib.yktPrepare === "function");
   };
 
+  let _ppFontDecryptInitTried = false;
+  const ppInitFontDecryptFromResource = () => {
+    if (_ppFontDecryptInitTried) return;
+    _ppFontDecryptInitTried = true;
+    if (ppGetFontDecrypt()) return;
+    let code = "";
+    try {
+      if (typeof GM_getResourceText === "function") code = GM_getResourceText("fontDecryptLib") || "";
+    } catch (e) {
+      code = "";
+    }
+    if (!code) return;
+    try {
+      (0, eval)(code);
+    } catch (e) {
+      try {
+        console.warn("[字体解密] 库执行失败:", e && e.message ? e.message : e);
+      } catch (err) {}
+    }
+  };
+  ppInitFontDecryptFromResource();
+
+  let _ppFontDecryptWarned = false;
+  const ppWarnFontDecrypt = (msg) => {
+    if (_ppFontDecryptWarned) return;
+    _ppFontDecryptWarned = true;
+    try {
+      useLogStore().addLog(msg, "warning");
+    } catch (e) {}
+    try {
+      console.warn("[字体解密] " + msg);
+    } catch (e) {}
+  };
+  const hasCipherText = (doc) => {
+    try {
+      return !!(doc && doc.querySelector && doc.querySelector(".font-cxsecret"));
+    } catch (e) {
+      return false;
+    }
+  };
   const decodeCipherFontSafe = (doc) => {
     const lib = ppGetFontDecrypt();
-    if (!lib || typeof lib.cxDecode !== "function") return;
-    return lib.cxDecode(doc);
+    if (!lib || typeof lib.cxDecode !== "function") {
+      if (hasCipherText(doc)) {
+        ppWarnFontDecrypt("字体解密库未加载（@resource fontDecryptLib 缺失），本题可能是乱码；请重装或更新脚本");
+      }
+      return;
+    }
+    let result;
+    try {
+      result = lib.cxDecode(doc);
+    } catch (e) {
+      if (hasCipherText(doc)) {
+        ppWarnFontDecrypt("字体解密异常：" + (e && e.message ? e.message : e));
+      }
+      return;
+    }
+    if (result && result.ok === false && result.reason && result.reason !== "no-target") {
+      ppWarnFontDecrypt("字体解密未生效（" + result.reason + "），本题可能带乱码；请把该页面反馈给作者");
+    }
+    return result;
   };
 
   const ppYktPrepareFont = async (doc) => {
@@ -6383,7 +6443,15 @@ const AuthorWords = _sfc_main$4;
 
       __publicField(this, "stripTags", (html) => {
         if (html == null) return "";
-        return html.replace(REGEX.HTML_TAGS, "").replace(REGEX.NBSP, " ").replace(REGEX.WHITESPACE, " ").replace(REGEX.BR_TAG, "\n").replace(REGEX.IMG_TAG, '<img src="$1"/>').trim();
+        const formulas = [];
+        const unAttr = (v) => String(v == null ? "" : v).replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#0*39;/g, "'").replace(/&apos;/gi, "'").replace(/&amp;/gi, "&");
+        const withSlots = String(html).replace(REGEX.MJX_CONTAINER, (block) => {
+          const m = block.match(REGEX.DATA_LATEX);
+          const latex = unAttr(m ? (m[1] != null ? m[1] : m[2]) : "");
+          formulas.push(latex);
+          return latex ? ` \uE000MJX-${formulas.length - 1}\uE000 ` : `\uE000MJX-${formulas.length - 1}\uE000`;
+        });
+        return withSlots.replace(REGEX.HTML_TAGS, "").replace(REGEX.NBSP, " ").replace(REGEX.WHITESPACE, " ").replace(REGEX.BR_TAG, "\n").replace(REGEX.IMG_TAG, '<img src="$1"/>').replace(REGEX.MJX_SLOT, (all, idx) => formulas[Number(idx)] || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&apos;/g, "'").replace(/&amp;/g, "&").trim();
       });
 
       __publicField(this, "htmlWithAbsoluteImages", (el) => {
