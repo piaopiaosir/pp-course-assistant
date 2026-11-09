@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.6
+// @version      4.1.7
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -6227,9 +6227,41 @@ const AuthorWords = _sfc_main$4;
       return false;
     }
   };
+  const _ppFontDecryptState = { status: null, stats: null, at: 0 };
+  const ppFontDecryptDocStats = (doc) => {
+    try {
+      const styles = doc.querySelectorAll("style");
+      let secret = 0;
+      let base64 = 0;
+      styles.forEach((s) => {
+        const t = s.textContent || "";
+        if (t.indexOf("font-cxsecret") !== -1) secret += 1;
+        if (t.indexOf("base64,") !== -1) base64 += 1;
+      });
+      return {
+        styles: styles.length,
+        secret,
+        base64,
+        links: doc.querySelectorAll('link[rel="stylesheet"]').length,
+        cipher: doc.querySelectorAll(".font-cxsecret").length,
+      };
+    } catch (e) {
+      return null;
+    }
+  };
+  const ppFontDecryptSnapshot = () => {
+    if (!_ppFontDecryptState.status) return null;
+    return { status: _ppFontDecryptState.status, ...(_ppFontDecryptState.stats || {}) };
+  };
   const decodeCipherFontSafe = (doc) => {
+    const remember = (status) => {
+      _ppFontDecryptState.status = status;
+      _ppFontDecryptState.stats = ppFontDecryptDocStats(doc);
+      _ppFontDecryptState.at = Date.now();
+    };
     const lib = ppGetFontDecrypt();
     if (!lib || typeof lib.cxDecode !== "function") {
+      remember("no-lib");
       if (hasCipherText(doc)) {
         ppWarnFontDecrypt("字体解密库未加载（@resource fontDecryptLib 缺失），本题可能是乱码；请重装或更新脚本");
       }
@@ -6239,11 +6271,13 @@ const AuthorWords = _sfc_main$4;
     try {
       result = lib.cxDecode(doc);
     } catch (e) {
+      remember("error");
       if (hasCipherText(doc)) {
         ppWarnFontDecrypt("字体解密异常：" + (e && e.message ? e.message : e));
       }
       return;
     }
+    remember(result && result.ok === true ? "ok" : (result && result.reason) || "unknown");
     if (result && result.ok === false && result.reason && result.reason !== "no-target") {
       ppWarnFontDecrypt("字体解密未生效（" + result.reason + "），本题可能带乱码；请把该页面反馈给作者");
     }
@@ -7131,6 +7165,7 @@ const AuthorWords = _sfc_main$4;
             step1TaskId: step1TaskId || undefined,
             userId: questionData.u,
             clientVersion: getClientVersion(),
+            fontDecrypt: ppFontDecryptSnapshot(),
             async: true
           }),
           timeout: timeout,
