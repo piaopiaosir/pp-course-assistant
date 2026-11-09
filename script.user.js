@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.5
+// @version      4.1.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://tuchuang-1310788589.cos.ap-guangzhou.myqcloud.com/_selftest/icon.webp
@@ -165,8 +165,11 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-sub{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--pp-text-3);white-space:nowrap;overflow:hidden;}
 .pp-sub b{font-weight:600;color:var(--pp-brand);}
 .pp-sub i{font-style:normal;color:var(--pp-text-4);}
-.pp-update-badge{flex:none;display:inline-flex;align-items:center;height:16px;padding:0 5px;border:1px solid #fdecc8;border-radius:99px;background:#fffaeb;color:#b45309;font-size:8px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s;}
-.pp-update-badge:hover{background:#fff3d6;border-color:#f8d99a;}
+.pp-update-badge{flex:none;display:inline-flex;align-items:center;gap:3px;height:16px;padding:0 6px 0 5px;border:1px solid #dbe8ff;border-radius:99px;background:#eef4ff;color:#2563eb;font-size:8px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,box-shadow .15s;animation:ppUpdBadgeIn .32s cubic-bezier(.22,.8,.32,1) both;}
+.pp-update-badge::before{content:"";width:4px;height:4px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.12);animation:ppUpdBadgePulse 1.8s ease-in-out infinite;}
+.pp-update-badge:hover{background:#e4eeff;border-color:#c9dcff;box-shadow:0 2px 6px -2px rgba(37,99,235,.25);}
+@keyframes ppUpdBadgePulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(.8);}}
+@keyframes ppUpdBadgeIn{0%{opacity:0;transform:translateY(-2px) scale(.72);}55%{opacity:1;transform:translateY(0) scale(1.08);}100%{opacity:1;transform:translateY(0) scale(1);}}
 .pp-head-right{flex:none;display:flex;align-items:center;gap:2px;}
 .pp-live{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 6px;border-radius:7px;font-size:10px;color:var(--pp-text-3);white-space:nowrap;}
 .pp-live.on{background:var(--pp-success-bg);color:#0b7a46;}
@@ -867,8 +870,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 .pp-upd-btn.primary{flex:1;background:linear-gradient(135deg,#2f6bf6,#1d4ed8);color:#fff;box-shadow:0 8px 18px -8px rgba(29,78,216,.7);}
 .pp-upd-btn.primary:hover{background:linear-gradient(135deg,#2a63ea,#1a44c2);}
 .pp-upd-btn.primary svg{width:15px;height:15px;}
-.pp-upd-btn.secondary{padding:0 18px;background:#f2f5fa;color:#475569;border:1px solid #e6ecf5;}
-.pp-upd-btn.secondary:hover{background:#e9eef7;color:#1e293b;}
 .pp-upd-hint{min-height:16px;margin:12px 24px 20px;font-size:11px;line-height:1.5;color:#94a3b8;text-align:center;word-break:break-all;}
 .pp-upd-hint[data-tone="warn"]{color:#b45309;}
 .pp-upd-hint[data-tone="ok"]{color:#15803d;}
@@ -883,7 +884,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   .pp-upd-body{padding:14px 18px 0;}
   .pp-upd-actions{padding:16px 18px 0;gap:8px;}
   .pp-upd-hint{margin:10px 18px 16px;}
-  .pp-upd-btn.secondary{padding:0 14px;}
 }
 @media (prefers-reduced-motion:reduce){
   .pp-public-overlay,.pp-public-overlay *,.pp-upd-overlay,.pp-upd-overlay *{animation-duration:.001ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
@@ -1359,50 +1359,127 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   };
 
+  const PP_SCRIPT_GH_PROXY_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/piaopiaosir/pp-course-assistant/main/script.user.js';
   const PP_SCRIPT_CDN_URL = 'https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/script.user.js';
   const PP_SCRIPT_UPDATE_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.user.js';
   const PP_SCRIPT_META_URL = 'https://scriptcat.org/scripts/code/5597/%7C%F0%9F%A5%87PP%E7%BD%91%E8%AF%BE%E5%B0%8F%E5%8A%A9%E6%89%8B%7C%E9%A3%98%E9%A3%98%7C.meta.js';
   const PP_SCRIPT_VERSION_SOURCES = [
-    { url: PP_SCRIPT_META_URL, updateUrl: PP_SCRIPT_UPDATE_URL },
-    { url: PP_SCRIPT_CDN_URL, range: 'bytes=0-8191', updateUrl: PP_SCRIPT_CDN_URL },
+    { url: PP_SCRIPT_GH_PROXY_URL, range: 'bytes=0-8191', updateUrl: PP_SCRIPT_GH_PROXY_URL, timeout: 10000 },
+    { url: PP_SCRIPT_META_URL, updateUrl: PP_SCRIPT_UPDATE_URL, timeout: 30000 },
+    { url: PP_SCRIPT_CDN_URL, updateUrl: PP_SCRIPT_CDN_URL, timeout: 20000 },
   ];
 
-  const fetchScriptVersion = (callback) => {
+  let _ppScriptVersionPromise = null;
+  let _ppScriptVersionResult = null;
+  const fetchScriptVersionOnce = () => new Promise((resolve) => {
     let index = 0;
+    let settled = false;
+    const total = PP_SCRIPT_VERSION_SOURCES.length;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
     const next = () => {
-      if (index >= PP_SCRIPT_VERSION_SOURCES.length) {
-        callback(null);
+      if (index >= total) {
+        finish(null);
         return;
       }
-      const source = PP_SCRIPT_VERSION_SOURCES[index++];
+      attempt(PP_SCRIPT_VERSION_SOURCES[index++]);
+    };
+
+    const attempt = (source) => {
+      const succeed = (version) => {
+        finish({ version, updateUrl: source.updateUrl });
+      };
+      const fail = () => {
+        next();
+      };
+
+      if (source.range && typeof fetch === "function") {
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), source.timeout) : null;
+        fetch(source.url, {
+          method: "GET",
+          headers: { Range: source.range },
+          cache: "no-store",
+          ...(controller ? { signal: controller.signal } : {})
+        }).then((response) => {
+          if (timer) clearTimeout(timer);
+          const status = Number(response && response.status) || 0;
+          if (status !== 200 && status !== 206) {
+            fail();
+            return null;
+          }
+          return response.text().then((text) => {
+            const versionMatch = String(text || "").match(/\/\/\s*@version\s+(\d+\.\d+\.\d+)/);
+            if (versionMatch && versionMatch[1]) succeed(versionMatch[1]);
+            else fail();
+          });
+        }).catch(() => {
+          if (timer) clearTimeout(timer);
+          fail();
+        });
+        return;
+      }
+
       const options = {
         method: "GET",
-        url: source.range ? source.url : source.url + '?t=' + Date.now(),
-        timeout: 5000,
+        url: source.range ? source.url : source.url + (source.url.includes("?") ? "&" : "?") + "t=" + Date.now(),
+        timeout: source.timeout,
         onload: (response) => {
           try {
+            const status = Number(response && response.status) || 0;
+            if (status !== 200 && status !== 206) {
+              fail();
+              return;
+            }
             const versionMatch = String(response.responseText || '').match(/\/\/\s*@version\s+(\d+\.\d+\.\d+)/);
             if (versionMatch && versionMatch[1]) {
-              callback({ version: versionMatch[1], updateUrl: source.updateUrl });
+              succeed(versionMatch[1]);
               return;
             }
           } catch (e) {}
-          next();
+          fail();
         },
-        onerror: next,
-        ontimeout: next
+        onerror: fail,
+        ontimeout: fail
       };
       options.headers = { "Cache-Control": "no-cache", "Pragma": "no-cache" };
       if (source.range) options.headers.Range = source.range;
-      _GM_xmlhttpRequest(options);
+      try {
+        _GM_xmlhttpRequest(options);
+      } catch (e) {
+        fail();
+      }
     };
+
     next();
+  });
+  const fetchScriptVersion = (callback) => {
+    if (_ppScriptVersionResult) {
+      callback(_ppScriptVersionResult);
+      return;
+    }
+    if (_ppScriptVersionPromise) {
+      _ppScriptVersionPromise.then(callback);
+      return;
+    }
+    _ppScriptVersionPromise = fetchScriptVersionOnce().then((result) => {
+      if (result) _ppScriptVersionResult = result;
+      return result;
+    }).finally(() => {
+      _ppScriptVersionPromise = null;
+    });
+    _ppScriptVersionPromise.then(callback);
   };
 
   const PP_UPDATE_STATE = vue.reactive({
     available: false,
     latestVersion: "",
-    updateUrl: PP_SCRIPT_UPDATE_URL,
+    updateUrl: PP_SCRIPT_GH_PROXY_URL,
     message: ""
   });
   const checkScriptUpdate = () => {
@@ -2808,7 +2885,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (compareVersion(currentVersion, latestVersion) < 0) {
 
             if (isMajorUpdate(currentVersion, latestVersion)) {
-              showUpdateDialog(latestVersion, currentVersion);
+              showUpdateDialog(latestVersion, result.updateUrl, currentVersion);
             } else {
               logStore.addLog(`有新版本 v${latestVersion}，非大版本更新`, 'info');
             }
@@ -2818,7 +2895,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         });
       };
 
-      const showUpdateDialog = (latestVersion, currentVersion) => {
+      const showUpdateDialog = (latestVersion, updateUrl, currentVersion) => {
         try {
           if (document.getElementById("update-dialog")) return;
           _ppEnsurePublicStyles();
@@ -2864,7 +2941,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   <button class="pp-upd-btn primary" id="update-btn" type="button">立即更新
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
                   </button>
-                  <a class="pp-upd-btn secondary" id="update-backup-btn" href="${_ppPublicEscape(PP_SCRIPT_CDN_URL)}" target="_blank" rel="noopener noreferrer" title="打开 CDN 链接手动更新">备用链接</a>
                 </div>
                 <p class="pp-upd-hint" id="pp-upd-hint" aria-live="polite">更新完成后刷新页面即可生效</p>
               </div>
@@ -2884,12 +2960,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (primaryBtn) {
             primaryBtn.addEventListener("click", () => {
               let win = null;
-              try { win = window.open(PP_SCRIPT_UPDATE_URL, "_blank"); } catch (e) {}
+              try { win = window.open(updateUrl || PP_SCRIPT_GH_PROXY_URL, "_blank"); } catch (e) {}
               if (win) {
                 try { win.opener = null; } catch (e) {}
                 setHint("已在新标签页打开，安装完成后刷新本页面", "ok");
               } else {
-                setHint("浏览器拦截了新窗口，请点击「备用链接」手动打开", "warn");
+                setHint("浏览器拦截了新窗口，请允许弹窗后重试", "warn");
               }
             });
             setTimeout(() => {
