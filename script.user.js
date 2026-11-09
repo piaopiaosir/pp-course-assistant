@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.8
+// @version      4.1.9
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -19,6 +19,7 @@
 // @match        *://*.hike-teaching-center.polymas.com/*
 // @match        *://*.yuketang.cn/*
 // @match        *://*.gdufemooc.cn/*
+// @match        *://*.txootd.cn/*
 // @require      https://lib.baomitu.com/vue/3.5.0/vue.global.prod.js
 // @require      https://lib.baomitu.com/vue-demi/0.14.7/index.iife.js
 // @require      data:application/javascript,window.Vue%3DVue%3B
@@ -755,6 +756,71 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 (function (vue, pinia, rxjs, md5, ElementPlus) {
 
   'use strict';
+
+  const ppShopModalPurge = (() => {
+    const HOST_RE = /(^|\.)txootd\.cn$/i;
+    const SELECTOR = ".html-popup-modal";
+    let installed = false;
+
+    const drop = (node) => {
+      try {
+        if (node && node.parentNode) node.parentNode.removeChild(node);
+      } catch (e) {}
+    };
+
+    const sweep = () => {
+      try {
+        document.querySelectorAll(SELECTOR).forEach(drop);
+        document.querySelectorAll(".html-popup-content,.html-popup-header,.html-popup-body,.html-popup-footer").forEach((el) => {
+          if (el && el.closest(SELECTOR)) drop(el.closest(SELECTOR));
+        });
+      } catch (e) {}
+      try {
+        if (document.body) {
+          document.body.style.removeProperty("overflow");
+          document.body.style.removeProperty("padding-right");
+          document.documentElement.style.removeProperty("overflow");
+        }
+      } catch (e) {}
+    };
+
+    const install = () => {
+      if (installed) return;
+      installed = true;
+      sweep();
+      try {
+        const observer = new MutationObserver((records) => {
+          for (let i = 0; i < records.length; i += 1) {
+            const added = records[i].addedNodes;
+            for (let j = 0; j < added.length; j += 1) {
+              const node = added[j];
+              if (!node || node.nodeType !== 1) continue;
+              try {
+                if (node.matches && node.matches(SELECTOR)) {
+                  drop(node);
+                } else if (node.querySelector && node.querySelector(SELECTOR)) {
+                  sweep();
+                }
+              } catch (e) {}
+            }
+          }
+        });
+        observer.observe(document.documentElement || document, { childList: true, subtree: true });
+      } catch (e) {}
+    };
+
+    return {
+      hit: () => {
+        try { return HOST_RE.test(location.hostname); } catch (e) { return false; }
+      },
+      install
+    };
+  })();
+
+  if (ppShopModalPurge.hit()) {
+    ppShopModalPurge.install();
+    return;
+  }
 
   const PP_KEY = {
     ANSWER: "答题参数",
@@ -6203,7 +6269,7 @@ const AuthorWords = _sfc_main$4;
       (0, eval)(code);
     } catch (e) {
       try {
-        console.warn("[字体解密] 库执行失败:", e && e.message ? e.message : e);
+        console.debug("[字体解密] 库执行失败:", e && e.message ? e.message : e);
       } catch (err) {}
     }
   };
@@ -6214,10 +6280,7 @@ const AuthorWords = _sfc_main$4;
     if (_ppFontDecryptWarned) return;
     _ppFontDecryptWarned = true;
     try {
-      useLogStore().addLog(msg, "warning");
-    } catch (e) {}
-    try {
-      console.warn("[字体解密] " + msg);
+      console.debug("[字体解密] " + msg);
     } catch (e) {}
   };
   const hasCipherText = (doc) => {
@@ -6263,7 +6326,7 @@ const AuthorWords = _sfc_main$4;
     if (!lib || typeof lib.cxDecode !== "function") {
       remember("no-lib");
       if (hasCipherText(doc)) {
-        ppWarnFontDecrypt("字体解密库未加载（@resource fontDecryptLib 缺失），本题可能是乱码；请重装或更新脚本");
+        ppWarnFontDecrypt("库未加载（@resource fontDecryptLib 缺失）");
       }
       return;
     }
@@ -6273,13 +6336,13 @@ const AuthorWords = _sfc_main$4;
     } catch (e) {
       remember("error");
       if (hasCipherText(doc)) {
-        ppWarnFontDecrypt("字体解密异常：" + (e && e.message ? e.message : e));
+        ppWarnFontDecrypt("解密异常：" + (e && e.message ? e.message : e));
       }
       return;
     }
     remember(result && result.ok === true ? "ok" : (result && result.reason) || "unknown");
     if (result && result.ok === false && result.reason && result.reason !== "no-target") {
-      ppWarnFontDecrypt("字体解密未生效（" + result.reason + "），本题可能带乱码；请把该页面反馈给作者");
+      ppWarnFontDecrypt("未生效（" + result.reason + "）");
     }
     return result;
   };
@@ -15232,10 +15295,9 @@ const AuthorWords = _sfc_main$4;
         return null;
       }
     };
-    const yktPrepareFont = async (target, quiet) => {
+    const yktPrepareFont = async (target) => {
       if (!target) return false;
       if (!ppFontDecryptAvailable()) {
-        if (!quiet) logStore.addLog("字体解密库未加载，雨课堂题目将不做解密（不影响其他功能）", "warning");
         return false;
       }
       let hasCipher = false;
@@ -15244,12 +15306,6 @@ const AuthorWords = _sfc_main$4;
       } catch (e) {}
       if (!hasCipher) return true;
       const ok = await ppYktPrepareFont(target);
-      if (!quiet) {
-        logStore.addLog(
-          ok ? "字体解密表已就绪，题目内容将按明文上传" : "字体解密表准备失败，题目可能带乱码（不影响提交）",
-          ok ? "success" : "warning",
-        );
-      }
       return ok;
     };
 
@@ -15275,7 +15331,7 @@ const AuthorWords = _sfc_main$4;
     };
 
     for (let guard = 0; guard < 200; guard++) {
-      await yktPrepareFont(yktExerciseDoc() || document, true);
+      await yktPrepareFont(yktExerciseDoc() || document);
 
       const activeJob = yktJobs().find((el) => el.classList.contains("is-active"));
       const activeTag = yktActiveTag();
@@ -15304,7 +15360,7 @@ const AuthorWords = _sfc_main$4;
         logStore.addLog("发现任务点：图文，已自动打开", "success");
         await delay(1.2);
       } else if (wantAnswer && (activeTag === "作业" || (!activeTag && exerciseDoc))) {
-        await useYktHomeworkLogic(exerciseDoc, logStore, (target) => yktPrepareFont(target, true));
+        await useYktHomeworkLogic(exerciseDoc, logStore, (target) => yktPrepareFont(target));
         await delay(1.5);
       } else if (!wantVideo) {
         logStore.addLog("仅答题模式：跳过视频与图文任务", "info");
