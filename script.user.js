@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.1.9
+// @version      4.2.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -842,13 +842,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     BREAK_RATE: "突破倍速",
     AUTO_NEXT: "自动切换",
     REVIEW: "复习模式",
-    CHAPTER: "章节设置",
+    CHAPTER: "章节/作业/测验设置",
+    ZHS_CHAPTER: "章节设置",
     YKT_CHAPTER: "章节/习题设置",
     EXAM: "考试设置",
+    EXAM_PREVIEW: "跳转整页答题",
     ANSWER_GAP: "答题间隔",
     SIM_DELAY: "模拟延迟",
     SIMILAR: "相似匹配",
-    THRESHOLD: "正确阈值",
+    THRESHOLD: "填涂阈值",
     STANDBY: "激活挂机",
     DIRECT_REPORT: "直接上报",
     MISC: "其他设置",
@@ -1710,6 +1712,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     type: "number"
                   },
                   {
+                    name: PP_KEY.AUTO_SUBMIT,
+                    value: false,
+                    type: "boolean"
+                  },
+                  {
                     name: PP_KEY.THRESHOLD,
                     value: 85,
                     type: "number"
@@ -1720,11 +1727,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 name: PP_KEY.CHAPTER,
                 params: [
                   {
-                    name: PP_KEY.AUTO_SUBMIT,
-                    value: false,
-                    type: "boolean"
-                  },
-                  {
                     name: PP_KEY.AUTO_NEXT,
                     value: true,
                     type: "boolean"
@@ -1734,6 +1736,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               {
                 name: PP_KEY.EXAM,
                 params: [
+                  {
+                    name: PP_KEY.EXAM_PREVIEW,
+                    value: true,
+                    type: "boolean"
+                  },
                   {
                     name: PP_KEY.AUTO_NEXT,
                     value: true,
@@ -1812,16 +1819,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     name: PP_KEY.ANSWER_GAP,
                     value: 1,
                     type: "number"
-                  },
-                  {
-                    name: PP_KEY.THRESHOLD,
-                    value: 85,
-                    type: "number"
                   }
                 ]
               },
               {
-                name: PP_KEY.CHAPTER,
+                name: PP_KEY.ZHS_CHAPTER,
                 params: [
                   { name: "忽略习惯弹窗", value: false, type: "boolean" },
                   { name: PP_KEY.AUTO_NEXT, value: true, type: "boolean" }
@@ -1875,14 +1877,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                   { name: PP_KEY.SIMILAR, value: true, type: "boolean" },
                   { name: PP_KEY.SIM_DELAY, value: true, type: "boolean" },
                   { name: PP_KEY.ANSWER_GAP, value: 1, type: "number" },
-                  { name: PP_KEY.THRESHOLD, value: 85, type: "number" }
+                  { name: PP_KEY.AUTO_SUBMIT, value: true, type: "boolean" }
                 ]
               },
               {
                 name: PP_KEY.YKT_CHAPTER,
                 params: [
                   { name: "自动评论", value: false, type: "boolean" },
-                  { name: PP_KEY.AUTO_SUBMIT, value: true, type: "boolean" },
                   { name: PP_KEY.AUTO_NEXT, value: true, type: "boolean" }
                 ]
               }
@@ -3056,6 +3057,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         [PP_KEY.VIDEO]: "play",
         [PP_KEY.ANSWER]: "spark",
         [PP_KEY.CHAPTER]: "list",
+        [PP_KEY.ZHS_CHAPTER]: "list",
         [PP_KEY.YKT_CHAPTER]: "list",
         [PP_KEY.EXAM]: "shield",
         [PP_KEY.ANSWER_SETTINGS]: "spark"
@@ -3077,9 +3079,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         [PP_KEY.MODE]: "选择脚本在当前页面的运行方式，模式之间互斥。",
         [PP_KEY.VIDEO]: "控制播放方式、倍速与视频内答题行为。",
         [PP_KEY.ANSWER]: "选择题库 / AI 答题策略，并控制消耗与准确率。",
-        [PP_KEY.CHAPTER]: "控制章节任务的提交、弹窗忽略与任务点自动切换。",
-        [PP_KEY.YKT_CHAPTER]: "控制雨课堂章节/习题的评论、提交与自动切换。",
-        [PP_KEY.EXAM]: "控制考试页面的自动切换行为。",
+        [PP_KEY.CHAPTER]: "控制章节测验与作业任务点的自动切换。",
+        [PP_KEY.ZHS_CHAPTER]: "控制智慧树章节的弹窗忽略与任务点自动切换。",
+        [PP_KEY.YKT_CHAPTER]: "控制雨课堂章节/习题的评论与自动切换。",
+        [PP_KEY.EXAM]: "控制整卷预览时是否跳转整页答题，以及逐题模式下是否自动切下一题。",
         [PP_KEY.ANSWER_SETTINGS]: "控制智慧树的答题行为。"
       };
       const MODE_DESCS = {
@@ -3088,6 +3091,10 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         [PP_KEY.ONLY_ANSWER]: "只完成章节测验、作业或考试，不主动播放视频。",
         [PP_KEY.REVIEW]: "重新完成已学内容，适合考前复习。",
         "答题": "开启后执行智慧树答题。"
+      };
+      const AUTO_SUBMIT_HINTS = {
+        cx: "开启后填涂率达标自动提交章节测验",
+        ykt: "开启后作业填完自动提交，考试只填不交卷"
       };
 
       const hasParam = (part, name) => part.params.some((p) => p.name === name);
@@ -3539,6 +3546,11 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           hints.push(ppHint("浏览器最小化刷课时，请开启激活挂机", { tone: "ok", icon: "check" }));
         }
         if (part.name === PP_KEY.ANSWER) {
+          const autoSubmit = getParam(part, PP_KEY.AUTO_SUBMIT);
+          const autoSubmitHint = AUTO_SUBMIT_HINTS[configStore.platformName];
+          if (autoSubmit && autoSubmit.value && autoSubmitHint) {
+            hints.push(ppHint(autoSubmitHint, { tone: "warn", icon: "alert" }));
+          }
           const verify = getParam(part, PP_KEY.VERIFY);
           if (verify && verify.value) {
             hints.push(ppHint("校验模式会同时请求题库与 AI，答题次数多倍消耗、耗时更长", { tone: "warn", icon: "alert" }));
@@ -3546,6 +3558,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           const web = getParam(part, PP_KEY.WEB_SEARCH);
           if (aiActive(part) && web && web.value) {
             hints.push(ppHint("联网搜索会显著增加 Token 与答题次数消耗", { tone: "warn", icon: "alert" }));
+          }
+        }
+        if (part.name === PP_KEY.EXAM) {
+          const jumpPreview = getParam(part, PP_KEY.EXAM_PREVIEW);
+          if (jumpPreview && !jumpPreview.value) {
+            hints.push(ppHint("已关闭整页跳转：按逐题模式作答，需配合「自动切换」进入下一题", { icon: "info" }));
           }
         }
         if (part.name === PP_KEY.VIDEO) {
@@ -6808,6 +6826,7 @@ const AuthorWords = _sfc_main$4;
   const ANSWER_THRESHOLD_DEFAULT = 85;
   const ANSWER_THRESHOLD_MIN = 50;
   const ANSWER_THRESHOLD_MAX = 99;
+  const FILL_MATCH_FLOOR = 85;
 
   const findAnswerParam = (platformKey, paramName) => {
     try {
@@ -6969,16 +6988,16 @@ const AuthorWords = _sfc_main$4;
       return { fillRate, threshold, action: "idle" };
     }
     if (fillRate >= threshold) {
-      addLog(`填入率 ${fillRate}% ≥ 正确阈值 ${threshold}%：自动提交`, "success");
+      addLog(`填入率 ${fillRate}% ≥ 填涂阈值 ${threshold}%：自动提交`, "success");
       await opts.submit();
       return { fillRate, threshold, action: "submit" };
     }
     if (canDraft) {
-      addLog(`填入率 ${fillRate}% < 正确阈值 ${threshold}%：不自动提交，已暂存`, "warning");
+      addLog(`填入率 ${fillRate}% < 填涂阈值 ${threshold}%：不自动提交，已暂存`, "warning");
       await opts.draft();
       return { fillRate, threshold, action: "draft" };
     }
-    addLog(`填入率 ${fillRate}% < 正确阈值 ${threshold}%：不自动提交，请手动补答后提交`, "warning");
+    addLog(`填入率 ${fillRate}% < 填涂阈值 ${threshold}%：不自动提交，请手动补答后提交`, "warning");
     return { fillRate, threshold, action: "draft" };
   };
 
@@ -8020,8 +8039,7 @@ const AuthorWords = _sfc_main$4;
       const configStore = useConfigStore();
       const answerParams = configStore.platformParams[configStore.platformName]?.parts.find((p) => p.name === PP_KEY.ANSWER)?.params || [];
       const useSimilarity = answerParams.find((p) => p.name === PP_KEY.SIMILAR)?.value !== false;
-      const thresholdRaw = Number(answerParams.find((p) => p.name === PP_KEY.THRESHOLD)?.value);
-      const threshold = Math.min(99, Math.max(50, Number.isFinite(thresholdRaw) && thresholdRaw > 0 ? thresholdRaw : 85));
+      const threshold = FILL_MATCH_FLOOR;
 
       const optionList = getOptionList(question);
       const answerList = Array.isArray(question.answer)
@@ -10557,7 +10575,7 @@ const AuthorWords = _sfc_main$4;
           addLog: (msg, type) => logStore.addLog(msg, type),
           pageLabel: "章节/作业/测验",
           platformKey: "cx",
-          autoSubmit: readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, false),
+          autoSubmit: readCxParamValue(PP_KEY.ANSWER, PP_KEY.AUTO_SUBMIT, false),
           filled: Number(handler.correctNum) || 0,
           total: Number(handler.questions?.length) || 0,
           skipped: Number(handler.skippedCount) || 0,
@@ -11204,7 +11222,7 @@ const AuthorWords = _sfc_main$4;
       addLog: (msg, type) => logStore.addLog(msg, type),
       pageLabel: "随堂练习",
       platformKey: "cx",
-      autoSubmit: readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_SUBMIT, false),
+      autoSubmit: readCxParamValue(PP_KEY.ANSWER, PP_KEY.AUTO_SUBMIT, false),
       filled: filledCount,
       total: answerTotal,
       skipped: skippedCount,
@@ -11242,7 +11260,7 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog(`检测到学习通作业页面`, "primary");
     logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     await new CxQuestionHandler("zy").init();
-    logStore.addLog("当前页面不支持自动提交：请检查已填入的答案后手动保存", "warning");
+    logStore.addLog("作业不自动提交：请检查已填入的答案后手动保存", "warning");
   };
 
   const answerExamPreview = async () => {
@@ -11267,8 +11285,9 @@ const AuthorWords = _sfc_main$4;
 
       const markInfo = _unsafeWindow.document.querySelector('.mark_info');
       const disallowPreview = markInfo?.textContent?.includes('不允许整卷预览');
+      const jumpToPreview = readCxParamValue(PP_KEY.EXAM, PP_KEY.EXAM_PREVIEW, true);
 
-      if (!disallowPreview) {
+      if (!disallowPreview && jumpToPreview) {
 
         logStore.addLog(`允许整卷预览，即将跳转到整卷预览页面`, "primary");
         await delay(3);
@@ -11279,7 +11298,11 @@ const AuthorWords = _sfc_main$4;
         return;
       }
 
-      logStore.addLog(`当前考试不允许整卷预览，进入逐题答题模式`, "warning");
+      if (!disallowPreview) {
+        logStore.addLog(`已关闭跳转整页答题，进入逐题答题模式`, "warning");
+      } else {
+        logStore.addLog(`当前考试不允许整卷预览，进入逐题答题模式`, "warning");
+      }
       logStore.addLog(`在考完前禁止手动切换题目，否则会导致重复答题！`, "warning");
       _GM_setValue('pp_exam_sequential', true);
     }
@@ -13107,9 +13130,9 @@ const AuthorWords = _sfc_main$4;
       autoPlay: readParam(ZH_STUDY_PART, PP_KEY.NORMAL_PLAY, true) !== false,
       autoSpeed: readParam(ZH_STUDY_PART, PP_KEY.AUTO_RATE, true) !== false,
       speed: Math.min(Math.max(1, speedRaw), zhSpeedCeiling()),
-      autoNext: readParam(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true) !== false,
+      autoNext: readParam(PP_KEY.ZHS_CHAPTER, PP_KEY.AUTO_NEXT, true) !== false,
       quizAuto: readParam(ZH_STUDY_PART, "弹题作答", true) !== false,
-      ignoreHabit: readParam(PP_KEY.CHAPTER, "忽略习惯弹窗", false) === true,
+      ignoreHabit: readParam(PP_KEY.ZHS_CHAPTER, "忽略习惯弹窗", false) === true,
       captchaNotify: true
     };
   };
@@ -14603,14 +14626,13 @@ const AuthorWords = _sfc_main$4;
     if (typeCode === "0" || typeCode === "1" || typeCode === "3") {
       if (!list.length) return false;
       let useSimilarity = true;
-      let threshold = 85;
       try {
         const cfg = useConfigStore();
         const answerPart = cfg.platformParams[cfg.platformName]?.parts.find((p) => p && p.name === PP_KEY.ANSWER);
         const similarParam = answerPart && answerPart.params.find((p) => p && p.name === PP_KEY.SIMILAR);
         if (similarParam) useSimilarity = similarParam.value !== false;
-        threshold = resolveAnswerThreshold(cfg.platformName);
       } catch (e) {}
+      const threshold = FILL_MATCH_FLOOR;
       const fuzzyPick = (ans) => {
         if (!useSimilarity) return -1;
         const target = String(ans == null ? "" : ans).trim();
@@ -14861,7 +14883,7 @@ const AuthorWords = _sfc_main$4;
     const progressStore = useProgressStore();
     const autoSwitch = readYktParam(PP_KEY.YKT_CHAPTER, PP_KEY.AUTO_NEXT, true);
     const skipAnswered = readYktParam(PP_KEY.ANSWER, PP_KEY.SKIP_ANSWERED, true);
-    const autoSubmit = readYktParam(PP_KEY.YKT_CHAPTER, PP_KEY.AUTO_SUBMIT, true);
+    const autoSubmit = readYktParam(PP_KEY.ANSWER, PP_KEY.AUTO_SUBMIT, true);
 
     let handled = 0;
     let filled = 0;
