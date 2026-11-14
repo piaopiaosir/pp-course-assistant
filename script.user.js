@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.2.0
+// @version      4.2.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -840,6 +840,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     AUTO_RATE: "自动倍速",
     MANUAL_RATE: "手动倍速",
     BREAK_RATE: "突破倍速",
+    RHYTHM: "节奏抖动",
     AUTO_NEXT: "自动切换",
     REVIEW: "复习模式",
     CHAPTER: "章节/作业/测验设置",
@@ -1636,7 +1637,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                     exclusiveGroup: "playMode"
                   },
                   {
-                    name: "规避检测",
+                    name: PP_KEY.RHYTHM,
                     value: false,
                     type: "boolean",
                     dependsOn: { param: PP_KEY.SIMULATE, value: true }
@@ -9830,7 +9831,7 @@ const AuthorWords = _sfc_main$4;
           const videojs_id = String(parseInt(Math.random() * 9999999));
           document.cookie = 'videojs_id=' + videojs_id + ';path=/';
 
-          const evasionEnabled = cxVideoParamValue("规避检测", false);
+          const evasionEnabled = cxVideoParamValue(PP_KEY.RHYTHM, false);
 
           const parseVideoCpi = () => {
             const m = window.location.href.match(/[?&]cpi=(\d+)/);
