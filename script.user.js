@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.2.1
+// @version      4.3.0
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -16,7 +16,7 @@
 // @match        *://*.sslibrary.com/*
 // @match        *://onlineexamh5new.zhihuishu.com/*
 // @match        *://*.zhihuishu.com/*
-// @match        *://*.hike-teaching-center.polymas.com/*
+// @match        *://*.polymas.com/*
 // @match        *://*.yuketang.cn/*
 // @match        *://*.gdufemooc.cn/*
 // @match        *://*.txootd.cn/*
@@ -28,7 +28,7 @@
 // @require      https://lib.baomitu.com/rxjs/7.8.2/rxjs.umd.min.js
 // @require      https://lib.baomitu.com/blueimp-md5/2.19.0/js/md5.min.js
 // @resource     ElementPlusStyle  https://lib.baomitu.com/element-plus/2.8.2/index.min.css
-// @resource     fontDecryptLib    https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.0.3/font-decrypt.js
+// @resource     fontDecryptLib    https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.1.0/font-decrypt.js
 // @connect      *
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
@@ -6485,21 +6485,21 @@ const AuthorWords = _sfc_main$4;
 
   class QuestionProcessor {
     constructor() {
-      __publicField(this, "_document", document);
-      __publicField(this, "_window", _unsafeWindow);
+      __publicField(this, "_doc", document);
+      __publicField(this, "_win", _unsafeWindow);
       __publicField(this, "addLog");
       __publicField(this, "addQuestion");
       __publicField(this, "questions", []);
-      __publicField(this, "correctNum", 0);
-      __publicField(this, "isFilling", false);
-      __publicField(this, "parseHtml", () => {
-        throw new Error("Abstract method: parseHtml must be implemented by subclass");
+      __publicField(this, "answeredCount", 0);
+      __publicField(this, "_applying", false);
+      __publicField(this, "collectQuestions", () => {
+        throw new Error("Abstract method: collectQuestions must be implemented by subclass");
       });
-      __publicField(this, "fillQuestion", (question) => {
-        throw new Error("Abstract method: fillQuestion must be implemented by subclass");
+      __publicField(this, "applyAnswers", (question) => {
+        throw new Error("Abstract method: applyAnswers must be implemented by subclass");
       });
 
-      __publicField(this, "checkIfAnswered", (question) => {
+      __publicField(this, "isAlreadyDone", (question) => {
 
         if (question.type === "0" || question.type === "1") {
           for (const key in question.options) {
@@ -6594,7 +6594,7 @@ const AuthorWords = _sfc_main$4;
         if (question.type === "26") {
           try {
             const textareaElement = question.element.querySelector("textarea");
-            const UE = this._window && this._window.UE;
+            const UE = this._win && this._win.UE;
             const ueditor =
               UE && textareaElement && typeof UE.getEditor === "function"
                 ? UE.getEditor(textareaElement.id || textareaElement.name)
@@ -6631,7 +6631,7 @@ const AuthorWords = _sfc_main$4;
         return false;
       });
 
-      __publicField(this, "typeMap", PP_TYPE_CODE_MAP);
+      __publicField(this, "typeCodeMap", PP_TYPE_CODE_MAP);
 
       __publicField(this, "stripTags", (html) => {
         if (html == null) return "";
@@ -6698,8 +6698,8 @@ const AuthorWords = _sfc_main$4;
         return clone.innerHTML;
       });
 
-      __publicField(this, "extractOptions", (optionElements, optionSelector) => {
-        const optionsObject = {};
+      __publicField(this, "collectOptionNodes", (optionElements, optionSelector) => {
+        const optionNodeMap = {};
         const optionTexts = [];
         const optionsList = [];
         const allElements = Array.from(optionElements || []);
@@ -6712,13 +6712,13 @@ const AuthorWords = _sfc_main$4;
           optionTexts.push(optionTextContent);
           let key = optionTextContent;
           let suffix = 2;
-          while (Object.prototype.hasOwnProperty.call(optionsObject, key)) {
+          while (Object.prototype.hasOwnProperty.call(optionNodeMap, key)) {
             key = optionTextContent + "#" + suffix;
             suffix += 1;
           }
-          optionsObject[key] = optionElement;
+          optionNodeMap[key] = optionElement;
         });
-        return [optionsObject, optionTexts, optionsList];
+        return [optionNodeMap, optionTexts, optionsList];
       });
 
       __publicField(this, "trimTitle", (str) => {
@@ -7483,9 +7483,9 @@ const AuthorWords = _sfc_main$4;
 
       __publicField(this, "init", async () => {
         await ppfxWaitFaceCheck();
-        await waitForAudioFrames(this._document, 5000);
+        await waitForAudioFrames(this._doc, 5000);
         this.questions = [];
-        this.parseHtml();
+        this.collectQuestions();
         if (this.questions.length) {
           const progressStore = useProgressStore();
           const answerLabel = this.type === "ks" ? "考试答题" : this.type === "zj" ? "章节测验" : "作业答题";
@@ -7512,7 +7512,7 @@ const AuthorWords = _sfc_main$4;
 
           const _answerParamsPart1 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === PP_KEY.ANSWER);
           const skipAnswered = _answerParamsPart1?.params.find(p => p.name === PP_KEY.SKIP_ANSWERED)?.value || false;
-          this.correctNum = 0;
+          this.answeredCount = 0;
           this.skippedCount = 0;
           this.failedCount = 0;
           let skippedCount = 0;
@@ -7532,7 +7532,7 @@ const AuthorWords = _sfc_main$4;
             }
 
             ppLogAnswerQuestion((msg, type) => this.addLog(msg, type), index + 1, question.title);
-            if (skipAnswered && this.checkIfAnswered(question, this.type)) {
+            if (skipAnswered && this.isAlreadyDone(question, this.type)) {
               ppLogAnswerSkipped((msg, type) => this.addLog(msg, type), index + 1);
               skippedCount += 1;
               question.skipped = true;
@@ -7550,12 +7550,12 @@ const AuthorWords = _sfc_main$4;
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
               question.sourceName = answerData.data.sourceName || "";
-              const filledOk = (await this.fillQuestion(question)) === true;
+              const filledOk = (await this.applyAnswers(question)) === true;
               if (filledOk) {
-                this.correctNum += 1;
+                this.answeredCount += 1;
                 progressStore.update({
-                  filledCount: this.correctNum,
-                  fillRate: computeFillRate(this.correctNum, answerTotal)
+                  filledCount: this.answeredCount,
+                  fillRate: computeFillRate(this.answeredCount, answerTotal)
                 });
                 ppLogAnswerFilled((msg, type) => this.addLog(msg, type), index + 1, {
                   source: answerData.data.source,
@@ -7588,22 +7588,22 @@ const AuthorWords = _sfc_main$4;
           }
           this.skippedCount = skippedCount;
           this.failedCount = failedCount;
-          this.fillRate = computeFillRate(this.correctNum, answerTotal);
+          this.fillRate = computeFillRate(this.answeredCount, answerTotal);
           ppLogAnswerSummary((msg, type) => this.addLog(msg, type), {
-            handled: aborted ? this.correctNum + skippedCount + failedCount : answerTotal,
-            filled: this.correctNum,
+            handled: aborted ? this.answeredCount + skippedCount + failedCount : answerTotal,
+            filled: this.answeredCount,
             skipped: skippedCount,
             failed: failedCount,
             total: answerTotal,
           });
           progressStore.update({
-            filledCount: this.correctNum,
+            filledCount: this.answeredCount,
             fillRate: this.fillRate
           });
           if (aborted) {
             progressStore.update({
               isPlaying: false,
-              detail: `答题已中断（${this.correctNum} / ${answerTotal}）`
+              detail: `答题已中断（${this.answeredCount} / ${answerTotal}）`
             });
           } else {
             progressStore.update({
@@ -7615,18 +7615,18 @@ const AuthorWords = _sfc_main$4;
           }
         } else
           this.addLog("未解析到题目，请进入正确页面", "danger");
-        return Promise.resolve(this.questions.length > 0 ? this.correctNum / this.questions.length * 100 : 0);
+        return Promise.resolve(this.questions.length > 0 ? this.answeredCount / this.questions.length * 100 : 0);
       });
 
-      __publicField(this, "parseHtml", () => {
-        if (!this._document)
+      __publicField(this, "collectQuestions", () => {
+        if (!this._doc)
           return [];
         if (["zj"].includes(this.type)) {
-          const questionElements = this._document.querySelectorAll(SELECTORS.CX_QUESTION_ZJ);
-          this.addQuestions(questionElements);
+          const questionElements = this._doc.querySelectorAll(SELECTORS.CX_QUESTION_ZJ);
+          this.pushQuestions(questionElements);
         } else if (["zy", "ks"].includes(this.type)) {
-          const questionElements = this._document.querySelectorAll(SELECTORS.CX_QUESTION_ZY_KS);
-          this.addQuestions(questionElements);
+          const questionElements = this._doc.querySelectorAll(SELECTORS.CX_QUESTION_ZY_KS);
+          this.pushQuestions(questionElements);
         }
       });
 
@@ -7682,7 +7682,7 @@ const AuthorWords = _sfc_main$4;
             await sleep(120);
           }
           let wrote = 0;
-          const UE = this._window && this._window.UE;
+          const UE = this._win && this._win.UE;
           const textarea = blankEl.querySelector("textarea");
           const editor =
             UE && textarea && typeof UE.getEditor === "function"
@@ -7836,7 +7836,7 @@ const AuthorWords = _sfc_main$4;
           for (const idx of picked) {
             const el = (sub.elements || [])[idx];
             if (!el) continue;
-            if (this.isOptionSelected(el)) continue;
+            if (this.isChoiceChecked(el)) continue;
             await clickEl(el);
             filled += 1;
           }
@@ -7846,8 +7846,8 @@ const AuthorWords = _sfc_main$4;
         return filled > 0;
       });
 
-      __publicField(this, "fillQuestion", async (question) => {
-        if (!this._window)
+      __publicField(this, "applyAnswers", async (question) => {
+        if (!this._win)
           return false;
 
         try {
@@ -7859,7 +7859,7 @@ const AuthorWords = _sfc_main$4;
             ? rawAnswer.some((item) => String(item == null ? "" : item).trim() !== "")
             : String(rawAnswer == null ? "" : rawAnswer).trim() !== "";
           this._fillNoop = false;
-          if (await this.fillQuestionV2(question)) {
+          if (await this.applyAnswersInternal(question)) {
             return hasAnswerPayload && this._fillNoop !== true;
           }
           if (question.type === "4" || question.type === "5" || question.type === "6" || question.type === "7" || question.type === "8") {
@@ -7874,7 +7874,7 @@ const AuthorWords = _sfc_main$4;
             .map((line) => "<p>" + line + "</p>")
             .join("");
 
-          const ue = this._window.UE;
+          const ue = this._win.UE;
           const ueditor =
             ue && typeof ue.getEditor === "function"
               ? ue.getEditor(textareaElement.id || textareaElement.name)
@@ -7953,7 +7953,7 @@ const AuthorWords = _sfc_main$4;
               : String(question.answer == null ? "" : question.answer);
             if (!answerText.trim()) return false;
             const textareaElement = question.element.querySelector("textarea");
-            const UE = this._window && this._window.UE;
+            const UE = this._win && this._win.UE;
             const ueditor =
               UE && textareaElement && typeof UE.getEditor === "function"
                 ? UE.getEditor(textareaElement.id || textareaElement.name)
@@ -8003,26 +8003,26 @@ const AuthorWords = _sfc_main$4;
           this.addLog(`答题过程发生错误：${error.message}`, "danger");
           return false;
         } finally {
-          this.isFilling = false;
+          this._applying = false;
         }
       });
       this.type = type;
       if (iframe) {
-        this._document = iframe.contentDocument;
-        this._window = iframe.contentWindow;
-        decodeCipherFontSafe(this._document);
+        this._doc = iframe.contentDocument;
+        this._win = iframe.contentWindow;
+        decodeCipherFontSafe(this._doc);
       } else {
-        decodeCipherFontSafe(this._document);
+        decodeCipherFontSafe(this._doc);
       }
     }
-    isOptionSelected(optionElement) {
+    isChoiceChecked(optionElement) {
       if (["zj", "zy"].includes(this.type)) return ppOptionLooksSelected(optionElement);
       if (["ks"].includes(this.type)) {
         return !!(optionElement.querySelector(".check_answer") || optionElement.querySelector(".check_answer_dx"));
       }
       return false;
     }
-    async fillQuestionV2(question) {
+    async applyAnswersInternal(question) {
       let type = String(question.type);
       const isZhs = String(question.workType) === "zhs";
       const supportedTypes = isZhs
@@ -8080,8 +8080,8 @@ const AuthorWords = _sfc_main$4;
           done += 1;
         }
         try {
-          const fn = this._window && this._window.getFillinBlanksDataForQuestion;
-          if (typeof fn === "function") fn.call(this._window, info.qid);
+          const fn = this._win && this._win.getFillinBlanksDataForQuestion;
+          if (typeof fn === "function") fn.call(this._win, info.qid);
         } catch (e) {}
         return done > 0;
       }
@@ -8123,7 +8123,7 @@ const AuthorWords = _sfc_main$4;
           for (let i = 0; i < optionList.length; i++) {
             const el = optionList[i].el;
             if (!el || targetIndices.includes(i)) continue;
-            if (this.isOptionSelected(el)) {
+            if (this.isChoiceChecked(el)) {
               await clickOption(el);
             }
           }
@@ -8133,7 +8133,7 @@ const AuthorWords = _sfc_main$4;
         for (const idx of targetIndices) {
           const el = optionList[idx].el;
           if (!el) continue;
-          if (this.isOptionSelected(el)) continue;
+          if (this.isChoiceChecked(el)) continue;
           await clickOption(el);
         }
         return true;
@@ -8149,7 +8149,7 @@ const AuthorWords = _sfc_main$4;
           const idx = matchOptionIndex(optionList, rawAnswer);
           const el = idx >= 0 ? optionList[idx].el : null;
           if (el) {
-            if (!this.isOptionSelected(el)) await clickOption(el);
+            if (!this.isChoiceChecked(el)) await clickOption(el);
             return true;
           }
         }
@@ -8192,7 +8192,7 @@ const AuthorWords = _sfc_main$4;
           return true;
         }
         if (target.classList && target.classList.contains("check_answer")) return true;
-        if (this.isOptionSelected(target)) return true;
+        if (this.isChoiceChecked(target)) return true;
         const holder = target.closest ? target.closest(".answerBg") : null;
         if (holder && (holder.querySelector(".check_answer") || holder.querySelector(".check_answer_dx"))) return true;
         await clickOption(target);
@@ -8333,7 +8333,7 @@ const AuthorWords = _sfc_main$4;
               inpDiv.click();
               await sleep(300);
             }
-            const UE = this._window && this._window.UE;
+            const UE = this._win && this._win.UE;
             const ueditor = UE && typeof UE.getEditor === "function" ? UE.getEditor(textareaElement.id || textareaElement.name) : null;
             if (ueditor && typeof ueditor.setContent === "function") {
               if (ueditor.body === null) {
@@ -8510,12 +8510,12 @@ const AuthorWords = _sfc_main$4;
       const code = input ? String(input.value || "").trim() : "";
       return code || "999";
     }
-    addQuestions(questionElements) {
+    pushQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
         var _a, _b, _c, _d;
         let questionTitle = "";
         let optionElements;
-        let optionsObject = {};
+        let optionNodeMap = {};
         let optionTexts = [];
         let optionsList = [];
         const resolvedType = this.resolveQuestionType(questionElement);
@@ -8578,7 +8578,7 @@ const AuthorWords = _sfc_main$4;
             optionsList: [],
             answer: [],
             workType: this.type,
-            refer: this._window.location.href,
+            refer: this._win.location.href,
             _reading: subs
           });
           return;
@@ -8613,7 +8613,7 @@ const AuthorWords = _sfc_main$4;
               optionsList: [],
               answer: [],
               workType: this.type,
-              refer: this._window.location.href,
+              refer: this._win.location.href,
               _cloze: cloze
             });
             return;
@@ -8654,7 +8654,7 @@ const AuthorWords = _sfc_main$4;
               optionsList: [],
               answer: [],
               workType: this.type,
-              refer: this._window.location.href,
+              refer: this._win.location.href,
               _shared: subs
             });
             return;
@@ -8700,7 +8700,7 @@ const AuthorWords = _sfc_main$4;
               optionsList: [],
               answer: [],
               workType: this.type,
-              refer: this._window.location.href,
+              refer: this._win.location.href,
               _fillBlanks: { qid, blanks: blankEls, words }
             });
             return;
@@ -8715,7 +8715,7 @@ const AuthorWords = _sfc_main$4;
           const typeText = colorShallowElement ? this.stripTags(colorShallowElement.innerHTML) : "";
           questionTitle = fullText.replace(typeText, "").replace(/^\d+\.\s*/, "").replace(/_{2,}/g, "____").trim();
             optionElements = questionElement.querySelectorAll(zyKsSelector);
-            [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".answer_p");
+            [optionNodeMap, optionTexts, optionsList] = this.collectOptionNodes(optionElements, ".answer_p");
         } else if (["zj"].includes(this.type)) {
           questionTitle = this.stripTags(this.htmlWithAbsoluteImages(questionElement.querySelector(".fontLabel")))
             .replace(/（[\d.]+分）/g, "").trim();
@@ -8759,7 +8759,7 @@ const AuthorWords = _sfc_main$4;
               optionsList: [],
               answer: [],
               workType: this.type,
-              refer: this._window.location.href,
+              refer: this._win.location.href,
               _selectElements: selectElements,
               _leftItems: leftItems,
               _secondListItems: secondListItems
@@ -8768,7 +8768,7 @@ const AuthorWords = _sfc_main$4;
           }
 
             optionElements = questionElement.querySelectorAll(zjSelector);
-            [optionsObject, optionTexts, optionsList] = this.extractOptions(optionElements, ".fl.after");
+            [optionNodeMap, optionTexts, optionsList] = this.collectOptionNodes(optionElements, ".fl.after");
         }
         if (String(resolvedType) === "13") {
           const sortItems = Array.from(
@@ -8786,11 +8786,11 @@ const AuthorWords = _sfc_main$4;
           title: this.trimTitle(questionTitle),
           audios: [],
           optionsText: optionTexts,
-          options: optionsObject,
+          options: optionNodeMap,
           optionsList: optionsList,
           answer: [],
           workType: this.type,
-          refer: this._window.location.href
+          refer: this._win.location.href
         });
       });
     }
@@ -10577,7 +10577,7 @@ const AuthorWords = _sfc_main$4;
           pageLabel: "章节/作业/测验",
           platformKey: "cx",
           autoSubmit: readCxParamValue(PP_KEY.ANSWER, PP_KEY.AUTO_SUBMIT, false),
-          filled: Number(handler.correctNum) || 0,
+          filled: Number(handler.answeredCount) || 0,
           total: Number(handler.questions?.length) || 0,
           skipped: Number(handler.skippedCount) || 0,
           canSubmit,
@@ -10984,11 +10984,11 @@ const AuthorWords = _sfc_main$4;
         .trim();
 
       const optionLis = questionItem.querySelectorAll(".option-list li");
-      const optionsObject = {};
+      const optionNodeMap = {};
       const optionTexts = [];
       optionLis.forEach((li) => {
         const result = li.querySelector(".option-result")?.innerText?.trim() || "";
-        optionsObject[result] = li;
+        optionNodeMap[result] = li;
         optionTexts.push(result);
       });
 
@@ -10997,7 +10997,7 @@ const AuthorWords = _sfc_main$4;
         type: questionTypeMapping[questionTypeText] || "0",
         title: cleanTitle,
         optionsText: optionTexts,
-        options: optionsObject,
+        options: optionNodeMap,
         answer: [],
         workType: "stuActive",
         refer: window.location.href
@@ -11533,7 +11533,7 @@ const AuthorWords = _sfc_main$4;
           const allHandled = els.every((el) => handled.has(this.zhsQuestionKey(el)));
           if (!allHandled) return;
           finishedLogged = true;
-          this.correctNum = filledCount;
+          this.answeredCount = filledCount;
           this.skippedCount = skippedCount;
           this.failedCount = failedCount;
           progressStore.update({
@@ -11557,7 +11557,7 @@ const AuthorWords = _sfc_main$4;
         };
 
         const clickNextQuestion = async () => {
-          const switchBtns = this._document?.querySelectorAll(".switch-btn-box > button");
+          const switchBtns = this._doc?.querySelectorAll(".switch-btn-box > button");
           const nextBtn = switchBtns && switchBtns[1];
           if (!nextBtn) {
             this.addLog("未找到下一题按钮，请手动切换", "danger");
@@ -11629,7 +11629,7 @@ const AuthorWords = _sfc_main$4;
 
               await new Promise(r => setTimeout(r, 100));
 
-              const filledOk = (await this.fillQuestion(question)) === true;
+              const filledOk = (await this.applyAnswers(question)) === true;
               if (filledOk) {
                 filledCount += 1;
                 progressStore.update({
@@ -11681,14 +11681,14 @@ const AuthorWords = _sfc_main$4;
           handleCurrentQuestion().catch(() => {});
         }, 800);
       });
-      __publicField(this, "parseHtml", () => {
-        if (!this._document)
+      __publicField(this, "collectQuestions", () => {
+        if (!this._doc)
           return [];
-        const questionElements = this._document.querySelectorAll(SELECTORS.ZHS_QUESTION);
-        this.addQuestions(questionElements);
+        const questionElements = this._doc.querySelectorAll(SELECTORS.ZHS_QUESTION);
+        this.pushQuestions(questionElements);
       });
-      __publicField(this, "fillQuestion", async (question) => {
-        if (!this._window)
+      __publicField(this, "applyAnswers", async (question) => {
+        if (!this._win)
           return false;
 
         try {
@@ -11828,14 +11828,14 @@ const AuthorWords = _sfc_main$4;
              !!optionElement.querySelector(".cur") ||
              !!optionElement.querySelector(".selected");
     }
-    addQuestions(questionElements) {
+    pushQuestions(questionElements) {
       questionElements.forEach((questionElement) => {
         this.questions.push(this.buildQuestion(questionElement));
       });
     }
     getZhsQuestionElements() {
       try {
-        return this._document ? Array.from(this._document.querySelectorAll(SELECTORS.ZHS_QUESTION)) : [];
+        return this._doc ? Array.from(this._doc.querySelectorAll(SELECTORS.ZHS_QUESTION)) : [];
       } catch (e) {
         return [];
       }
@@ -11931,19 +11931,19 @@ const AuthorWords = _sfc_main$4;
 
       const fullQuestionType = zhsTypeMapping[questionTypeText] || questionTypeText;
 
-      const numericType = this.typeMap.get(fullQuestionType) || "999";
+      const numericType = this.typeCodeMap.get(fullQuestionType) || "999";
 
-      const [optionsObject, optionTexts] = this.extractOptions(questionElement == null ? void 0 : questionElement.querySelectorAll(SELECTORS.ZHS_OPTION), ".node_detail");
+      const [optionNodeMap, optionTexts] = this.collectOptionNodes(questionElement == null ? void 0 : questionElement.querySelectorAll(SELECTORS.ZHS_OPTION), ".node_detail");
       return {
         element: questionElement,
         type: numericType,
         title: questionTitle,
         titleHtml: questionTitleHtml,
         optionsText: optionTexts,
-        options: optionsObject,
+        options: optionNodeMap,
         answer: [],
         workType: "zhs",
-        refer: this._window.location.href,
+        refer: this._win.location.href,
         html: this.serializeQuestionHtml(questionElement, stemHtml, questionTitle)
       };
     }
@@ -11965,7 +11965,7 @@ const AuthorWords = _sfc_main$4;
       } catch (e) {}
       if (number) return `${number}#${title}`;
       try {
-        return `idx${Array.prototype.indexOf.call(this._document.querySelectorAll(SELECTORS.ZHS_QUESTION), questionElement)}`;
+        return `idx${Array.prototype.indexOf.call(this._doc.querySelectorAll(SELECTORS.ZHS_QUESTION), questionElement)}`;
       } catch (e) {
         return "";
       }
@@ -13521,6 +13521,34 @@ const AuthorWords = _sfc_main$4;
     return { done, total };
   };
 
+  /**
+   * 点开一个折叠章节。
+   *
+   * 照 abc 的 clickEl：滚动到可视区 → click() → 再补一个冒泡 MouseEvent。
+   * 折叠时子节点不渲染、进度读成 0/0，会被误判成「本页任务点已全部完成」，
+   * 用户看到的就是「必须手动把左侧列表全部点开才会继续刷课」。
+   */
+  const zhOpenSection = async (section) => {
+    if (!section) return false;
+    try {
+      section.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (e) {
+      // 滚动失败不影响点击
+    }
+    await zhSleep(0.2);
+    try {
+      section.click();
+    } catch (e) {
+      // click 不可用时靠下面的事件派发
+    }
+    try {
+      section.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    } catch (e) {
+      // 派发失败忽略
+    }
+    return true;
+  };
+
   const zhStageLegacyShare = {
     id: "legacy-share",
     label: "共享课",
@@ -13554,7 +13582,11 @@ const AuthorWords = _sfc_main$4;
       const pending = tune.restudy
         ? list.filter((el) => !zhRestudySeen(this, el, list))
         : list.filter((el) => !this.isDone(el));
-      if (!pending.length) {
+      const current = this.current();
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
+      const index = pending.indexOf(current);
+      const target = index >= 0 ? pending[index + 1] || null : pending[0] || null;
+      if (!target) {
         zhLogCadence(
           log,
           tune.restudy ? "legacy-restudy-all" : "legacy-all",
@@ -13564,10 +13596,6 @@ const AuthorWords = _sfc_main$4;
         );
         return false;
       }
-      const current = this.current();
-      if (tune.restudy && current) zhRestudyMark(this, current, list);
-      const index = pending.indexOf(current);
-      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(zhPick(".catalogue_title", target), "下一个视频")}`, "primary");
       zhTapNode(target);
       await zhSleep(2.4);
@@ -13605,7 +13633,11 @@ const AuthorWords = _sfc_main$4;
       const pending = tune.restudy
         ? list.filter((el) => !zhRestudySeen(this, el, list))
         : list.filter((el) => !this.isDone(el));
-      if (!pending.length) {
+      const current = this.current();
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
+      const index = pending.indexOf(current);
+      const target = index >= 0 ? pending[index + 1] || null : pending[0] || null;
+      if (!target) {
         zhLogCadence(
           log,
           tune.restudy ? "newshare-restudy-all" : "newshare-all",
@@ -13615,10 +13647,6 @@ const AuthorWords = _sfc_main$4;
         );
         return false;
       }
-      const current = this.current();
-      if (tune.restudy && current) zhRestudyMark(this, current, list);
-      const index = pending.indexOf(current);
-      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(target.parentElement, "下一节")}`, "primary");
       zhTapNode(target);
       await zhSleep(2.4);
@@ -13674,7 +13702,11 @@ const AuthorWords = _sfc_main$4;
       const pending = tune.restudy
         ? list.filter((el) => !zhRestudySeen(this, el, list))
         : list.filter((el) => !this.isDone(el));
-      if (!pending.length) {
+      const current = this.current();
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
+      const index = pending.indexOf(current);
+      const target = index >= 0 ? pending[index + 1] || null : pending[0] || null;
+      if (!target) {
         zhLogCadence(
           log,
           tune.restudy ? "wisdom-restudy-all" : "wisdom-all",
@@ -13684,10 +13716,6 @@ const AuthorWords = _sfc_main$4;
         );
         return false;
       }
-      const current = this.current();
-      if (tune.restudy && current) zhRestudyMark(this, current, list);
-      const index = pending.indexOf(current);
-      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(target, "下一节")}`, "primary");
       zhTapNode(target);
       await zhSleep(2.6);
@@ -13720,6 +13748,44 @@ const AuthorWords = _sfc_main$4;
     return !text || text.indexOf("已完成") >= 0;
   };
 
+  // 已绑定事件的媒体元素，避免反复重绑
+  const zhBoundMedia = new WeakSet();
+
+  /**
+   * 切到下一个待完成章节 —— 章节切换的唯一实现，advance / chapterAdvance 共用。
+   *
+   * abc：按 `.collapse-info-progress .progress-text` 解析进度，取 active 之后一个；
+   *      越界返回 null 而不是回退到自身（这正是我们会死循环、它不会的地方）。
+   * OCS：先原生 click() 再校验子节点是否渲染。
+   * 我们：读不到进度或总数是 0（折叠章节未渲染）时算未完成 —— abc / OCS 都直接过滤，
+   *      代价是折叠的章节永远刷不到。
+   *
+   * @returns {Promise<boolean>} true=已切换；false=没有可切的，由调用方收尾
+   */
+  const zhAdvanceSection = async (tune, log) => {
+    const sections = zhPickAll(".section-item-collapse-info");
+    if (!sections.length) return false;
+
+    const unfinished = sections.filter((el) => {
+      const progress = zhSectionProgress(el);
+      if (!progress || !progress.total) return true;
+      return progress.done < progress.total;
+    });
+    if (!unfinished.length) return false;
+
+    const active = sections.find((el) => /(^|\s)active(\s|$)/.test(el.className || ""));
+    const pos = unfinished.indexOf(active);
+    // 越界说明当前已是最后一个待完成章节：返回 false，绝不回退到自身
+    const target = pos >= 0 ? unfinished[pos + 1] || null : unfinished[0] || null;
+    if (!target) return false;
+
+    const head = zhPick(".section-item-collapse-title", target) || target;
+    log.addLog(`切换到下一节：${zhTxtOf(head, "下一章")}`, "primary");
+    await zhOpenSection(target);
+    await zhSleep(2.4);
+    return true;
+  };
+
   const zhStageCard = {
     id: "card",
     label: "新形态课程",
@@ -13748,7 +13814,19 @@ const AuthorWords = _sfc_main$4;
       const pending = tune.restudy
         ? list.filter((el) => !zhRestudySeen(this, el, list))
         : list.filter((el) => !this.chapterDone(el));
-      if (!pending.length) {
+      const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
+      const index = pending.indexOf(current);
+      // 越界不回退到 pending[0]：当前已是最后一个待完成时交给章节切换
+      const target = index >= 0 ? pending[index + 1] || null : pending[0] || null;
+      if (target) {
+        log.addLog(`切换到下一节：${zhTxtOf(zhPick(".title", target) || zhPick(".catalogue_title", target) || target, "下一个视频")}`, "primary");
+        zhTapNode(target);
+        await zhSleep(2.4);
+        return true;
+      }
+      const moved = await zhAdvanceSection(tune, log);
+      if (!moved) {
         zhLogCadence(
           log,
           tune.restudy ? "fusion-chapter-restudy-all" : "fusion-chapter-all",
@@ -13756,16 +13834,8 @@ const AuthorWords = _sfc_main$4;
           "success",
           300
         );
-        return false;
       }
-      const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
-      if (tune.restudy && current) zhRestudyMark(this, current, list);
-      const index = pending.indexOf(current);
-      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
-      log.addLog(`切换到下一节：${zhTxtOf(zhPick(".title", target) || zhPick(".catalogue_title", target) || target, "下一个视频")}`, "primary");
-      zhTapNode(target);
-      await zhSleep(2.4);
-      return true;
+      return moved;
     },
     async step(tune, log) {
       zhClearNoise();
@@ -13780,9 +13850,23 @@ const AuthorWords = _sfc_main$4;
       if (kind === "video") {
         const media = await zhFindMedia(["#vjs_container video", ".video-player-wrapper video", "video"], 6);
         if (media) {
-          if (media.ended) {
-            const plan = zhResolveEnded(this, tune, log, media, card, !!(card && zhCardDone(card)), { list: zhCardList() });
-            if (plan === "advance") return await this.advance(tune, log);
+          // 照 abc 的 videoEl.onpause / onended：只绑一次，播完由事件推进
+          if (!zhBoundMedia.has(media)) {
+            zhBoundMedia.add(media);
+            media.onpause = () => {
+              if (media.ended) return;
+              setTimeout(() => {
+                if (!media.ended) media.play().catch(() => {});
+              }, 1000);
+            };
+            media.onended = () => {
+              // 照 abc：播完延迟 3 秒直接切下一节，不检查完成标记
+              void (async () => {
+                log.addLog("视频播放完毕，即将跳转下一节", "primary");
+                await zhSleep(3);
+                await this.advance(tune, log);
+              })().catch(() => {});
+            };
           }
           await zhKeepPlaying(media, tune);
           return true;
@@ -13811,15 +13895,19 @@ const AuthorWords = _sfc_main$4;
         : cards.filter((card) => !zhCardDone(card));
       if (pending.length) {
         if (tune.restudy && activeCard) zhRestudyMark(this, activeCard, cards);
+        // 与 abc 的 getNextJob 一致：只取当前卡片之后的，没有就交给章节切换，
+        // 绝不回退到 pending[0]（那会点回自己，视频重新从头播）
         const after = pending.find((card) => cards.indexOf(card) > activeIndex);
-        const target = after || pending[0];
-        log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(".common-text, .video-title, .basic-info-video-card-container")) || "下一个资源"}`, "primary");
-        zhTapNode(zhPick(".basic-info-video-card-container", target) || zhPick(".common-text", target) || target);
-        await zhSleep(2.4);
-        return true;
+        const target = after || (activeIndex >= 0 ? null : pending[0]) || null;
+        if (target) {
+          log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(".common-text, .video-title, .basic-info-video-card-container")) || "下一个资源"}`, "primary");
+          zhTapNode(zhPick(".basic-info-video-card-container", target) || zhPick(".common-text", target) || target);
+          await zhSleep(2.4);
+          return true;
+        }
       }
-      const sections = zhPickAll(".section-item-collapse-info");
-      if (!sections.length) {
+      const moved = await zhAdvanceSection(tune, log);
+      if (!moved) {
         zhLogCadence(
           log,
           tune.restudy ? "card-restudy-all" : "card-all",
@@ -13827,23 +13915,8 @@ const AuthorWords = _sfc_main$4;
           "success",
           300
         );
-        return false;
       }
-      const activeSection = sections.find((el) => /(^|\s)active(\s|$)/.test(el.className || ""));
-      const unfinished = sections.filter((el) => {
-        const progress = zhSectionProgress(el);
-        return !progress || progress.done < progress.total;
-      });
-      if (!unfinished.length) {
-        zhLogCadence(log, "card-section-all", "本页任务点已全部完成", "success", 300);
-        return false;
-      }
-      const activePos = unfinished.indexOf(activeSection);
-      const nextSection = activePos >= 0 && unfinished[activePos + 1] ? unfinished[activePos + 1] : unfinished[0];
-      log.addLog(`切换到下一节：${zhTxtOf(zhPick(".section-item-collapse-title", nextSection), "下一章")}`, "primary");
-      zhTapNode(nextSection);
-      await zhSleep(2.8);
-      return true;
+      return moved;
     }
   };
 
@@ -13944,7 +14017,11 @@ const AuthorWords = _sfc_main$4;
       const pending = tune.restudy
         ? list.filter((item) => !zhRestudySeen(this, item, list))
         : list.filter((item) => !this.isDone(profile, item));
-      if (!pending.length) {
+      const current = this.current(profile);
+      if (tune.restudy && current) zhRestudyMark(this, current, list);
+      const index = pending.indexOf(current);
+      const target = index >= 0 ? pending[index + 1] || null : pending[0] || null;
+      if (!target) {
         zhLogCadence(
           log,
           tune.restudy ? "practice-restudy-all" : "practice-all",
@@ -13954,10 +14031,6 @@ const AuthorWords = _sfc_main$4;
         );
         return false;
       }
-      const current = this.current(profile);
-      if (tune.restudy && current) zhRestudyMark(this, current, list);
-      const index = pending.indexOf(current);
-      const target = index >= 0 && pending[index + 1] ? pending[index + 1] : pending[0];
       log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(profile.title) || target, "下一个资源")}`, "primary");
       zhTapNode(target);
       await zhSleep(2.6);
@@ -14011,8 +14084,23 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`检测到智慧树${stage.label}学习页面`, "primary");
     log.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
     log.addLog(`播放器最大倍速：${zhSpeedCeiling()}x`, "info");
+    // 照 abc：进页面时把遮罩和弹窗全部隐藏，异常行为提示之类会挡住后续流程
+    zhPickAll(".el-overlay, .el-dialog").forEach((el) => {
+      try {
+        el.style.display = "none";
+      } catch (e) {
+        // 单个弹窗处理失败忽略
+      }
+    });
     while (zhRuntime.epoch === epoch) {
       await zhSleep(1.1);
+      // 照 abc 的 visibilityTimer：页面切后台时提醒一次，学习流程可能不推进
+      if (document.visibilityState === "hidden" && !zhRuntime.visibilityWarned) {
+        zhRuntime.visibilityWarned = true;
+        log.addLog("页面未保持前台，学习流程可能无法正常推进..", "warning");
+      } else if (document.visibilityState === "visible") {
+        zhRuntime.visibilityWarned = false;
+      }
       const tune = zhStudyTuning();
       if (!tune.modeOn) {
         log.addLog("智慧树「学习」已关闭，停止本页任务", "warning");
@@ -14039,6 +14127,299 @@ const AuthorWords = _sfc_main$4;
         zhLogCadence(log, "stage-error", `页面处理出现异常：${error && error.message ? error.message : error}`, "warning", 20);
       }
     }
+  };
+
+  // ============================================================
+  // AI 教学中心（polymas hike）：作业 / 随堂练习
+  //   平台接口直接给题面 + 选项 + 对错标记，服务端转成选项正文后下发；
+  //   考试 / 作业任务两页不调接口，直接走通用试卷逻辑（DOM + 题库查询）。
+  // ============================================================
+  const HIKE_CARD_SEL = ".question-item";
+  const HIKE_OPTION_SEL = ".option-list .option-item";
+  const HIKE_EDITOR_SEL = ".ProseMirror";
+  const HIKE_SCORED_SEL = ".stu-score-show";
+
+  const HIKE_PAGE_PATHS = [
+    { path: "/stu/answer-homework", page: "homework" },
+    { path: "/stu/answer-training", page: "training" },
+    { path: "/stu-exam/answer-exam", page: "exam" },
+    { path: "/stu-hike/stuHomeworkDo", page: "legacy" }
+  ];
+
+  const hikePageType = () => {
+    const path = location.pathname;
+    const hit = HIKE_PAGE_PATHS.find((item) => path.includes(item.path));
+    return hit ? hit.page : "";
+  };
+
+  const hikeCookieOf = (name) => {
+    const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+    return match ? decodeURIComponent(match[1]) : "";
+  };
+
+  const hikeParams = () => {
+    const query = new URLSearchParams(location.search);
+    const parts = location.pathname.split("/").filter(Boolean);
+    const index = parts.indexOf("exam-hub");
+    return {
+      courseId: index >= 0 ? parts[index + 1] || "" : "",
+      homeworkId: query.get("homeworkId") || "",
+      paperId: query.get("paperId") || "",
+      examId: query.get("examId") || "",
+      trainingBankId: query.get("trainingBankId") || "",
+      practiceQuestionsMainId: query.get("practiceQuestionsMainId") || ""
+    };
+  };
+
+  /**
+   * 随堂练习预热：进页面时调一次，让服务端从平台拉整卷、把标准答案逐题写进缓存。
+   * 之后每道题仍走「上传原始 HTML → 服务端解析 → 查缓存」，不再带 questionId。
+   */
+  const hikePrimeTraining = (params, accessToken) => new Promise((resolve) => {
+    const platformToken = hikeCookieOf("ai-poly");
+    if (!platformToken) {
+      resolve({ code: -1, msg: "未读取到平台登录凭证，请刷新页面后重试" });
+      return;
+    }
+    if (!accessToken) {
+      resolve({ code: -1, msg: "未配置用户密钥，请前往设置中填写" });
+      return;
+    }
+    _GM_xmlhttpRequest({
+      url: getRandomServer(),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: JSON.stringify({
+        token: accessToken,
+        async: true,
+        questionData: {
+          workType: "zhs",
+          type: "0",
+          question: "hike:training:prime",
+          hike: { prime: true, platformToken, page: "training", ...params }
+        }
+      }),
+      timeout: 25e3,
+      onload: (response) => {
+        try {
+          resolve(JSON.parse(response.responseText));
+        } catch (e) {
+          resolve({ code: -1, msg: "接口返回异常" });
+        }
+      },
+      onerror: () => resolve({ code: -1, msg: "网络错误，请检查网络后重试" }),
+      ontimeout: () => resolve({ code: -1, msg: "请求超时，请稍后重试" })
+    });
+  });
+
+  const hikeClean = (text) => String(text || "").replace(/\s+/g, "").toLowerCase();
+
+  const hikeOptionsOf = (card) => Array.from(card.querySelectorAll(HIKE_OPTION_SEL));
+
+  const hikeOptionText = (option) => {
+    const node = option.querySelector(".option-content");
+    return (node || option).textContent || "";
+  };
+
+  const hikeIsPicked = (option) => option.classList.contains("is-choose")
+    || Boolean(option.querySelector("[class*='xuanzhong']"))
+    || Boolean(option.querySelector(".el-checkbox__input.is-checked, .el-radio__input.is-checked"));
+
+  const hikePick = async (option) => {
+    if (!option) return false;
+    if (hikeIsPicked(option)) return true;
+    option.click();
+    await zhSleep(0.25);
+    return hikeIsPicked(option);
+  };
+
+  /** 平台下发的是选项正文，这里按文本对齐；对不上再退回包含匹配 */
+  const hikeMatchIndexes = (options, answers) => {
+    const texts = options.map((option) => hikeClean(hikeOptionText(option)));
+    const picked = [];
+    for (const answer of answers) {
+      const target = hikeClean(answer);
+      if (!target) continue;
+      let index = texts.indexOf(target);
+      if (index < 0) {
+        index = texts.findIndex((text) => text && (text.includes(target) || target.includes(text)));
+      }
+      if (index >= 0 && !picked.includes(index)) picked.push(index);
+    }
+    return picked.sort((a, b) => a - b);
+  };
+
+  /**
+   * 取 Tiptap 实例：元素上直接挂的那份，取不到再从页面 document 重新取一次。
+   * 沙箱/iframe 里元素上的实例可能是隔离后的对象，和 abc 的 findEditor 一样做两次尝试。
+   */
+  const hikeFindEditor = (element, editors) => {
+    const usable = (value) => Boolean(value && value.commands && typeof value.commands.setContent === "function");
+    if (usable(element.editor)) return element.editor;
+    const index = editors.indexOf(element);
+    if (index < 0) return null;
+    const pageNode = _unsafeWindow.document.querySelectorAll(HIKE_EDITOR_SEL)[index];
+    const fromPage = pageNode ? pageNode.editor : null;
+    return usable(fromPage) ? fromPage : null;
+  };
+
+  const hikeWriteEditors = async (card, answers) => {
+    const editors = Array.from(card.querySelectorAll(HIKE_EDITOR_SEL));
+    if (!editors.length) return false;
+    const values = editors.length === 1 ? [answers.join("\n")] : answers;
+    let filled = 0;
+    for (let i = 0; i < editors.length; i++) {
+      const value = values[i];
+      if (!value) continue;
+      const editor = editors[i];
+      const instance = hikeFindEditor(editor, editors);
+      if (instance) {
+        instance.commands.setContent("<p>" + value.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch])) + "</p>", true);
+      } else {
+        editor.focus();
+        document.execCommand("selectAll", false);
+        document.execCommand("insertText", false, value);
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      await zhSleep(0.2);
+      // 写入后校验：内容和预期对得上才算成功（与 abc 的 writeEditor 一致）
+      const expected = hikeClean(value).slice(0, 12);
+      if (expected && hikeClean(editor.textContent || "").indexOf(expected) >= 0) filled += 1;
+    }
+    return filled > 0;
+  };
+
+  /**
+   * 题卡 → 查询入参。
+   * 题干同时用于判空（对应 abc parseCards 的 `.filter((q) => q.title)`）；
+   * 查题仍走 queryAnswer(outerHTML)，服务端解析，这里只服务填涂定位。
+   */
+  const hikeCardQuestion = (card) => {
+    const optionNodes = Array.from(card.querySelectorAll(HIKE_OPTION_SEL));
+    const titleNode = card.querySelector(".qeustion-content .markdown-latex-container, .combination-content");
+    const typeNode = card.querySelector(".title-box .title, .combination-title");
+    const options = {};
+    optionNodes.forEach((node) => {
+      options[zhPaperClean(hikeOptionText(node))] = node;
+    });
+    return {
+      element: card,
+      type: ppZhTypeCodeOf(typeNode ? typeNode.textContent : ""),
+      title: zhPaperClean(titleNode ? titleNode.textContent : ""),
+      optionsText: optionNodes.map((node) => zhPaperClean(hikeOptionText(node))),
+      options,
+      workType: "zhs",
+      refer: location.href
+    };
+  };
+
+  const hikeFillChoice = async (optionNodes, type, answers) => {
+    const indexes = hikeMatchIndexes(optionNodes, answers);
+    const limit = type === "0" ? indexes.slice(0, 1) : indexes;
+    let ok = false;
+    for (const index of limit) {
+      if (await hikePick(optionNodes[index])) ok = true;
+    }
+    return ok;
+  };
+
+  /** 考试页：整页多卡，平台不给答案，逐卡查库后填涂 */
+  const hikeSolveExamCards = async (log) => {
+    const cards = Array.from(document.querySelectorAll(HIKE_CARD_SEL));
+    let filled = 0;
+    for (const card of cards) {
+      if (card.querySelector(HIKE_SCORED_SEL)) continue;
+      const question = hikeCardQuestion(card);
+      if (!question.title) continue;
+      const result = await queryAnswer(question);
+      const answers = result && result.code === 200 && result.data ? result.data.answer : null;
+      if (!Array.isArray(answers) || !answers.length) continue;
+      if (question.type === "0" || question.type === "1" || question.type === "3") {
+        if (await hikeFillChoice(hikeOptionsOf(card), question.type, answers)) filled += 1;
+      } else if (await hikeWriteEditors(card, answers)) {
+        filled += 1;
+      }
+      await zhSleep(0.3);
+    }
+    log.addLog(`共 ${cards.length} 题，已填入 ${filled} 题，请检查后手动提交`, "warning");
+  };
+
+  /** 作业任务页：左侧题号卡片 + 单题区，逐题查询后点「下一题」 */
+  const hikeSolveLegacyCards = async (log) => {
+    const cards = Array.from(document.querySelectorAll(".card_ul .card_li"));
+    if (cards.length) cards[0].click();
+    await zhSleep(2);
+    let previous = "";
+    let filled = 0;
+    for (let step = 0; step < 200; step++) {
+      let question = null;
+      for (let wait = 0; wait < 20; wait++) {
+        const root = document.querySelector(".q_main");
+        if (root) {
+          const optionNodes = Array.from(root.querySelectorAll("label"));
+          const title = zhPaperClean(zhPaperTextOf(root, [".question-topic"]));
+          if (title && title !== previous) {
+            const options = {};
+            optionNodes.forEach((node) => {
+              options[zhPaperClean(node.textContent)] = node;
+            });
+            question = {
+              element: root,
+              type: ppZhTypeCodeOf(zhPaperTextOf(root, [".question_score"])),
+              title,
+              optionsText: optionNodes.map((node) => zhPaperClean(node.textContent)),
+              options,
+              workType: "zhs",
+              refer: location.href
+            };
+            break;
+          }
+        }
+        await zhSleep(0.3);
+      }
+      if (!question) break;
+      previous = question.title;
+      const result = await queryAnswer(question);
+      const answers = result && result.code === 200 && result.data ? result.data.answer : null;
+      if (Array.isArray(answers) && answers.length) {
+        const optionNodes = Object.values(question.options);
+        if (question.type === "0" || question.type === "1" || question.type === "3") {
+          if (await hikeFillChoice(optionNodes, question.type, answers)) filled += 1;
+        }
+      }
+      const next = document.querySelector(".check_btn:not(.is-disabled)");
+      if (!next) break;
+      next.click();
+      await zhSleep(1.5);
+    }
+    log.addLog(`作业任务页已填入 ${filled} 题，请检查后手动提交`, "warning");
+  };
+
+  const useHikePaperAnswer = async () => {
+    const page = hikePageType();
+    if (!page) return;
+
+    const log = useLogStore();
+    const setting = useSettingStore();
+    if (!setting.config.basicConfig.autoAnswer.value) {
+      log.addLog("自动答题已关闭，请前往设置中更改", "warning");
+      return;
+    }
+
+    // 只有随堂练习需要先从平台拉一次整卷，把标准答案逐题写进服务端缓存
+    if (page === "training") {
+      const response = await hikePrimeTraining(hikeParams(), setting.config.basicConfig.token.value);
+      if (response && response.code === 200) {
+        const primed = response.data ? response.data.primed : 0;
+        log.addLog(primed ? `已读取 ${primed} 道题的答案` : "答案已就绪");
+      } else {
+        log.addLog(`读取答案失败：${(response && response.msg) || "未知错误"}，改为按页面题目查询..`, "warning");
+      }
+    }
+
+    // 四个页面统一：解析页面题卡 → 上传原始 HTML → 普通查询 → 填涂
+    if (page === "legacy") await hikeSolveLegacyCards(log);
+    else await hikeSolveExamCards(log);
   };
 
   const useZhClassroomStudy = async () => {
@@ -15572,7 +15953,11 @@ const AuthorWords = _sfc_main$4;
         { keyword: "fusioncourseh5.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
         { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "hike-teaching-center.polymas.com", logic: useZhClassroomStudy },
+        { keyword: "polymas.com", logic: useZhClassroomStudy },
+        { keyword: "hike-teaching-center.polymas.com/stu/answer-homework", logic: useHikePaperAnswer },
+        { keyword: "hike-teaching-center.polymas.com/stu/answer-training", logic: useHikePaperAnswer },
+        { keyword: "hike-teaching-center.polymas.com/stu-exam/answer-exam", logic: useHikePaperAnswer },
+        { keyword: "hike-teaching-center.polymas.com/stu-hike/stuHomeworkDo", logic: useHikePaperAnswer },
         { keyword: "examloop.zhihuishu.com/exam/", logic: useZhsPaperAnswerLogic },
         { keyword: "studentexamcomh5.zhihuishu.com/studentReviewTestOrExam", logic: useZhsPaperAnswerLogic },
         { keyword: "smartcourseexam.zhihuishu.com/ReviewExam", logic: useZhsPaperAnswerLogic },
