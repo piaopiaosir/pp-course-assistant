@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.3.0
+// @version      4.3.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -10458,7 +10458,8 @@ const AuthorWords = _sfc_main$4;
             await mediaElement.pause();
             mediaElement.muted = true;
             ppMuteOnce(mediaElement);
-            await mediaElement.play();
+            // 播放器重建元素时 play() 的 Promise 可能永远不 settle，加超时避免整条流程卡死
+            await zhWithTimeout(mediaElement.play(), 6, false);
 
             mediaElement.playbackRate = playbackRate;
             logStore.addLog(`播放成功，倍速：${playbackRate}x`, "primary");
@@ -10472,7 +10473,7 @@ const AuthorWords = _sfc_main$4;
                 await delay(3);
               }
               try {
-                await mediaElement.play();
+                await zhWithTimeout(mediaElement.play(), 6, false);
               } catch(e) {}
               mediaElement.playbackRate = playbackRate;
             };
@@ -12006,30 +12007,45 @@ const AuthorWords = _sfc_main$4;
     };
   };
 
+  const _ppXhrInterceptors = [];
+  const _ppInstallXhrSendHook = () => {
+    const proto = XMLHttpRequest.prototype;
+    if (proto.send.__ppSendHookInstalled) return;
+    const originalSend = proto.send;
+    const patchedSend = function(...args) {
+      try {
+        this.addEventListener('load', function() {
+          try {
+            const responseURL = String(this.responseURL || '');
+            for (const item of _ppXhrInterceptors) {
+              if (item.urlList.some((urlItem) => responseURL.includes(urlItem))) {
+                item.callback(this.responseText);
+                break;
+              }
+            }
+          } catch (e) {}
+        });
+      } catch (e) {}
+      return originalSend.apply(this, args);
+    };
+    patchedSend.__ppSendHookInstalled = true;
+    proto.send = patchedSend;
+  };
+
   class XMLHttpRequestInterceptor {
     constructor(urlList, callback) {
       __publicField(this, "xhr");
-      __publicField(this, "originalOpen");
-      __publicField(this, "originalSend");
       __publicField(this, "callback");
       this.xhr = new XMLHttpRequest();
-      this.originalOpen = this.xhr.open;
-      this.originalSend = this.xhr.send;
       this.callback = callback;
       this.intercept(urlList);
     }
+    // 注意：智慧树学习页会做原生性检查（XMLHttpRequest.prototype.open 一旦被改写，
+    // 即判定「检测到异常脚本」：暂停 + 上报 + 3 秒跳回首页，且每 60 秒复查一次）。
+    // 因此这里不改写 open，只挂 send（不在检查范围内），在 load 回调里按 responseURL 过滤。
     intercept(urlList) {
-      const self = this;
-      const originalOpen = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function(method, url2) {
-        originalOpen.apply(this, [method, url2]);
-        const shouldIntercept = urlList.some((urlItem) => url2.includes(urlItem));
-        if (shouldIntercept) {
-          this.addEventListener('load', function() {
-            self.callback(this.responseText);
-          });
-        }
-      };
+      _ppXhrInterceptors.push({ urlList, callback: this.callback });
+      _ppInstallXhrSendHook();
     }
   }
 
@@ -12504,17 +12520,15 @@ const AuthorWords = _sfc_main$4;
       const NativeXhr = win.XMLHttpRequest;
       if (typeof NativeXhr === "function" && !NativeXhr.__ppZhPaperProbe) {
         NativeXhr.__ppZhPaperProbe = true;
-        const nativeOpen = NativeXhr.prototype.open;
         const nativeSend = NativeXhr.prototype.send;
-        NativeXhr.prototype.open = function (method, address, ...rest) {
-          try { this.__ppZhPaperAddress = String(address == null ? "" : address); } catch (e) {}
-          return nativeOpen.call(this, method, address, ...rest);
-        };
+        // 注意：不要改写 XMLHttpRequest.prototype.open —— 智慧树学习页会校验其原生性，
+        // 一旦被改写就会判「检测到异常脚本」（暂停 + 上报 + 3 秒跳回首页，且每 60 秒复查）。
+        // 这里只挂 send（不在检查范围内），在 load 回调里用 responseURL 过滤目标接口。
         NativeXhr.prototype.send = function (...args) {
           try {
             this.addEventListener("load", function () {
               try {
-                const address = String(this.responseURL || this.__ppZhPaperAddress || "");
+                const address = String(this.responseURL || "");
                 if (wanted(address)) ppZhTakePaperPayload(address, this.responseText);
               } catch (e) {}
             });
@@ -12984,6 +12998,26 @@ const AuthorWords = _sfc_main$4;
   const ZH_STUDY_PART = PP_KEY.VIDEO;
 
   const zhSleep = (sec) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(sec) || 0) * 1e3));
+  // 给可能永远不 settle 的 Promise 加超时（典型：播放器重建元素后，旧元素的 media.play() 悬挂）
+  const zhWithTimeout = (promise, sec, fallback) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(fallback), Math.max(1, Number(sec) || 5) * 1e3);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        finish(value);
+      },
+      () => {
+        clearTimeout(timer);
+        finish(fallback);
+      }
+    );
+  });
   const zhPick = (sel, root) => {
     try {
       return (root || document).querySelector(sel);
@@ -13055,7 +13089,27 @@ const AuthorWords = _sfc_main$4;
     lastAdvanceAt: 0,
     quizSignature: "",
     booted: false,
-    restudy: new Set()
+    restudy: new Set(),
+    lastBeat: 0,
+    lastRestartAt: 0,
+    waitMediaSince: 0,
+    stage: null,
+    log: null,
+    watchdog: null
+  };
+
+  // 照 abc：平台播放器有时停在片尾不触发 ended（currentTime≈duration 且 paused），
+  // 所以完成判定不能只认 media.ended。
+  const zhMediaAtEnd = (media) => {
+    try {
+      if (!media) return false;
+      if (media.ended) return true;
+      const duration = Number(media.duration) || 0;
+      if (!duration) return false;
+      return media.paused && media.currentTime >= duration - 1.2;
+    } catch (e) {
+      return false;
+    }
   };
 
   const zhRestudyKey = (stage, el, list) => {
@@ -13072,8 +13126,7 @@ const AuthorWords = _sfc_main$4;
     zhRuntime.restudy.clear();
   };
 
-  const zhResolveEnded = (stage, tune, log, media, current, done, options) => {
-    const opts = options || {};
+  const zhResolveEnded = (stage, tune, log, media, current, done, options) => {    const opts = options || {};
     const list = opts.list || (typeof stage.chapters === "function" ? stage.chapters() : []);
     if (done && current) {
       if (!tune.restudy) return "advance";
@@ -13180,6 +13233,15 @@ const AuthorWords = _sfc_main$4;
       }
       media.__ppZhSpeed = rate;
     } catch (e) {}
+    // 平台播放器的倍速标签是它自己的内部状态，直接改元素倍速不会同步显示。
+    // 这里只改文本（不派发事件，也不会触发容器的合成点击检测）。
+    try {
+      const text = rate === 1 ? "1.0" : String(rate);
+      const label = document.querySelector("#container .speedBox > span");
+      if (label && label.textContent !== "X " + text) label.textContent = "X " + text;
+      const vjsValue = document.querySelector(".vjs-playback-rate-value");
+      if (vjsValue && vjsValue.textContent !== text) vjsValue.textContent = text;
+    } catch (e) {}
     return rate;
   };
 
@@ -13189,7 +13251,8 @@ const AuthorWords = _sfc_main$4;
     while (Date.now() < deadline) {
       for (const sel of list) {
         const media = zhPick(sel);
-        if (media && (media.currentSrc || media.src || media.readyState > 0)) return media;
+        // 必须仍连接在文档上：播放器初始化时会重建 video，旧元素上挂起的 play() 可能永远不兑现
+        if (media && media.isConnected !== false && (media.currentSrc || media.src || media.readyState > 0)) return media;
       }
       await zhSleep(0.4);
     }
@@ -13200,6 +13263,10 @@ const AuthorWords = _sfc_main$4;
     if (!media) return false;
     const log = useLogStore();
     ppMuteOnce(media);
+    // 照 abc：从头开始播放时跳过 0 秒，避免卡在 0 进度
+    try {
+      if (media.currentTime < 1) media.currentTime = 1;
+    } catch (e) {}
     if (tune) zhPinSpeed(media, tune.autoSpeed ? zhSpeedCeiling() : tune.speed);
     const markPlayed = () => {
       if (media.__ppZhPlayLogged) return;
@@ -13224,20 +13291,24 @@ const AuthorWords = _sfc_main$4;
         log.addLog(`开始播放：${mediaName || "视频"}`, "primary");
       } catch (e) {}
     }
-    try {
-      await media.play();
-      markPlayed();
-      return true;
-    } catch (e) {
+    const tryPlay = async () => {
       try {
-        media.muted = true;
-        await media.play();
-        markPlayed();
-        return true;
-      } catch (e2) {
+        return (await zhWithTimeout(media.play(), 6, false)) !== false;
+      } catch (e) {
         return false;
       }
+    };
+    if (await tryPlay()) {
+      markPlayed();
+      return true;
     }
+    // 自动播放策略：未静音时 play() 会被拒绝；静音后重试
+    if (!media.muted) media.muted = true;
+    if (await tryPlay()) {
+      markPlayed();
+      return true;
+    }
+    return false;
   };
 
   const zhVmChainOf = (node) => {
@@ -13466,6 +13537,131 @@ const AuthorWords = _sfc_main$4;
     if (readTip && zhVisible(readTip.closest ? readTip.closest(".dialog-read") : readTip)) zhTapNode(readTip);
   };
 
+  // 需要“点按钮关掉”的提示弹窗（只隐藏遮罩可能留下平台内部弹窗状态，导致视频卡住）
+  const ZH_NOTICE_DISMISS_RULES = [
+    {
+      key: "zh-course-notice",
+      resume: true,
+      match: (text) =>
+        text.indexOf("课程提醒") >= 0 ||
+        (text.indexOf("智慧树共享课") >= 0 && text.indexOf("公众号") >= 0),
+      buttons: ["下次再说", "已绑定,不再提示", "已绑定，不再提示"],
+      log: "已关闭「课程提醒（绑定公众号）」弹窗"
+    }
+  ];
+  const zhDismissNoticeDialogs = (log) => {
+    let handled = 0;
+    zhPickAll(".el-dialog, .el-message-box, [class*='dialog']").forEach((node) => {
+      try {
+        if (!zhVisible(node)) return;
+        if (node.querySelector(ZH_DIALOG_KEEP_SELECTOR)) return;
+        const text = zhTxtOf(node).replace(/\s+/g, "");
+        const rule = ZH_NOTICE_DISMISS_RULES.find((item) => item.match(text));
+        if (!rule) return;
+        const buttons = zhPickAll("button", node);
+        const btn = rule.buttons
+          .map((label) => buttons.find((candidate) => zhTxtOf(candidate).indexOf(label) >= 0))
+          .find(Boolean);
+        if (btn) zhTapNode(btn);
+        try {
+          node.style.display = "none";
+        } catch (e) {}
+        const wrapper = node.closest ? node.closest(".el-overlay, .el-dialog__wrapper, .el-overlay-dialog") : null;
+        if (wrapper) {
+          try {
+            wrapper.style.display = "none";
+          } catch (e) {}
+        }
+        if (rule.resume) {
+          try {
+            const media = document.querySelector("#container video") || document.querySelector("video");
+            if (media && media.paused && !media.ended) {
+              const duration = Number(media.duration) || 0;
+              if (duration && media.currentTime >= duration - 1.5) {
+                // 卡在片尾：把进度推到结尾触发 ended，交给正常的「完成 → 切换下一节」逻辑
+                media.currentTime = duration;
+              } else if (!duration || media.currentTime < duration - 1) {
+                media.play().catch(() => {});
+              }
+            }
+          } catch (e) {}
+        }
+        zhLogCadence(log, rule.key, rule.log, "info", 30);
+        handled += 1;
+      } catch (e) {}
+    });
+    return handled;
+  };
+
+  const ZH_DIALOG_BLOCK_TEXTS = [
+    "检测到异常脚本",
+    "异常行为提示",
+    "温馨提示",
+    "保持良好的学习习惯",
+    "同时播放多个视频",
+    "学习时间已经结束",
+    "本课程不能跨章学习"
+  ];
+  // 这些弹窗不能隐藏：验证码、答题/测验弹窗，隐藏会影响人工验证或自动答题
+  const ZH_DIALOG_KEEP_SELECTOR =
+    ".yidun_popup, .yidun_intelli-tips, iframe[src*='captcha'], .tcaptcha-transform, [id*='tcaptcha'], .questionContent, .examPaper_subject, .el-radio, .el-checkbox";
+  const zhDismissLegacyCourseRemind = (log) => {
+    // abc 原文：document.querySelector(".courseRemind.khfaPop")?.querySelector(".header-slot-box .el-icon-error")?.click()
+    try {
+      const popup = document.querySelector(".courseRemind.khfaPop");
+      const closeBtn = popup ? popup.querySelector(".header-slot-box .el-icon-error") : null;
+      if (!closeBtn) return false;
+      closeBtn.click();
+      zhLogCadence(log, "zh-course-remind-legacy", "已关闭课程提醒弹窗（abc 同款选择器）", "info", 30);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const zhHideBlockingDialogs = (log) => {
+    let hidden = 0;
+    zhDismissLegacyCourseRemind(log);
+    zhPickAll(".el-overlay, .el-dialog, .el-dialog__wrapper, .el-message-box, .el-message-box__wrapper").forEach((node) => {
+      try {
+        if (!zhVisible(node)) return;
+        if (node.querySelector(ZH_DIALOG_KEEP_SELECTOR)) return;
+        const text = zhTxtOf(node).replace(/\s+/g, "");
+        if (!text) return;
+        const hit = ZH_DIALOG_BLOCK_TEXTS.find((keyword) => text.indexOf(keyword) >= 0);
+        if (!hit) return;
+        node.style.display = "none";
+        hidden += 1;
+      } catch (e) {}
+    });
+    return hidden;
+  };
+  const zhInstallDialogGuard = (log) => {
+    if (zhRuntime.dialogGuard) return;
+    zhRuntime.dialogGuard = true;
+    zhHideBlockingDialogs(log);
+    const sweep = () => {
+      zhHideBlockingDialogs(log);
+    };
+    try {
+      const observer = new MutationObserver(() => {
+        if (zhRuntime.dialogSweepTimer) return;
+        zhRuntime.dialogSweepTimer = setTimeout(() => {
+          zhRuntime.dialogSweepTimer = null;
+          sweep();
+        }, 80);
+      });
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style", "class"]
+      });
+      zhRuntime.dialogGuardObserver = observer;
+    } catch (e) {}
+    zhRuntime.dialogGuardTimer = setInterval(sweep, 1500);
+  };
+
   const zhPptSweep = async (boxSelector, log) => {
     const boxes = Array.isArray(boxSelector) ? boxSelector : [boxSelector];
     const find = (sel) => {
@@ -13511,6 +13707,37 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
+  // 照 abc 的 processPpt / processBook：非视频任务点（课件 / 电子书）自动完成
+  const zhHandleResourceTask = async (log) => {
+    try {
+      const pptBox = zhPick(".ppt-preview-container") || zhPick(".ppt-btn-container");
+      if (pptBox) {
+        const ok = await zhPptSweep([".ppt-preview-container", ".ppt-btn-container"], log);
+        if (ok) return "ppt";
+      }
+      const bookBox = zhPick(".preview-section .book-mark .book-container") || zhPick(".book-container");
+      if (bookBox) {
+        const ok = await zhBookSweep(".preview-section .book-mark .book-container, .book-container", log);
+        if (ok) return "book";
+      }
+    } catch (e) {}
+    return "";
+  };
+
+  // 非视频任务点处理完后的收尾：完成标记出现了就切下一节，否则交给 15 秒超时兜底
+  const zhFinishResourceTask = async (stage, tune, log, kind) => {
+    const pendingCurrent = stage.current();
+    if (pendingCurrent && stage.isDone(pendingCurrent)) return await stage.advance(tune, log);
+    if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
+    if (Date.now() - zhRuntime.waitMediaSince > 15000) {
+      zhRuntime.waitMediaSince = 0;
+      log.addLog(`「${kind === "ppt" ? "课件" : "电子书"}」任务点未打完成标记，跳过`, "warning");
+      return await stage.advance(tune, log);
+    }
+    await zhSleep(1);
+    return true;
+  };
+
   const zhSectionProgress = (el) => {
     const text = zhTxtOf(zhPick(".collapse-info-progress .progress-text", el));
     const matched = text.replace(/\s/g, "").match(/(\d+)\/(\d+)/);
@@ -13539,7 +13766,6 @@ const AuthorWords = _sfc_main$4;
     try {
       section.click();
     } catch (e) {
-      // click 不可用时靠下面的事件派发
     }
     try {
       section.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -13558,6 +13784,10 @@ const AuthorWords = _sfc_main$4;
     isDone: (el) => !!(el && zhPick(".time_icofinish", el)),
     async step(tune, log) {
       zhClearNoise();
+      // 资源列表形态的学习页交给卡片资源逻辑处理
+      if (!zhPickAll("li.video, .clearfix.video").length && zhCardList().length) {
+        return await zhStageCard.step.call(zhStageCard, tune, log);
+      }
       const media = await zhFindMedia(["#vjs_container_html5_api", "#vjs_container video", "video"], 6);
       if (media) {
         if (media.ended) {
@@ -13571,6 +13801,9 @@ const AuthorWords = _sfc_main$4;
         await zhKeepPlaying(media, tune);
         return true;
       }
+      // 照 abc：非视频任务点（PPT / 电子书）自动完成
+      const resourceKind = await zhHandleResourceTask(log);
+      if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
       if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
       zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
@@ -13612,9 +13845,15 @@ const AuthorWords = _sfc_main$4;
     isDone: (el) => !!(el && el.parentElement && zhPick(".finish-icon", el.parentElement)),
     async step(tune, log) {
       zhClearNoise();
+      // 部分课程的学习页是「资源列表」形态（没有 .child-main），交给卡片资源逻辑处理
+      if (!zhPickAll(".child-main").length && zhCardList().length) {
+        return await zhStageCard.step.call(zhStageCard, tune, log);
+      }
       const media = await zhFindMedia(["video", "audio"], 6);
       if (media) {
-        if (media.ended) {
+        zhRuntime.waitMediaSince = 0;
+        // 照 abc：ended 或「播放位置已到片尾」都算完成（平台常停在片尾不触发 ended）
+        if (zhMediaAtEnd(media)) {
           const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)));
           if (plan === "advance") return await this.advance(tune, log);
@@ -13622,8 +13861,18 @@ const AuthorWords = _sfc_main$4;
         await zhKeepPlaying(media, tune);
         return true;
       }
+      // 照 abc：非视频任务点（PPT / 电子书）自动完成
+      const resourceKind = await zhHandleResourceTask(log);
+      if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
       if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      // 照 abc：等待视频超时（15 秒）仍无可播媒体，就跳过当前任务点
+      if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
+      if (Date.now() - zhRuntime.waitMediaSince > 15000) {
+        zhRuntime.waitMediaSince = 0;
+        log.addLog("视频加载超时，跳过当前任务点", "warning");
+        return await this.advance(tune, log);
+      }
       zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
       return false;
     },
@@ -13671,6 +13920,10 @@ const AuthorWords = _sfc_main$4;
     isDone: (el) => !!(el && zhPick(".finish-icon", el)),
     async step(tune, log) {
       zhClearNoise();
+      // 资源列表形态的学习页交给卡片资源逻辑处理
+      if (!zhPickAll(".chapter-content .chapter-item").length && zhCardList().length) {
+        return await zhStageCard.step.call(zhStageCard, tune, log);
+      }
       const mastery = zhPick(".masterylevel-body");
       if (zhVisible(mastery)) {
         zhTapNode(zhPick(".header-box .close-box") || zhPick(".header-icon"));
@@ -13680,7 +13933,9 @@ const AuthorWords = _sfc_main$4;
       }
       const media = await zhFindMedia(["video", "audio"], 6);
       if (media) {
-        if (media.ended) {
+        zhRuntime.waitMediaSince = 0;
+        // 照 abc：ended 或「播放位置已到片尾」都算完成
+        if (zhMediaAtEnd(media)) {
           const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)), {
             replayKey: "wisdom-replay",
@@ -13691,8 +13946,18 @@ const AuthorWords = _sfc_main$4;
         await zhKeepPlaying(media, tune);
         return true;
       }
+      // 照 abc：非视频任务点（PPT / 电子书）自动完成
+      const resourceKind = await zhHandleResourceTask(log);
+      if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
       if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      // 照 abc：等待视频超时（15 秒）仍无可播媒体，就跳过当前任务点
+      if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
+      if (Date.now() - zhRuntime.waitMediaSince > 15000) {
+        zhRuntime.waitMediaSince = 0;
+        log.addLog("视频加载超时，跳过当前任务点", "warning");
+        return await this.advance(tune, log);
+      }
       zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
       return false;
     },
@@ -13748,7 +14013,6 @@ const AuthorWords = _sfc_main$4;
     return !text || text.indexOf("已完成") >= 0;
   };
 
-  // 已绑定事件的媒体元素，避免反复重绑
   const zhBoundMedia = new WeakSet();
 
   /**
@@ -13775,7 +14039,6 @@ const AuthorWords = _sfc_main$4;
 
     const active = sections.find((el) => /(^|\s)active(\s|$)/.test(el.className || ""));
     const pos = unfinished.indexOf(active);
-    // 越界说明当前已是最后一个待完成章节：返回 false，绝不回退到自身
     const target = pos >= 0 ? unfinished[pos + 1] || null : unfinished[0] || null;
     if (!target) return false;
 
@@ -13817,7 +14080,6 @@ const AuthorWords = _sfc_main$4;
       const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
       if (tune.restudy && current) zhRestudyMark(this, current, list);
       const index = pending.indexOf(current);
-      // 越界不回退到 pending[0]：当前已是最后一个待完成时交给章节切换
       const target = index >= 0 ? pending[index + 1] || null : pending[0] || null;
       if (target) {
         log.addLog(`切换到下一节：${zhTxtOf(zhPick(".title", target) || zhPick(".catalogue_title", target) || target, "下一个视频")}`, "primary");
@@ -13850,7 +14112,6 @@ const AuthorWords = _sfc_main$4;
       if (kind === "video") {
         const media = await zhFindMedia(["#vjs_container video", ".video-player-wrapper video", "video"], 6);
         if (media) {
-          // 照 abc 的 videoEl.onpause / onended：只绑一次，播完由事件推进
           if (!zhBoundMedia.has(media)) {
             zhBoundMedia.add(media);
             media.onpause = () => {
@@ -13860,7 +14121,6 @@ const AuthorWords = _sfc_main$4;
               }, 1000);
             };
             media.onended = () => {
-              // 照 abc：播完延迟 3 秒直接切下一节，不检查完成标记
               void (async () => {
                 log.addLog("视频播放完毕，即将跳转下一节", "primary");
                 await zhSleep(3);
@@ -13895,8 +14155,6 @@ const AuthorWords = _sfc_main$4;
         : cards.filter((card) => !zhCardDone(card));
       if (pending.length) {
         if (tune.restudy && activeCard) zhRestudyMark(this, activeCard, cards);
-        // 与 abc 的 getNextJob 一致：只取当前卡片之后的，没有就交给章节切换，
-        // 绝不回退到 pending[0]（那会点回自己，视频重新从头播）
         const after = pending.find((card) => cards.indexOf(card) > activeIndex);
         const target = after || (activeIndex >= 0 ? null : pending[0]) || null;
         if (target) {
@@ -14084,24 +14342,116 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`检测到智慧树${stage.label}学习页面`, "primary");
     log.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
     log.addLog(`播放器最大倍速：${zhSpeedCeiling()}x`, "info");
-    // 照 abc：进页面时把遮罩和弹窗全部隐藏，异常行为提示之类会挡住后续流程
-    zhPickAll(".el-overlay, .el-dialog").forEach((el) => {
+    // 照 abc（新共享课 start2）的时序：它是在页面加载完成后才统一隐藏弹窗。
+    // 太早隐藏会漏掉平台延迟弹出的「课程提醒」，随后视频被暂停就卡住了。
+    const abcHideAllDialogs = () => {
       try {
-        el.style.display = "none";
-      } catch (e) {
-        // 单个弹窗处理失败忽略
-      }
-    });
+        document.querySelectorAll(".el-overlay,.el-dialog").forEach((dialog) => {
+          if (dialog.querySelector(ZH_DIALOG_KEEP_SELECTOR)) return;
+          dialog.style.display = "none";
+        });
+      } catch (e) {}
+      try {
+        const media = document.querySelector("#container video") || document.querySelector("video");
+        if (media && media.paused && !media.ended) {
+          const duration = Number(media.duration) || 0;
+          if (!duration || media.currentTime < duration - 1.5) media.play().catch(() => {});
+        }
+      } catch (e) {}
+    };
+    abcHideAllDialogs();
+    setTimeout(abcHideAllDialogs, 5000);
+    setTimeout(abcHideAllDialogs, 9000);
+    setTimeout(abcHideAllDialogs, 15000);
+    // 之后由守护持续处理后续弹出的提示类弹窗（验证码、答题弹窗会保留）
+    zhInstallDialogGuard(log);
+    // 照 abc 的 startPolling：用独立定时器做三件事
+    // ① 媒体自愈（片尾未 ended / 被自动播放策略拦住时恢复）
+    // ② 完成标记轮询：当前任务点出现完成标记就切下一节（abc 的 finishTimer，不等 ended）
+    // ③ 心跳检测：主循环 30 秒没动静就自动重启流程
+    zhRuntime.stage = stage;
+    zhRuntime.log = log;
+    zhRuntime.lastBeat = Date.now();
+    if (!zhRuntime.watchdog) {
+      zhRuntime.watchdog = setInterval(() => {
+        if (!zhRuntime.booted || !zhRuntime.stage) return;
+        try {
+          const media = document.querySelector("#container video") || document.querySelector("video");
+          if (media && media.paused && !media.ended) {
+            media.muted = true;
+            const duration = Number(media.duration) || 0;
+            if (duration && media.currentTime >= duration - 2) {
+              // 平台播放器常停在片尾不触发 ended，手动推到最后让 ended 生效
+              media.currentTime = duration;
+            } else {
+              media.play().catch(() => {});
+            }
+          }
+        } catch (e) {}
+        // ② 照 abc 的 finishTimer：完成标记出现 → 立刻切下一节，不依赖 ended 事件
+        try {
+          const stage = zhRuntime.stage;
+          if (
+            stage &&
+            typeof stage.current === "function" &&
+            typeof stage.isDone === "function" &&
+            typeof stage.advance === "function" &&
+            Date.now() - (zhRuntime.lastAdvanceAt || 0) > 4000
+          ) {
+            const current = stage.current();
+            if (current && stage.isDone(current)) {
+              let tune = null;
+              try {
+                tune = zhStudyTuning();
+              } catch (e) {
+                tune = null;
+              }
+              if (tune && tune.modeOn) {
+                zhRuntime.lastAdvanceAt = Date.now();
+                Promise.resolve(stage.advance(tune, zhRuntime.log)).catch(() => {});
+              }
+            }
+          }
+        } catch (e) {}
+        const silent = Date.now() - (zhRuntime.lastBeat || 0);
+        if (silent > 30000 && Date.now() - (zhRuntime.lastRestartAt || 0) > 60000) {
+          zhRuntime.lastRestartAt = Date.now();
+          zhLogCadence(
+            zhRuntime.log,
+            "zh-loop-restart",
+            `学习流程已 ${Math.round(silent / 1000)} 秒无响应，正在自动重启流程`,
+            "warning",
+            30
+          );
+          zhRuntime.booted = false;
+          zhRuntime.epoch += 1;
+          const restartStage = zhRuntime.stage;
+          const restartLog = zhRuntime.log;
+          Promise.resolve()
+            .then(() => zhBootClassroom(restartStage, restartLog))
+            .catch(() => {});
+        }
+      }, 2000);
+    }
     while (zhRuntime.epoch === epoch) {
       await zhSleep(1.1);
-      // 照 abc 的 visibilityTimer：页面切后台时提醒一次，学习流程可能不推进
+      zhRuntime.lastBeat = Date.now();
       if (document.visibilityState === "hidden" && !zhRuntime.visibilityWarned) {
         zhRuntime.visibilityWarned = true;
         log.addLog("页面未保持前台，学习流程可能无法正常推进..", "warning");
       } else if (document.visibilityState === "visible") {
         zhRuntime.visibilityWarned = false;
       }
-      const tune = zhStudyTuning();
+      let tune = null;
+      try {
+        tune = zhStudyTuning();
+      } catch (error) {
+        tune = null;
+      }
+      if (!tune) {
+        zhLogCadence(log, "zh-tuning-error", "读取学习配置失败，稍后重试", "warning", 30);
+        continue;
+      }
       if (!tune.modeOn) {
         log.addLog("智慧树「学习」已关闭，停止本页任务", "warning");
         break;
@@ -14282,7 +14632,6 @@ const AuthorWords = _sfc_main$4;
         editor.dispatchEvent(new Event("input", { bubbles: true }));
       }
       await zhSleep(0.2);
-      // 写入后校验：内容和预期对得上才算成功（与 abc 的 writeEditor 一致）
       const expected = hikeClean(value).slice(0, 12);
       if (expected && hikeClean(editor.textContent || "").indexOf(expected) >= 0) filled += 1;
     }
@@ -14425,6 +14774,8 @@ const AuthorWords = _sfc_main$4;
   const useZhClassroomStudy = async () => {
     const log = useLogStore();
     if (zhRuntime.booted) return;
+    // 提前挂弹窗守护：入口提示、进入页面前弹出的提示类弹窗都会被隐藏
+    zhInstallDialogGuard(log);
     const host = location.hostname;
     const stage = ZH_CLASSROOM_STAGES.find((item) => item.match(host));
     if (!stage) {
