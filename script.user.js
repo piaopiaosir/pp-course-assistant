@@ -1,4 +1,3 @@
-// ==UserScript==
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
@@ -41,7 +40,6 @@
 // @tag          ChatGPT|Gemini|Deepseek多模型支持
 // @tag          免费题库
 // @tag          全题型支持
-// ==/UserScript==
 
 const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
@@ -10458,7 +10456,6 @@ const AuthorWords = _sfc_main$4;
             await mediaElement.pause();
             mediaElement.muted = true;
             ppMuteOnce(mediaElement);
-            // 播放器重建元素时 play() 的 Promise 可能永远不 settle，加超时避免整条流程卡死
             await zhWithTimeout(mediaElement.play(), 6, false);
 
             mediaElement.playbackRate = playbackRate;
@@ -12040,9 +12037,6 @@ const AuthorWords = _sfc_main$4;
       this.callback = callback;
       this.intercept(urlList);
     }
-    // 注意：智慧树学习页会做原生性检查（XMLHttpRequest.prototype.open 一旦被改写，
-    // 即判定「检测到异常脚本」：暂停 + 上报 + 3 秒跳回首页，且每 60 秒复查一次）。
-    // 因此这里不改写 open，只挂 send（不在检查范围内），在 load 回调里按 responseURL 过滤。
     intercept(urlList) {
       _ppXhrInterceptors.push({ urlList, callback: this.callback });
       _ppInstallXhrSendHook();
@@ -12521,9 +12515,6 @@ const AuthorWords = _sfc_main$4;
       if (typeof NativeXhr === "function" && !NativeXhr.__ppZhPaperProbe) {
         NativeXhr.__ppZhPaperProbe = true;
         const nativeSend = NativeXhr.prototype.send;
-        // 注意：不要改写 XMLHttpRequest.prototype.open —— 智慧树学习页会校验其原生性，
-        // 一旦被改写就会判「检测到异常脚本」（暂停 + 上报 + 3 秒跳回首页，且每 60 秒复查）。
-        // 这里只挂 send（不在检查范围内），在 load 回调里用 responseURL 过滤目标接口。
         NativeXhr.prototype.send = function (...args) {
           try {
             this.addEventListener("load", function () {
@@ -12998,7 +12989,6 @@ const AuthorWords = _sfc_main$4;
   const ZH_STUDY_PART = PP_KEY.VIDEO;
 
   const zhSleep = (sec) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(sec) || 0) * 1e3));
-  // 给可能永远不 settle 的 Promise 加超时（典型：播放器重建元素后，旧元素的 media.play() 悬挂）
   const zhWithTimeout = (promise, sec, fallback) => new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -13098,8 +13088,6 @@ const AuthorWords = _sfc_main$4;
     watchdog: null
   };
 
-  // 照 abc：平台播放器有时停在片尾不触发 ended（currentTime≈duration 且 paused），
-  // 所以完成判定不能只认 media.ended。
   const zhMediaAtEnd = (media) => {
     try {
       if (!media) return false;
@@ -13233,8 +13221,6 @@ const AuthorWords = _sfc_main$4;
       }
       media.__ppZhSpeed = rate;
     } catch (e) {}
-    // 平台播放器的倍速标签是它自己的内部状态，直接改元素倍速不会同步显示。
-    // 这里只改文本（不派发事件，也不会触发容器的合成点击检测）。
     try {
       const text = rate === 1 ? "1.0" : String(rate);
       const label = document.querySelector("#container .speedBox > span");
@@ -13251,7 +13237,6 @@ const AuthorWords = _sfc_main$4;
     while (Date.now() < deadline) {
       for (const sel of list) {
         const media = zhPick(sel);
-        // 必须仍连接在文档上：播放器初始化时会重建 video，旧元素上挂起的 play() 可能永远不兑现
         if (media && media.isConnected !== false && (media.currentSrc || media.src || media.readyState > 0)) return media;
       }
       await zhSleep(0.4);
@@ -13263,7 +13248,6 @@ const AuthorWords = _sfc_main$4;
     if (!media) return false;
     const log = useLogStore();
     ppMuteOnce(media);
-    // 照 abc：从头开始播放时跳过 0 秒，避免卡在 0 进度
     try {
       if (media.currentTime < 1) media.currentTime = 1;
     } catch (e) {}
@@ -13302,7 +13286,6 @@ const AuthorWords = _sfc_main$4;
       markPlayed();
       return true;
     }
-    // 自动播放策略：未静音时 play() 会被拒绝；静音后重试
     if (!media.muted) media.muted = true;
     if (await tryPlay()) {
       markPlayed();
@@ -13537,7 +13520,6 @@ const AuthorWords = _sfc_main$4;
     if (readTip && zhVisible(readTip.closest ? readTip.closest(".dialog-read") : readTip)) zhTapNode(readTip);
   };
 
-  // 需要“点按钮关掉”的提示弹窗（只隐藏遮罩可能留下平台内部弹窗状态，导致视频卡住）
   const ZH_NOTICE_DISMISS_RULES = [
     {
       key: "zh-course-notice",
@@ -13578,7 +13560,6 @@ const AuthorWords = _sfc_main$4;
             if (media && media.paused && !media.ended) {
               const duration = Number(media.duration) || 0;
               if (duration && media.currentTime >= duration - 1.5) {
-                // 卡在片尾：把进度推到结尾触发 ended，交给正常的「完成 → 切换下一节」逻辑
                 media.currentTime = duration;
               } else if (!duration || media.currentTime < duration - 1) {
                 media.play().catch(() => {});
@@ -13602,11 +13583,9 @@ const AuthorWords = _sfc_main$4;
     "学习时间已经结束",
     "本课程不能跨章学习"
   ];
-  // 这些弹窗不能隐藏：验证码、答题/测验弹窗，隐藏会影响人工验证或自动答题
   const ZH_DIALOG_KEEP_SELECTOR =
     ".yidun_popup, .yidun_intelli-tips, iframe[src*='captcha'], .tcaptcha-transform, [id*='tcaptcha'], .questionContent, .examPaper_subject, .el-radio, .el-checkbox";
   const zhDismissLegacyCourseRemind = (log) => {
-    // abc 原文：document.querySelector(".courseRemind.khfaPop")?.querySelector(".header-slot-box .el-icon-error")?.click()
     try {
       const popup = document.querySelector(".courseRemind.khfaPop");
       const closeBtn = popup ? popup.querySelector(".header-slot-box .el-icon-error") : null;
@@ -13707,7 +13686,6 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
-  // 照 abc 的 processPpt / processBook：非视频任务点（课件 / 电子书）自动完成
   const zhHandleResourceTask = async (log) => {
     try {
       const pptBox = zhPick(".ppt-preview-container") || zhPick(".ppt-btn-container");
@@ -13724,7 +13702,6 @@ const AuthorWords = _sfc_main$4;
     return "";
   };
 
-  // 非视频任务点处理完后的收尾：完成标记出现了就切下一节，否则交给 15 秒超时兜底
   const zhFinishResourceTask = async (stage, tune, log, kind) => {
     const pendingCurrent = stage.current();
     if (pendingCurrent && stage.isDone(pendingCurrent)) return await stage.advance(tune, log);
@@ -13748,19 +13725,11 @@ const AuthorWords = _sfc_main$4;
     return { done, total };
   };
 
-  /**
-   * 点开一个折叠章节。
-   *
-   * 照 abc 的 clickEl：滚动到可视区 → click() → 再补一个冒泡 MouseEvent。
-   * 折叠时子节点不渲染、进度读成 0/0，会被误判成「本页任务点已全部完成」，
-   * 用户看到的就是「必须手动把左侧列表全部点开才会继续刷课」。
-   */
   const zhOpenSection = async (section) => {
     if (!section) return false;
     try {
       section.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (e) {
-      // 滚动失败不影响点击
     }
     await zhSleep(0.2);
     try {
@@ -13770,7 +13739,6 @@ const AuthorWords = _sfc_main$4;
     try {
       section.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     } catch (e) {
-      // 派发失败忽略
     }
     return true;
   };
@@ -13784,7 +13752,6 @@ const AuthorWords = _sfc_main$4;
     isDone: (el) => !!(el && zhPick(".time_icofinish", el)),
     async step(tune, log) {
       zhClearNoise();
-      // 资源列表形态的学习页交给卡片资源逻辑处理
       if (!zhPickAll("li.video, .clearfix.video").length && zhCardList().length) {
         return await zhStageCard.step.call(zhStageCard, tune, log);
       }
@@ -13801,7 +13768,6 @@ const AuthorWords = _sfc_main$4;
         await zhKeepPlaying(media, tune);
         return true;
       }
-      // 照 abc：非视频任务点（PPT / 电子书）自动完成
       const resourceKind = await zhHandleResourceTask(log);
       if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
@@ -13845,14 +13811,12 @@ const AuthorWords = _sfc_main$4;
     isDone: (el) => !!(el && el.parentElement && zhPick(".finish-icon", el.parentElement)),
     async step(tune, log) {
       zhClearNoise();
-      // 部分课程的学习页是「资源列表」形态（没有 .child-main），交给卡片资源逻辑处理
       if (!zhPickAll(".child-main").length && zhCardList().length) {
         return await zhStageCard.step.call(zhStageCard, tune, log);
       }
       const media = await zhFindMedia(["video", "audio"], 6);
       if (media) {
         zhRuntime.waitMediaSince = 0;
-        // 照 abc：ended 或「播放位置已到片尾」都算完成（平台常停在片尾不触发 ended）
         if (zhMediaAtEnd(media)) {
           const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)));
@@ -13861,12 +13825,10 @@ const AuthorWords = _sfc_main$4;
         await zhKeepPlaying(media, tune);
         return true;
       }
-      // 照 abc：非视频任务点（PPT / 电子书）自动完成
       const resourceKind = await zhHandleResourceTask(log);
       if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
       if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
-      // 照 abc：等待视频超时（15 秒）仍无可播媒体，就跳过当前任务点
       if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
       if (Date.now() - zhRuntime.waitMediaSince > 15000) {
         zhRuntime.waitMediaSince = 0;
@@ -13920,7 +13882,6 @@ const AuthorWords = _sfc_main$4;
     isDone: (el) => !!(el && zhPick(".finish-icon", el)),
     async step(tune, log) {
       zhClearNoise();
-      // 资源列表形态的学习页交给卡片资源逻辑处理
       if (!zhPickAll(".chapter-content .chapter-item").length && zhCardList().length) {
         return await zhStageCard.step.call(zhStageCard, tune, log);
       }
@@ -13934,7 +13895,6 @@ const AuthorWords = _sfc_main$4;
       const media = await zhFindMedia(["video", "audio"], 6);
       if (media) {
         zhRuntime.waitMediaSince = 0;
-        // 照 abc：ended 或「播放位置已到片尾」都算完成
         if (zhMediaAtEnd(media)) {
           const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)), {
@@ -13946,12 +13906,10 @@ const AuthorWords = _sfc_main$4;
         await zhKeepPlaying(media, tune);
         return true;
       }
-      // 照 abc：非视频任务点（PPT / 电子书）自动完成
       const resourceKind = await zhHandleResourceTask(log);
       if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
       if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
-      // 照 abc：等待视频超时（15 秒）仍无可播媒体，就跳过当前任务点
       if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
       if (Date.now() - zhRuntime.waitMediaSince > 15000) {
         zhRuntime.waitMediaSince = 0;
@@ -14015,17 +13973,6 @@ const AuthorWords = _sfc_main$4;
 
   const zhBoundMedia = new WeakSet();
 
-  /**
-   * 切到下一个待完成章节 —— 章节切换的唯一实现，advance / chapterAdvance 共用。
-   *
-   * abc：按 `.collapse-info-progress .progress-text` 解析进度，取 active 之后一个；
-   *      越界返回 null 而不是回退到自身（这正是我们会死循环、它不会的地方）。
-   * OCS：先原生 click() 再校验子节点是否渲染。
-   * 我们：读不到进度或总数是 0（折叠章节未渲染）时算未完成 —— abc / OCS 都直接过滤，
-   *      代价是折叠的章节永远刷不到。
-   *
-   * @returns {Promise<boolean>} true=已切换；false=没有可切的，由调用方收尾
-   */
   const zhAdvanceSection = async (tune, log) => {
     const sections = zhPickAll(".section-item-collapse-info");
     if (!sections.length) return false;
@@ -14342,8 +14289,6 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`检测到智慧树${stage.label}学习页面`, "primary");
     log.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
     log.addLog(`播放器最大倍速：${zhSpeedCeiling()}x`, "info");
-    // 照 abc（新共享课 start2）的时序：它是在页面加载完成后才统一隐藏弹窗。
-    // 太早隐藏会漏掉平台延迟弹出的「课程提醒」，随后视频被暂停就卡住了。
     const abcHideAllDialogs = () => {
       try {
         document.querySelectorAll(".el-overlay,.el-dialog").forEach((dialog) => {
@@ -14363,12 +14308,7 @@ const AuthorWords = _sfc_main$4;
     setTimeout(abcHideAllDialogs, 5000);
     setTimeout(abcHideAllDialogs, 9000);
     setTimeout(abcHideAllDialogs, 15000);
-    // 之后由守护持续处理后续弹出的提示类弹窗（验证码、答题弹窗会保留）
     zhInstallDialogGuard(log);
-    // 照 abc 的 startPolling：用独立定时器做三件事
-    // ① 媒体自愈（片尾未 ended / 被自动播放策略拦住时恢复）
-    // ② 完成标记轮询：当前任务点出现完成标记就切下一节（abc 的 finishTimer，不等 ended）
-    // ③ 心跳检测：主循环 30 秒没动静就自动重启流程
     zhRuntime.stage = stage;
     zhRuntime.log = log;
     zhRuntime.lastBeat = Date.now();
@@ -14381,14 +14321,12 @@ const AuthorWords = _sfc_main$4;
             media.muted = true;
             const duration = Number(media.duration) || 0;
             if (duration && media.currentTime >= duration - 2) {
-              // 平台播放器常停在片尾不触发 ended，手动推到最后让 ended 生效
               media.currentTime = duration;
             } else {
               media.play().catch(() => {});
             }
           }
         } catch (e) {}
-        // ② 照 abc 的 finishTimer：完成标记出现 → 立刻切下一节，不依赖 ended 事件
         try {
           const stage = zhRuntime.stage;
           if (
@@ -14479,11 +14417,6 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
-  // ============================================================
-  // AI 教学中心（polymas hike）：作业 / 随堂练习
-  //   平台接口直接给题面 + 选项 + 对错标记，服务端转成选项正文后下发；
-  //   考试 / 作业任务两页不调接口，直接走通用试卷逻辑（DOM + 题库查询）。
-  // ============================================================
   const HIKE_CARD_SEL = ".question-item";
   const HIKE_OPTION_SEL = ".option-list .option-item";
   const HIKE_EDITOR_SEL = ".ProseMirror";
@@ -14521,10 +14454,6 @@ const AuthorWords = _sfc_main$4;
     };
   };
 
-  /**
-   * 随堂练习预热：进页面时调一次，让服务端从平台拉整卷、把标准答案逐题写进缓存。
-   * 之后每道题仍走「上传原始 HTML → 服务端解析 → 查缓存」，不再带 questionId。
-   */
   const hikePrimeTraining = (params, accessToken) => new Promise((resolve) => {
     const platformToken = hikeCookieOf("ai-poly");
     if (!platformToken) {
@@ -14583,7 +14512,6 @@ const AuthorWords = _sfc_main$4;
     return hikeIsPicked(option);
   };
 
-  /** 平台下发的是选项正文，这里按文本对齐；对不上再退回包含匹配 */
   const hikeMatchIndexes = (options, answers) => {
     const texts = options.map((option) => hikeClean(hikeOptionText(option)));
     const picked = [];
@@ -14599,10 +14527,6 @@ const AuthorWords = _sfc_main$4;
     return picked.sort((a, b) => a - b);
   };
 
-  /**
-   * 取 Tiptap 实例：元素上直接挂的那份，取不到再从页面 document 重新取一次。
-   * 沙箱/iframe 里元素上的实例可能是隔离后的对象，和 abc 的 findEditor 一样做两次尝试。
-   */
   const hikeFindEditor = (element, editors) => {
     const usable = (value) => Boolean(value && value.commands && typeof value.commands.setContent === "function");
     if (usable(element.editor)) return element.editor;
@@ -14638,11 +14562,6 @@ const AuthorWords = _sfc_main$4;
     return filled > 0;
   };
 
-  /**
-   * 题卡 → 查询入参。
-   * 题干同时用于判空（对应 abc parseCards 的 `.filter((q) => q.title)`）；
-   * 查题仍走 queryAnswer(outerHTML)，服务端解析，这里只服务填涂定位。
-   */
   const hikeCardQuestion = (card) => {
     const optionNodes = Array.from(card.querySelectorAll(HIKE_OPTION_SEL));
     const titleNode = card.querySelector(".qeustion-content .markdown-latex-container, .combination-content");
@@ -14672,7 +14591,6 @@ const AuthorWords = _sfc_main$4;
     return ok;
   };
 
-  /** 考试页：整页多卡，平台不给答案，逐卡查库后填涂 */
   const hikeSolveExamCards = async (log) => {
     const cards = Array.from(document.querySelectorAll(HIKE_CARD_SEL));
     let filled = 0;
@@ -14693,7 +14611,6 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`共 ${cards.length} 题，已填入 ${filled} 题，请检查后手动提交`, "warning");
   };
 
-  /** 作业任务页：左侧题号卡片 + 单题区，逐题查询后点「下一题」 */
   const hikeSolveLegacyCards = async (log) => {
     const cards = Array.from(document.querySelectorAll(".card_ul .card_li"));
     if (cards.length) cards[0].click();
@@ -14755,7 +14672,6 @@ const AuthorWords = _sfc_main$4;
       return;
     }
 
-    // 只有随堂练习需要先从平台拉一次整卷，把标准答案逐题写进服务端缓存
     if (page === "training") {
       const response = await hikePrimeTraining(hikeParams(), setting.config.basicConfig.token.value);
       if (response && response.code === 200) {
@@ -14766,7 +14682,6 @@ const AuthorWords = _sfc_main$4;
       }
     }
 
-    // 四个页面统一：解析页面题卡 → 上传原始 HTML → 普通查询 → 填涂
     if (page === "legacy") await hikeSolveLegacyCards(log);
     else await hikeSolveExamCards(log);
   };
@@ -14774,7 +14689,6 @@ const AuthorWords = _sfc_main$4;
   const useZhClassroomStudy = async () => {
     const log = useLogStore();
     if (zhRuntime.booted) return;
-    // 提前挂弹窗守护：入口提示、进入页面前弹出的提示类弹窗都会被隐藏
     zhInstallDialogGuard(log);
     const host = location.hostname;
     const stage = ZH_CLASSROOM_STAGES.find((item) => item.match(host));
