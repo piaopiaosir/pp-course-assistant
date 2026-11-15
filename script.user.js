@@ -1,3 +1,4 @@
+// ==UserScript==
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
@@ -40,6 +41,7 @@
 // @tag          ChatGPT|Gemini|Deepseek多模型支持
 // @tag          免费题库
 // @tag          全题型支持
+// ==/UserScript==
 
 const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
