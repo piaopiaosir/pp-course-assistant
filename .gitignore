@@ -1,0 +1,10 @@
+# 临时文件与分析产物
+_m.tmp
+*.tmp
+
+# 设计稿与逆向分析工作目录
+.design/
+_analysis/
+
+# 第三方 user.js 脚本，仅本地参考
+*.user.js
