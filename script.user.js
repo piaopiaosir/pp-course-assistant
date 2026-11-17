@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.3.4
+// @version      4.3.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -29,6 +29,7 @@
 // @require      https://lib.baomitu.com/blueimp-md5/2.19.0/js/md5.min.js
 // @resource     ElementPlusStyle  https://lib.baomitu.com/element-plus/2.8.2/index.min.css
 // @resource     fontDecryptLib    https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.1.0/font-decrypt.js
+// @resource     fontDecryptLibGh  https://gh-proxy.com/https://raw.githubusercontent.com/piaopiaosir/pp-font-decrypt/v1.1.0/font-decrypt.js
 // @connect      *
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
@@ -6272,25 +6273,65 @@ const AuthorWords = _sfc_main$4;
     return !!(lib && typeof lib.cxDecode === "function" && typeof lib.yktPrepare === "function");
   };
 
-  let _ppFontDecryptInitTried = false;
-  const ppInitFontDecryptFromResource = () => {
-    if (_ppFontDecryptInitTried) return;
-    _ppFontDecryptInitTried = true;
-    if (ppGetFontDecrypt()) return;
-    let code = "";
-    try {
-      if (typeof GM_getResourceText === "function") code = GM_getResourceText("fontDecryptLib") || "";
-    } catch (e) {
-      code = "";
-    }
-    if (!code) return;
+  
+  
+  const PP_FONT_DECRYPT_RESOURCES = ["fontDecryptLib", "fontDecryptLibGh"];
+  
+  let _ppFontDecryptInitError = "";
+  let _ppFontDecryptSource = "";
+  let _ppFontDecryptLastTry = 0;
+  const ppFontDecryptApplyCode = (code, source) => {
     try {
       (0, eval)(code);
     } catch (e) {
+      _ppFontDecryptInitError = "eval-fail";
       try {
-        console.debug("[字体解密] 库执行失败:", e && e.message ? e.message : e);
+        console.debug("[字体解密] 库执行失败（" + source + "）:", e && e.message ? e.message : e);
+      } catch (err) {}
+      return false;
+    }
+    if (!ppGetFontDecrypt()) {
+      _ppFontDecryptInitError = "no-window";
+      try {
+        console.debug("[字体解密] 库已执行但未挂载（" + source + "）");
+      } catch (err) {}
+      return false;
+    }
+    _ppFontDecryptInitError = "";
+    _ppFontDecryptSource = source;
+    
+    if (source !== PP_FONT_DECRYPT_RESOURCES[0]) {
+      try {
+        console.debug("[字体解密] 主渠道未生效，已使用备用渠道 " + source);
       } catch (err) {}
     }
+    return true;
+  };
+  
+  const ppInitFontDecryptFromResource = (force) => {
+    if (ppGetFontDecrypt()) return true;
+    const now = Date.now();
+    if (!force && now - _ppFontDecryptLastTry < 1000) return false;
+    _ppFontDecryptLastTry = now;
+    if (typeof GM_getResourceText !== "function") {
+      _ppFontDecryptInitError = "no-resource";
+      return false;
+    }
+    let channelError = "";
+    for (let i = 0; i < PP_FONT_DECRYPT_RESOURCES.length; i++) {
+      const name = PP_FONT_DECRYPT_RESOURCES[i];
+      let code = "";
+      try {
+        code = GM_getResourceText(name) || "";
+      } catch (e) {
+        code = "";
+      }
+      if (!code) continue;
+      if (ppFontDecryptApplyCode(code, name)) return true;
+      channelError = _ppFontDecryptInitError;
+    }
+    _ppFontDecryptInitError = channelError || "no-resource";
+    return false;
   };
   ppInitFontDecryptFromResource();
 
@@ -6341,11 +6382,18 @@ const AuthorWords = _sfc_main$4;
       _ppFontDecryptState.stats = ppFontDecryptDocStats(doc);
       _ppFontDecryptState.at = Date.now();
     };
-    const lib = ppGetFontDecrypt();
+    let lib = ppGetFontDecrypt();
+    
     if (!lib || typeof lib.cxDecode !== "function") {
-      remember("no-lib");
+      ppInitFontDecryptFromResource(true);
+      lib = ppGetFontDecrypt();
+    }
+    if (!lib || typeof lib.cxDecode !== "function") {
+      remember(_ppFontDecryptInitError || "no-lib");
       if (hasCipherText(doc)) {
-        ppWarnFontDecrypt("库未加载（@resource fontDecryptLib 缺失）");
+        ppWarnFontDecrypt(
+          "库未加载（" + (_ppFontDecryptInitError || "no-lib") + "，渠道 " + PP_FONT_DECRYPT_RESOURCES.join("/") + " 均不可用）",
+        );
       }
       return;
     }
