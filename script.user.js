@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.3.5
+// @version      4.3.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -760,7 +760,15 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
   const ppShopModalPurge = (() => {
     const HOST_RE = /(^|\.)txootd\.cn$/i;
-    const SELECTOR = ".html-popup-modal";
+    const TARGET_SELECTORS = [
+      "#sa-mask",
+      "#sa-box",
+      "#shop-left-btns",
+      '[id*="shop-left-btn"]',
+      '[class*="shop-left-btn"]',
+      ".html-popup-modal"
+    ];
+    const AGREEMENT_RE = /购\s*卡\s*协\s*议/;
     let installed = false;
 
     const drop = (node) => {
@@ -770,12 +778,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     };
 
     const sweep = () => {
-      try {
-        document.querySelectorAll(SELECTOR).forEach(drop);
-        document.querySelectorAll(".html-popup-content,.html-popup-header,.html-popup-body,.html-popup-footer").forEach((el) => {
-          if (el && el.closest(SELECTOR)) drop(el.closest(SELECTOR));
-        });
-      } catch (e) {}
+      TARGET_SELECTORS.forEach((sel) => {
+        try { document.querySelectorAll(sel).forEach(drop); } catch (e) {}
+      });
       try {
         if (document.body) {
           document.body.style.removeProperty("overflow");
@@ -797,16 +802,20 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               const node = added[j];
               if (!node || node.nodeType !== 1) continue;
               try {
-                if (node.matches && node.matches(SELECTOR)) {
-                  drop(node);
-                } else if (node.querySelector && node.querySelector(SELECTOR)) {
+                const nodeId = node.id || "";
+                if (nodeId === "sa-mask" || nodeId === "sa-box" || nodeId === "shop-left-btns" || (node.textContent && AGREEMENT_RE.test(node.textContent))) {
                   sweep();
+                  return;
                 }
               } catch (e) {}
             }
           }
         });
         observer.observe(document.documentElement || document, { childList: true, subtree: true });
+      } catch (e) {}
+      try {
+        const timer = setInterval(sweep, 300);
+        setTimeout(() => clearInterval(timer), 10000);
       } catch (e) {}
     };
 
@@ -11904,10 +11913,6 @@ const AuthorWords = _sfc_main$4;
       if (!stemShadow && stemNode && stemNode.__ppShadowRoot) {
         stemShadow = stemNode.__ppShadowRoot;
       }
-      if (!stemShadow) {
-        const stemScope = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe, .smallStem_describe");
-        stemShadow = readRecordedShadow(stemScope);
-      }
       const html = stemShadow ? String(stemShadow.innerHTML || "") : "";
       let text = stemShadow
         ? String(stemShadow.textContent || "").trim()
@@ -11922,22 +11927,12 @@ const AuthorWords = _sfc_main$4;
         const stemNode = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe div, .smallStem_describe p, .subject_describe, .smallStem_describe");
         const vm = stemNode && stemNode.__Ivue__;
         const sd = vm && vm._data && vm._data.shadowDom;
-        const scope = questionElement == null ? void 0 : questionElement.querySelector(".subject_describe, .smallStem_describe");
-        const recorded = readRecordedShadow(scope);
-        const originWrapped = (() => {
-          try {
-            const fn = _unsafeWindow.originFunction;
-            return !!(fn && fn.__ppAttachWrapped);
-          } catch (e) {
-            return false;
-          }
-        })();
         const htmlLen = sd ? String(sd.innerHTML || "").length : 0;
         let bridged = "";
         try {
           bridged = questionElement && questionElement.getAttribute ? questionElement.getAttribute("data-pp-stem") || "" : "";
         } catch (e) {}
-        return `bridge=${bridged ? "有" : "无"} ivue=${vm ? "有" : "无"} shadow=${sd ? "有" : "无"} recorded=${recorded ? "有" : "无"} origin=${originWrapped ? "已接管" : "未接管"} htmlLen=${htmlLen}`;
+        return `bridge=${bridged ? "有" : "无"} ivue=${vm ? "有" : "无"} shadow=${sd ? "有" : "无"} htmlLen=${htmlLen}`;
       } catch (e) {
         return `诊断失败:${e.message}`;
       }
@@ -14330,6 +14325,31 @@ const AuthorWords = _sfc_main$4;
     return "";
   };
 
+  const zhExamEntryOf = () => {
+    try {
+      const pools = zhPickAll(".wisdom-menu");
+      const scopes = pools.length ? pools : [document];
+      for (const scope of scopes) {
+        const nodes = Array.from(scope.querySelectorAll("div, li, a, button"));
+        const hit = nodes.find((el) => {
+          const text = zhTxtOf(el).replace(/\s+/g, "");
+          return text === "考试" && el.getClientRects().length > 0;
+        });
+        if (hit) return hit;
+      }
+      return zhPick('a[href*="stuExamWeb.html"], a[href*="onlineexamh5new"]');
+    } catch (e) {
+      return null;
+    }
+  };
+  const zhLogExamEntryHint = (log) => {
+    if (zhRuntime.examHinted) return;
+    if (document.querySelector("video, audio")) return;
+    if (!zhExamEntryOf()) return;
+    zhRuntime.examHinted = true;
+    log.addLog("检测到「考试」入口：请点击左侧「考试」进入考试列表，进入答题页后脚本会自动作答", "warning");
+  };
+
   const zhBootClassroom = async (stage, log) => {
     if (zhRuntime.booted) return;
     zhRuntime.booted = true;
@@ -14460,6 +14480,7 @@ const AuthorWords = _sfc_main$4;
         } else {
           zhRuntime.idle += 1;
           if (zhRuntime.idle % 15 === 0) log.addLog("当前没有可推进的内容，等待页面状态刷新…", "primary");
+          if (zhRuntime.idle === 15) zhLogExamEntryHint(log);
         }
       } catch (error) {
         zhLogCadence(log, "stage-error", `页面处理出现异常：${error && error.message ? error.message : error}`, "warning", 20);
@@ -16146,11 +16167,28 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
+  const PP_PLATFORM_DOMAINS = {
+    cx: [
+      "chaoxing.com", "xuexitong.com", "xueyinonline.com", "edu.cn",
+      "nbdlib.cn", "hnsyu.net", "gdhkmooc.com", "sslibrary.com"
+    ],
+    zhs: ["zhihuishu.com", "polymas.com"],
+    ykt: ["yuketang.cn", "gdufemooc.cn"]
+  };
   const ppPlatformOf = (url) => {
     const u = String(url || "");
-    if (u.includes("chaoxing") || u.includes("xuexitong") || u.includes("xueyin")) return "cx";
-    if (u.includes("zhihuishu") || u.includes("polymas")) return "zhs";
-    if (u.includes("yuketang") || u.includes("gdufemooc")) return "ykt";
+    let host = "";
+    try {
+      host = String(new URL(u).hostname || "").toLowerCase();
+    } catch (e) {
+      host = "";
+    }
+    if (!host) return "";
+    const keys = Object.keys(PP_PLATFORM_DOMAINS);
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      if (PP_PLATFORM_DOMAINS[key].some((domain) => host === domain || host.endsWith("." + domain))) return key;
+    }
     return "";
   };
 
@@ -16250,62 +16288,156 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog("已进入考试说明页，请点击进入答题页面后使用", "primary");
   };
 
-  const urlLogicPairs = [
-        { keyword: "changjiang-exam.yuketang.cn", logic: useYktExamLogic },
-        { keyword: "/v2/web/studentLog", logic: useYktCourseLogic },
-        { keyword: "/v2/web/student-lesson-report", logic: useYktCourseLogic },
-        { keyword: "/ai-workspace/lms-graph", logic: useYktCourseLogic },
-        { keyword: "/m/v2/course/normalcourse/logs", logic: useYktCourseLogic },
-        { keyword: "/pro/lms", logic: useYktCourseLogic },
-        { keyword: "/v2/web/studentcards", logic: useYktCourseLogic },
-        { keyword: "/v2/web/studentcard/", logic: useYktCourseLogic },
-        { keyword: "studyvideoh5.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "studyplush5.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "studywisdomh5.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "wisdom-mooc.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "ai-smart-course-student-pro.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "smartcoursestudent.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "fusioncourseh5.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
-        { keyword: "polymas.com", logic: useZhClassroomStudy },
-        { keyword: "hike-teaching-center.polymas.com/stu/answer-homework", logic: useHikePaperAnswer },
-        { keyword: "hike-teaching-center.polymas.com/stu/answer-training", logic: useHikePaperAnswer },
-        { keyword: "hike-teaching-center.polymas.com/stu-exam/answer-exam", logic: useHikePaperAnswer },
-        { keyword: "hike-teaching-center.polymas.com/stu-hike/stuHomeworkDo", logic: useHikePaperAnswer },
-        { keyword: "examloop.zhihuishu.com/exam/", logic: useZhsPaperAnswerLogic },
-        { keyword: "studentexamcomh5.zhihuishu.com/studentReviewTestOrExam", logic: useZhsPaperAnswerLogic },
-        { keyword: "smartcourseexam.zhihuishu.com/ReviewExam", logic: useZhsPaperAnswerLogic },
-        { keyword: "fusioncourseh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
-        { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
-        { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
-        { keyword: "ai-smart-course-student-pro.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
-        { keyword: "ai-smart-course-student-pro.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
-        { keyword: "smartcoursestudent.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
-        { keyword: "smartcoursestudent.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
-        { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhsPaperAnswerLogic },
-        { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsPaperAnswerLogic },
-        { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },
-        { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },
-        { keyword: "exam/preview", logic: useCxExamPreviewLogic },
-        { keyword: "/examcode/examnotes", logic: useCxExamNotesTipLogic },
-        { keyword: "/exam-ans/", logic: useCxExamLogic },
-        { keyword: "/exam/test", logic: useCxExamLogic },
-        { keyword: "/work/index", logic: useCxWorkLogic },
-        { keyword: "/work/doTest", logic: useCxWorkLogic },
-        { keyword: "/work/calcAnswer", logic: useCxWorkLogic },
-        { keyword: "/knowledge/start", logic: useCxChapterLogic },
-        { keyword: "/ztnodedetailcontroller/visitnodedetail", logic: useCxAutoReadLogic },
-        { keyword: "/course/", logic: useCxAutoReadLogic },
-        { keyword: "/plaza", logic: useCxPlazaTipLogic },
-        {
-          keyword: "mycourse/stu?courseid",
-          logic: useCxPracticeIframeWatcher
-        },
-        { keyword: "/page/active/stuActiveList", logic: useCxPracticeIframeWatcher },
-        { keyword: "/stuExamWeb.html", logic: useZhsAnswerLogic },
-        { keyword: "answerQuestion2", logic: useStuActiveLogic }
-      ];
+  const useZhsExamListTipLogic = () => {
+    const logStore = useLogStore();
+    logStore.addLog("当前是智慧树作业/考试列表页，请点击具体考试进入答题页", "warning");
+    let started = false;
+    const timer = setInterval(() => {
+      if (started) {
+        clearInterval(timer);
+        return;
+      }
+      if (!/webExamList\/(doexamination|dohomework)/.test(String(location.hash || ""))) return;
+      started = true;
+      clearInterval(timer);
+      useZhsAnswerLogic();
+    }, 1000);
+  };
+
+  const useZhsMasteryTipLogic = () => {
+    const logStore = useLogStore();
+    logStore.addLog("当前是掌握度页面，请点击低掌握度知识点上的「去提升」，进入练习后会自动答题", "warning");
+    let started = false;
+    const timer = setInterval(() => {
+      if (started) {
+        clearInterval(timer);
+        return;
+      }
+      if (!String(location.pathname || "").startsWith("/exam")) return;
+      started = true;
+      clearInterval(timer);
+      useZhsPaperAnswerLogic();
+    }, 1000);
+  };
+
+  const cxLogicRules = [
+    { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },
+    { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },
+    { keyword: "exam/preview", logic: useCxExamPreviewLogic },
+    { keyword: "/examcode/examnotes", logic: useCxExamNotesTipLogic },
+    { keyword: "/exam-ans/", logic: useCxExamLogic },
+    { keyword: "/exam/test", logic: useCxExamLogic },
+    { keyword: "/work/index", logic: useCxWorkLogic },
+    { keyword: "/work/doTest", logic: useCxWorkLogic },
+    { keyword: "/work/calcAnswer", logic: useCxWorkLogic },
+    { keyword: "/knowledge/start", logic: useCxChapterLogic },
+    { keyword: "/ztnodedetailcontroller/visitnodedetail", logic: useCxAutoReadLogic },
+    { keyword: "/course/", logic: useCxAutoReadLogic },
+    { keyword: "/plaza", logic: useCxPlazaTipLogic },
+    {
+      keyword: "mycourse/stu?courseid",
+      logic: useCxPracticeIframeWatcher
+    },
+    { keyword: "/page/active/stuActiveList", logic: useCxPracticeIframeWatcher },
+    { keyword: "answerQuestion2", logic: useStuActiveLogic }
+  ];
+
+  const zhsLogicRules = [
+    { keyword: "studyvideoh5.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "studyplush5.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "studywisdomh5.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "wisdom-mooc.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "ai-smart-course-student-pro.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "smartcoursestudent.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "fusioncourseh5.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
+    { keyword: "polymas.com", logic: useZhClassroomStudy },
+    { keyword: "hike-teaching-center.polymas.com/stu/answer-homework", logic: useHikePaperAnswer },
+    { keyword: "hike-teaching-center.polymas.com/stu/answer-training", logic: useHikePaperAnswer },
+    { keyword: "hike-teaching-center.polymas.com/stu-exam/answer-exam", logic: useHikePaperAnswer },
+    { keyword: "hike-teaching-center.polymas.com/stu-hike/stuHomeworkDo", logic: useHikePaperAnswer },
+    { keyword: "examloop.zhihuishu.com/exam/", logic: useZhsPaperAnswerLogic },
+    { keyword: "studentexamcomh5.zhihuishu.com/studentReviewTestOrExam", logic: useZhsPaperAnswerLogic },
+    { keyword: "smartcourseexam.zhihuishu.com/ReviewExam", logic: useZhsPaperAnswerLogic },
+    { keyword: "fusioncourseh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
+    { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
+    { keyword: "studywisdomh5.zhihuishu.com/study/mastery", logic: useZhsMasteryTipLogic },
+    { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
+    { keyword: "ai-smart-course-student-pro.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
+    { keyword: "ai-smart-course-student-pro.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
+    { keyword: "smartcoursestudent.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
+    { keyword: "smartcoursestudent.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
+    { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhsPaperAnswerLogic },
+    { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsPaperAnswerLogic },
+    { keyword: "stuExamWeb.html#/webExamList?", logic: useZhsExamListTipLogic },
+    { keyword: "/stuExamWeb.html", logic: useZhsAnswerLogic }
+  ];
+
+  const yktLogicRules = [
+    { keyword: "changjiang-exam.yuketang.cn", logic: useYktExamLogic },
+    { keyword: "/v2/web/studentLog", logic: useYktCourseLogic },
+    { keyword: "/v2/web/student-lesson-report", logic: useYktCourseLogic },
+    { keyword: "/ai-workspace/lms-graph", logic: useYktCourseLogic },
+    { keyword: "/m/v2/course/normalcourse/logs", logic: useYktCourseLogic },
+    { keyword: "/pro/lms", logic: useYktCourseLogic },
+    { keyword: "/v2/web/studentcards", logic: useYktCourseLogic },
+    { keyword: "/v2/web/studentcard/", logic: useYktCourseLogic }
+  ];
+
+  const urlLogicGroups = {
+    cx: cxLogicRules,
+    zhs: zhsLogicRules,
+    ykt: yktLogicRules
+  };
+  const urlLogicPairs = cxLogicRules.concat(zhsLogicRules, yktLogicRules);
+      const ppMatchTargetOf = (rawUrl) => {
+        const raw = String(rawUrl || "");
+        const crossPageParams = [
+          "fromUrl", "fromurl", "backUrl", "backurl", "returnUrl", "returnurl",
+          "redirectUrl", "redirecturl", "redirect_uri", "referrer"
+        ];
+        const stripCrossPageParams = (query) => {
+          if (!query) return null;
+          const params = new URLSearchParams(query);
+          let changed = false;
+          crossPageParams.forEach((name) => {
+            if (!params.has(name)) return;
+            params.delete(name);
+            changed = true;
+          });
+          const urlValued = [];
+          params.forEach((value, name) => {
+            let decoded = value;
+            try {
+              decoded = decodeURIComponent(value);
+            } catch (e) {}
+            if (decoded.indexOf("://") >= 0) urlValued.push(name);
+          });
+          urlValued.forEach((name) => {
+            params.delete(name);
+            changed = true;
+          });
+          return changed ? params.toString() : null;
+        };
+        try {
+          const parsed = new URL(raw);
+          const searchQuery = stripCrossPageParams(parsed.search.replace(/^\?/, ""));
+          if (searchQuery !== null) parsed.search = searchQuery ? `?${searchQuery}` : "";
+          const hashText = parsed.hash.replace(/^#/, "");
+          const hashQueryAt = hashText.indexOf("?");
+          if (hashQueryAt >= 0) {
+            const hashQuery = stripCrossPageParams(hashText.slice(hashQueryAt + 1));
+            if (hashQuery !== null) {
+              parsed.hash = hashText.slice(0, hashQueryAt) + (hashQuery ? `?${hashQuery}` : "");
+            }
+          }
+          return parsed.href;
+        } catch (e) {
+          return raw;
+        }
+      };
+
       const executeLogicByUrl = (url22) => {
 
         if (url22.includes('out_link.shtml')) {
@@ -16319,9 +16451,12 @@ const AuthorWords = _sfc_main$4;
           isShow.value = false;
           return;
         }
+        const matchTarget = ppMatchTargetOf(url22);
+        const platformKey = ppPlatformOf(matchTarget);
+        const routePool = urlLogicGroups[platformKey] || urlLogicPairs;
         let matchedRule = null;
-        for (const rule of urlLogicPairs) {
-          if (!url22.includes(rule.keyword)) continue;
+        for (const rule of routePool) {
+          if (!matchTarget.includes(rule.keyword)) continue;
           if (matchedRule === null || rule.keyword.length > matchedRule.keyword.length) matchedRule = rule;
         }
         if (matchedRule) {
@@ -17225,54 +17360,6 @@ const AuthorWords = _sfc_main$4;
     shadow.appendChild(styleEl2);
   };
 
-  const hookWebpack = () => {
-    let originCall = _unsafeWindow.Function.prototype.call;
-    _unsafeWindow.Function.prototype.call = function(...args) {
-      var _a, _b;
-      const result = originCall.apply(this, args);
-      if (((_b = (_a = args[0]) == null ? void 0 : _a.a) == null ? void 0 : _b.version) === "2.5.0") {
-        const install = args[1].exports.a.install;
-        args[1].exports.a.install = function(...installArgs) {
-          installArgs[0].mixin({
-            mounted: function() {
-              this.$el["__Ivue__"] = this;
-            }
-          });
-          return install.apply(this, installArgs);
-        };
-        return result;
-      }
-      return result;
-    };
-  };
-  const _ppShadowRoots = new WeakMap();
-  const hookAttachShadow = () => {
-    try {
-      const proto = _unsafeWindow.Element && _unsafeWindow.Element.prototype;
-      if (!proto || proto.__ppShadowHooked) return;
-      const origin = proto.attachShadow;
-      proto.attachShadow = function(init) {
-        const root = origin.apply(this, [init]);
-        try {
-          _ppShadowRoots.set(this, root);
-          this.__ppShadowRoot = root;
-        } catch (e) {}
-        return root;
-      };
-      proto.__ppShadowHooked = true;
-    } catch (e) {}
-  };
-  const readRecordedShadow = (scopeEl) => {
-    if (!scopeEl) return null;
-    try {
-      const list = [scopeEl, ...scopeEl.querySelectorAll("*")];
-      for (const el of list) {
-        const root = _ppShadowRoots.get(el);
-        if (root) return root;
-      }
-    } catch (e) {}
-    return null;
-  };
   const ZHS_BRIDGE_SOURCE = `(function () {
     if (window.__ppZhsBridge) return;
     window.__ppZhsBridge = true;
@@ -17377,38 +17464,14 @@ const AuthorWords = _sfc_main$4;
       script.remove();
     } catch (e) {}
   };
-  const hookOriginFunction = () => {
-    try {
-      const win = _unsafeWindow;
-      let current = win.originFunction;
-      const wrap = (holder) => {
-        try {
-          if (!holder || typeof holder.AttachShadow !== "function" || holder.__ppAttachWrapped) return holder;
-          const origin = holder.AttachShadow;
-          holder.AttachShadow = function(init) {
-            const root = origin.apply(this, [init]);
-            try {
-              _ppShadowRoots.set(this, root);
-              this.__ppShadowRoot = root;
-            } catch (e) {}
-            return root;
-          };
-          holder.__ppAttachWrapped = true;
-        } catch (e) {}
-        return holder;
-      };
-      current = wrap(current);
-      try {
-        Object.defineProperty(win, "originFunction", {
-          configurable: true,
-          enumerable: true,
-          get() { return current; },
-          set(value) { current = wrap(value); }
-        });
-      } catch (e) {}
-    } catch (e) {}
-  };
   const url = _unsafeWindow.location.href;
+  const pageHost = (() => {
+    try {
+      return String(_unsafeWindow.location.hostname || "").toLowerCase();
+    } catch (e) {
+      return "";
+    }
+  })();
 
   if (window.self === window.top) {
     window.addEventListener('message', (event) => {
@@ -17419,11 +17482,8 @@ const AuthorWords = _sfc_main$4;
     });
   }
 
-  if (url.includes("zhihuishu.com")) {
-    hookWebpack();
+  if (pageHost === "zhihuishu.com" || pageHost.endsWith(".zhihuishu.com")) {
     ppfxGuardTrustTimers();
-    hookAttachShadow();
-    hookOriginFunction();
     installZhsPageBridge();
     installZhPaperProbe();
   }
@@ -17551,6 +17611,30 @@ const AuthorWords = _sfc_main$4;
             if (store.type === "答题" && store.isPlaying) return;
             const media = pickMedia();
             if (!media) return;
+            const href = String(location.href || "");
+            const loginLike =
+              /login|passport|sso|cas|oauth|auth/i.test(href) ||
+              /登录|登陆|扫码|验证码/.test(String(document.title || ""));
+            if (loginLike || !(media.isConnected !== false)) {
+              if (store.type === "视频" || store.type === "音频") {
+                store.update({
+                  taskName: "等待任务开始",
+                  type: "",
+                  percent: 0,
+                  currentTime: 0,
+                  totalTime: 0,
+                  detail: "",
+                  isPlaying: false
+                });
+              }
+              return;
+            }
+            if (/zhihuishu\.com|polymas\.com/.test(location.hostname)) {
+              const inPlayer = media.closest && media.closest(
+                "#container, .video-player-wrapper, #vjs_container, .able-player-container, .video-js, .videoArea"
+              );
+              if (!inPlayer) return;
+            }
             const duration = Number(media.duration);
             if (!Number.isFinite(duration) || duration <= 0) return;
             const current = Math.min(duration, Math.max(0, Number(media.currentTime) || 0));
