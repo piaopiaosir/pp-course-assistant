@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.0
+// @version      4.4.1
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -13100,7 +13100,8 @@ const AuthorWords = _sfc_main$4;
     const y = box.top + box.height / 2;
     let hit = el;
     try {
-      hit = document.elementFromPoint(x, y) || el;
+      const top = document.elementFromPoint(x, y);
+      if (top && (top === el || el.contains(top))) hit = top;
     } catch (e) {
       hit = el;
     }
@@ -13114,6 +13115,53 @@ const AuthorWords = _sfc_main$4;
     fire(hit, "mouseup", { buttons: 0 });
     fire(hit, "click", { buttons: 0 });
     return true;
+  };
+
+  const ZH_MASK_SELECTOR = ".el-dialog__wrapper, .el-overlay, .el-overlay-dialog, .el-message-box__wrapper";
+  const zhMaskOf = (node) => {
+    try {
+      return (node && node.closest ? node.closest(ZH_MASK_SELECTOR) : null) || null;
+    } catch (e) {
+      return null;
+    }
+  };
+  const zhReleaseBodyPopupLock = () => {
+    try {
+      if (zhPickAll(ZH_MASK_SELECTOR).some((el) => zhVisible(el))) return false;
+      document.body.classList.remove("el-popup-parent--hidden");
+      document.documentElement.classList.remove("el-popup-parent--hidden");
+      zhPickAll(".v-modal").forEach((el) => {
+        try {
+          el.remove();
+        } catch (e) {}
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+  const zhHideMaskNode = (node) => {
+    if (!node) return false;
+    try {
+      node.style.display = "none";
+    } catch (e) {}
+    zhReleaseBodyPopupLock();
+    return true;
+  };
+  const zhHealStaleMasks = () => {
+    let healed = 0;
+    zhPickAll(ZH_MASK_SELECTOR).forEach((mask) => {
+      try {
+        if (!zhVisible(mask)) return;
+        if (mask.querySelector(ZH_DIALOG_KEEP_SELECTOR)) return;
+        const dialog = mask.querySelector(".el-dialog, .el-message-box, [role='dialog']");
+        if (!dialog || zhVisible(dialog)) return;
+        zhHideMaskNode(mask);
+        healed += 1;
+      } catch (e) {}
+    });
+    zhReleaseBodyPopupLock();
+    return healed;
   };
 
   const zhRuntime = {
@@ -13590,15 +13638,8 @@ const AuthorWords = _sfc_main$4;
           .map((label) => buttons.find((candidate) => zhTxtOf(candidate).indexOf(label) >= 0))
           .find(Boolean);
         if (btn) zhTapNode(btn);
-        try {
-          node.style.display = "none";
-        } catch (e) {}
-        const wrapper = node.closest ? node.closest(".el-overlay, .el-dialog__wrapper, .el-overlay-dialog") : null;
-        if (wrapper) {
-          try {
-            wrapper.style.display = "none";
-          } catch (e) {}
-        }
+        const wrapper = zhMaskOf(node);
+        if (wrapper) zhHideMaskNode(wrapper);
         if (rule.resume) {
           try {
             const media = document.querySelector("#container video") || document.querySelector("video");
@@ -13646,6 +13687,7 @@ const AuthorWords = _sfc_main$4;
   const zhHideBlockingDialogs = (log) => {
     let hidden = 0;
     zhDismissLegacyCourseRemind(log);
+    zhHealStaleMasks();
     zhPickAll(".el-overlay, .el-dialog, .el-dialog__wrapper, .el-message-box, .el-message-box__wrapper").forEach((node) => {
       try {
         if (!zhVisible(node)) return;
@@ -13654,7 +13696,7 @@ const AuthorWords = _sfc_main$4;
         if (!text) return;
         const hit = ZH_DIALOG_BLOCK_TEXTS.find((keyword) => text.indexOf(keyword) >= 0);
         if (!hit) return;
-        node.style.display = "none";
+        zhHideMaskNode(zhMaskOf(node) || node);
         hidden += 1;
       } catch (e) {}
     });
@@ -13665,6 +13707,10 @@ const AuthorWords = _sfc_main$4;
     zhRuntime.dialogGuard = true;
     zhHideBlockingDialogs(log);
     const sweep = () => {
+      zhHealStaleMasks();
+      try {
+        zhDismissNoticeDialogs(log);
+      } catch (e) {}
       zhHideBlockingDialogs(log);
     };
     try {
@@ -14361,10 +14407,10 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`播放器最大倍速：${zhSpeedCeiling()}x`, "info");
     const abcHideAllDialogs = () => {
       try {
-        document.querySelectorAll(".el-overlay,.el-dialog").forEach((dialog) => {
-          if (dialog.querySelector(ZH_DIALOG_KEEP_SELECTOR)) return;
-          dialog.style.display = "none";
-        });
+        zhDismissNoticeDialogs(log);
+      } catch (e) {}
+      try {
+        zhHealStaleMasks();
       } catch (e) {}
       try {
         const media = document.querySelector("#container video") || document.querySelector("video");
