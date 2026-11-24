@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.3
+// @version      4.4.4
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -33,6 +33,8 @@
 // @connect      *
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
+// @grant        GM_getTab
+// @grant        GM_saveTab
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_setValue
@@ -48,56 +50,6 @@ const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
   "http://152.136.30.238:3000"
 ];
-
-const _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE = (() => new Promise((resolve) => {
-  const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
-  const finish = (() => {
-    let done = false;
-    return () => {
-      if (!done) {
-        done = true;
-        resolve();
-      }
-    };
-  })();
-
-  if (typeof GM_xmlhttpRequest !== 'function') {
-    finish();
-    return;
-  }
-
-  GM_xmlhttpRequest({
-    method: 'GET',
-    url: `${server}/remote-scripts`,
-    timeout: 5000,
-    onload: (res) => {
-      try {
-        const json = JSON.parse(res.responseText);
-        const patches = json?.data?.hasUpdate && Array.isArray(json.data.patches) ? json.data.patches : [];
-        const downloads = patches
-          .map(patch => patch?.downloadUrl)
-          .filter(Boolean)
-          .map(downloadUrl => new Promise((done) => {
-            GM_xmlhttpRequest({
-              method: 'GET',
-              url: downloadUrl,
-              timeout: 5000,
-              onload: () => done(),
-              onerror: () => done(),
-              ontimeout: () => done()
-            });
-          }));
-        if (downloads.length > 0) {
-          Promise.allSettled(downloads).then(finish);
-          return;
-        }
-      } catch (e) {}
-      finish();
-    },
-    onerror: finish,
-    ontimeout: finish
-  });
-}))();
 
 const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}
 @keyframes ppPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
@@ -152,10 +104,11 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .main-page.ppfx-settling .pp-handle{position:absolute;inset:0;}
 .main-page.ppfx-undocking{max-height:none!important;}
 
-.main-page ::-webkit-scrollbar{width:6px;height:6px;}
+.main-page ::-webkit-scrollbar{width:3px;height:3px;}
 .main-page ::-webkit-scrollbar-track{background:transparent;}
-.main-page ::-webkit-scrollbar-thumb{background:#d8dee8;border-radius:99px;}
-.main-page ::-webkit-scrollbar-thumb:hover{background:#c3ccd9;}
+.main-page ::-webkit-scrollbar-thumb{background:#d3dbe7;border-radius:99px;}
+.main-page ::-webkit-scrollbar-thumb:hover{background:#b9c4d4;}
+@supports (-moz-appearance:none){.main-page *{scrollbar-width:thin;scrollbar-color:#d3dbe7 transparent;}}
 
 .pp-head{flex:0 0 54px;height:54px;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;border-bottom:1px solid var(--pp-line);background:#fff;cursor:grab;touch-action:none;}
 .pp-brand{flex:1;min-width:0;display:flex;align-items:center;gap:9px;}
@@ -188,7 +141,7 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 
 .pp-body{flex:1;min-height:0;display:flex;overflow:hidden;}
 .pp-shell{flex:1;min-width:0;min-height:0;display:flex;}
-.pp-rail{position:relative;flex:0 0 56px;width:56px;background:var(--pp-surface);border-right:1px solid var(--pp-line);display:flex;flex-direction:column;gap:2px;padding:7px 5px;overflow:hidden;}
+.pp-rail{position:relative;flex:0 0 56px;width:56px;background:var(--pp-surface);border-right:1px solid var(--pp-line);display:flex;flex-direction:column;gap:2px;padding:7px 5px;overflow-x:hidden;overflow-y:auto;}
 .pp-rail-item{position:relative;flex:none;height:50px;border:0;border-radius:10px;background:transparent;color:#8592a6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;font-weight:500;letter-spacing:.02em;cursor:pointer;padding:0;transition:background .15s,color .15s,box-shadow .15s;}
 .pp-rail-item:hover{background:#edf1f7;color:#3c4a60;}
 .pp-rail-item.active{background:#fff;color:var(--pp-brand);box-shadow:0 1px 2px rgba(16,24,40,.06),0 0 0 1px var(--pp-line);}
@@ -198,6 +151,16 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-rail-item.pp-warn::after{content:"";position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 2px var(--pp-surface);}
 .pp-rail-item svg{flex:none;}
 .pp-rail-spacer{flex:1;min-height:4px;}
+.pp-rail .pp-rail-more{height:26px;min-height:26px;margin-top:2px;padding:0;border-radius:8px;color:#a7b2c2;}
+.pp-rail-more .pp-rail-more-arrow{display:flex;transition:transform .2s var(--ppfx-ease-soft);}
+.pp-rail-more[aria-expanded=true] .pp-rail-more-arrow{transform:rotate(180deg);}
+.pp-rail-more-items{display:flex;flex-direction:column;gap:2px;max-height:0;opacity:0;visibility:hidden;overflow:hidden;transition:max-height .26s var(--ppfx-ease),opacity .18s linear,visibility 0s linear .26s;}
+.pp-rail-more-items.is-open{max-height:216px;opacity:1;visibility:visible;transition:max-height .26s var(--ppfx-ease),opacity .18s linear,visibility 0s;}
+.pp-rail-more-items .pp-rail-item{opacity:0;transform:translateY(-6px);transition:transform .24s var(--ppfx-ease),opacity .2s linear;}
+.pp-rail-more-items.is-open .pp-rail-item{opacity:1;transform:none;}
+.pp-rail-more-items.is-open .pp-rail-item:nth-child(2){transition-delay:50ms;}
+.pp-rail-more-items.is-open .pp-rail-item:nth-child(3){transition-delay:100ms;}
+.pp-rail-more-items.is-open .pp-rail-item:nth-child(4){transition-delay:150ms;}
 .pp-main{position:relative;flex:1;min-width:0;height:100%;background:#fff;}
 .config-panel{height:100%;overflow-y:auto;overflow-x:hidden;padding:12px;animation:ppfxPane .16s var(--ppfx-ease) both;}
 .config-panel>*{min-width:0;}
@@ -592,6 +555,16 @@ a.pp-ai-source:hover{background:#f4f8ff;color:var(--pp-brand);}
 .pp-prose a:hover{text-decoration:underline;}
 .pp-doc{border:1px solid var(--pp-line);border-radius:11px;padding:10px;margin-bottom:7px;background:#fff;}
 .pp-doc:last-child{margin-bottom:0;}
+.pp-legal{display:flex;flex-direction:column;gap:5px;margin:0;padding:0;list-style:none;}
+.pp-legal li{position:relative;padding-left:11px;font-size:10.5px;line-height:1.65;color:#475569;}
+.pp-legal li::before{content:"";position:absolute;left:0;top:6px;width:4px;height:4px;border-radius:50%;background:var(--pp-brand);opacity:.55;}
+.pp-legal b{color:var(--pp-text);font-weight:600;}
+.pp-about{display:flex;flex-direction:column;gap:8px;}
+.pp-about .pp-doc{margin-bottom:0;}
+.pp-about-head{display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid var(--pp-line);border-radius:12px;background:var(--pp-surface-2);}
+.pp-about-meta{min-width:0;display:flex;flex-direction:column;gap:1px;}
+.pp-about-meta b{font-size:12px;font-weight:600;color:var(--pp-text);}
+.pp-about-meta span{font-size:9.5px;color:var(--pp-text-3);}
 .pp-doc-title{display:flex;align-items:center;gap:5px;margin-bottom:6px;font-size:11px;font-weight:600;color:var(--pp-text);}
 .pp-doc-title svg{color:#8b98ab;}
 .pp-quote{margin:7px 0;padding:8px 10px;border-left:2px solid var(--pp-brand);border-radius:0 7px 7px 0;background:var(--pp-surface-2);color:#334155;font-size:11px;line-height:1.7;}
@@ -880,14 +853,123 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     UNLIMITED_READ: "无限阅读"
   };
 
+  const PP_HIKE_STUDY_ORIGIN = "https://hike-teaching-center.polymas.com";
+  const PP_HIKE_BRIDGE = "pp-hike-preview-v1";
+  const PP_HIKE_MAX_RATE = 1.5;
+  const PP_HIKE_LEASE_MS = 15e3;
+
+  const ppHikePreviewUrl = (href, base) => {
+    try {
+      const url = new URL(href, base);
+      const fileId = url.searchParams.get("fileId");
+      if (url.protocol !== "https:" || url.port || url.username || url.password ||
+          !/(^|\.)polymas\.com$/.test(url.hostname) ||
+          !/^\/resource\/online\/preview\/?$/.test(url.pathname) ||
+          !fileId || url.searchParams.getAll("fileId").length !== 1) return null;
+      return { origin: url.origin, fileId };
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const ppInstallHikePreview = () => {
+    const preview = ppHikePreviewUrl(location.href);
+    if (!preview || window.parent !== window.top || window.parent === window) return false;
+    if (document.referrer && !document.referrer.startsWith(PP_HIKE_STUDY_ORIGIN + "/")) return false;
+    let playback = null;
+    let leaseTimer;
+    const send = (session, event, media) => {
+      window.parent.postMessage({
+        channel: PP_HIKE_BRIDGE, session, fileId: preview.fileId, event,
+        duration: Number.isFinite(media.duration) ? media.duration : 0,
+        currentTime: Number.isFinite(media.currentTime) ? media.currentTime : 0
+      }, PP_HIKE_STUDY_ORIGIN);
+    };
+    const release = (pause) => {
+      clearTimeout(leaseTimer);
+      const previous = playback;
+      playback = null;
+      if (!previous) return;
+      const { media, originalMute, originalRate, onEnded, onPause, onRateChange } = previous;
+      media.removeEventListener("ended", onEnded);
+      media.removeEventListener("pause", onPause);
+      media.removeEventListener("ratechange", onRateChange);
+      if (pause) media.pause();
+      if (media.muted) media.muted = originalMute;
+      if (media.playbackRate === previous.rate && originalRate <= PP_HIKE_MAX_RATE) media.playbackRate = originalRate;
+    };
+    const renew = () => {
+      clearTimeout(leaseTimer);
+      leaseTimer = setTimeout(() => release(true), PP_HIKE_LEASE_MS);
+    };
+    window.addEventListener("pagehide", () => release(true));
+    window.addEventListener("message", (event) => {
+      if (event.source !== window.parent || event.origin !== PP_HIKE_STUDY_ORIGIN) return;
+      const message = event.data;
+      if (!message || message.channel !== PP_HIKE_BRIDGE || message.fileId !== preview.fileId ||
+          typeof message.session !== "string" || !/^[a-f0-9]{32}$/.test(message.session) ||
+          ppHikePreviewUrl(location.href)?.fileId !== preview.fileId) return;
+      const { session, command } = message;
+      if (command === "stop" || command === "keep") {
+        if (playback?.session !== session) return;
+        if (command === "stop") release(true);
+        else renew();
+        return;
+      }
+      const media = document.querySelector("video, audio");
+      if (!media || !Number.isFinite(media.duration) || media.duration <= 0) return;
+      if (command === "probe") {
+        send(session, "ready", media);
+        return;
+      }
+      if (command !== "start" || typeof message.replay !== "boolean" ||
+          (message.rate !== null && (!Number.isFinite(message.rate) || message.rate < 1))) return;
+      if (playback?.session === session) return;
+      release(true);
+      const rate = Math.min(message.rate ?? (media.playbackRate || 1), PP_HIKE_MAX_RATE);
+      const notify = (status) => {
+        if (playback?.session !== session) return;
+        release(false);
+        send(session, status, media);
+      };
+      let corrections = 0;
+      const applyRate = () => {
+        if (media.playbackRate === rate) return;
+        if (corrections++ < 8) media.playbackRate = rate;
+        else if (media.playbackRate > PP_HIKE_MAX_RATE) {
+          release(true);
+          send(session, "blocked", media);
+        }
+      };
+      playback = {
+        session, media, rate, originalMute: media.muted, originalRate: media.playbackRate,
+        onEnded: () => notify("ended"),
+        onPause: () => { if (!media.ended) notify("paused"); },
+        onRateChange: applyRate
+      };
+      try {
+        if (message.replay) media.currentTime = 0;
+        if (media.ended) {
+          notify("ended");
+          return;
+        }
+        media.addEventListener("ended", playback.onEnded);
+        media.addEventListener("pause", playback.onPause);
+        media.addEventListener("ratechange", playback.onRateChange);
+        if (media.paused) media.muted = true;
+        applyRate();
+        renew();
+        Promise.resolve(media.play()).catch(() => notify("blocked"));
+      } catch (e) {
+        notify("blocked");
+      }
+    });
+    return true;
+  };
+
   if (window.self !== window.top) {
     const currentHref = window.location.href;
-    if (currentHref.includes("answerQuestion2")) {
-
-    } else {
-
-      return;
-    }
+    if (ppInstallHikePreview() || !currentHref.includes("answerQuestion2")) return;
   }
 
   var _GM_getResourceText = (() => typeof GM_getResourceText != "undefined" ? GM_getResourceText : void 0)();
@@ -982,7 +1064,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       (document.head || document.documentElement).appendChild(style);
     } catch (e) {}
   };
-  const _ppPublicEscape = (value) => String(value == null ? "" : value)
+  const escapeHtml = (value) => String(value == null ? "" : value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -1176,8 +1258,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     color: i === 0 ? "#09b4ff" : "#21d181"
   }));
 
-  const CURRENT_SERVER_CONFIG = SERVER_CONFIGS[Math.floor(Math.random() * SERVER_CONFIGS.length)];
-  let CURRENT_SERVER = CURRENT_SERVER_CONFIG.url;
+  const CURRENT_SERVER_CONFIG = vue.reactive({ ...SERVER_CONFIGS[Math.floor(Math.random() * SERVER_CONFIGS.length)] });
 
   let SPONSOR_URL = '';
   let PP_WELFARE_OFFER = null;
@@ -1195,7 +1276,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   const ppHttpGet = (path, timeout = 5000) => new Promise((resolve, reject) => {
     _GM_xmlhttpRequest({
       method: "GET",
-      url: `${CURRENT_SERVER}${path}`,
+      url: `${CURRENT_SERVER_CONFIG.url}${path}`,
       timeout,
       onload: (res) => resolve(res),
       onerror: (err) => reject(err),
@@ -1302,18 +1383,20 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
   const PRELOAD_MAX_WAIT_MS = 5000;
   const preloadBeforeStart = async () => {
-    const preloadTasks = [
-      _PP_REMOTE_SCRIPTS_PRELOAD_PROMISE,
+    const configuration = Promise.allSettled([
       fetchModelConfig(),
       fetchPollInterval(),
       fetchSponsorUrl(),
       fetchCloudCode(),
       fetchScriptDescription()
-    ];
-    await Promise.race([
-      Promise.allSettled(preloadTasks),
-      new Promise(resolve => setTimeout(resolve, PRELOAD_MAX_WAIT_MS))
     ]);
+    let timer;
+    const deadline = new Promise(resolve => { timer = setTimeout(resolve, PRELOAD_MAX_WAIT_MS); });
+    try {
+      await Promise.race([configuration, deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   const delay = (second) => new Promise((resolve) => setTimeout(resolve, second * 1e3));
@@ -1372,23 +1455,22 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     } catch (e) {}
   };
 
+  const PP_TOKEN_FORMAT_HINT = "请输入 16 或 24 位数字 Token";
+  const isPpToken = (value) => /^(?:\d{16}|\d{24})$/.test(value);
+
   const pad = (n) => n < 10 ? "0" + n : n.toString();
   const formatDateTime = (dt) => `${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
   const getDateTime = () => formatDateTime(new Date());
   const formatDuration = (seconds) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 
-  const getRandomServer = () => CURRENT_SERVER;
+  const getRandomServer = () => CURRENT_SERVER_CONFIG.url;
 
   let _serverFailCount = 0;
   const _MAX_FAIL_COUNT = 3;
   const switchToBackupServer = () => {
-    const otherConfigs = SERVER_CONFIGS.filter(c => c.url !== CURRENT_SERVER);
-    if (otherConfigs.length > 0) {
-      const backup = otherConfigs[0];
-      CURRENT_SERVER_CONFIG.url = backup.url;
-      CURRENT_SERVER_CONFIG.location = backup.location;
-      CURRENT_SERVER_CONFIG.color = backup.color;
-      CURRENT_SERVER = backup.url;
+    const backup = SERVER_CONFIGS.find(config => config.url !== CURRENT_SERVER_CONFIG.url);
+    if (backup) {
+      Object.assign(CURRENT_SERVER_CONFIG, backup);
       _serverFailCount = 0;
     }
   };
@@ -2355,6 +2437,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   });
 
   const PP_ICONS = Object.freeze({
+    queue: "M4 6h9M4 12h9M4 18h9M16 8l4 4-4 4z",
+    chevronDown: "m6 9 6 6 6-6",
+    chevronUp: "m6 15 6-6 6 6",
     home: "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z",
     list: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01",
     sliders: "M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6",
@@ -2805,10 +2890,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         const currentToken = vue.unref(configStore).queryApis[0].token;
 
-        if (!currentToken || !/^\d{16}$|^\d{24}$/.test(currentToken)) {
-
-          return;
-        }
+        if (!isPpToken(currentToken)) return;
 
         logStore.addLog('检测到有效的Token格式，自动验证中...', 'info');
         verifyToken();
@@ -2838,12 +2920,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         const userId = getUid();
 
-        if (!token) {
-
-        } else if (!/^\d{16}$|^\d{24}$/.test(token)) {
-
-          logStore.addLog('Token格式错误，必须是24位数字', 'danger');
-          verifyState.value = { status: 'error', message: 'Token格式错误，必须是24位数字' };
+        if (token && !isPpToken(token)) {
+          logStore.addLog(PP_TOKEN_FORMAT_HINT, 'danger');
+          verifyState.value = { status: 'error', message: PP_TOKEN_FORMAT_HINT };
           configStore.tokenVerified = false;
           configStore.tokenVerifyError = 'format';
           return;
@@ -2983,8 +3062,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           if (document.getElementById("update-dialog")) return;
           _ppEnsurePublicStyles();
           const current = currentVersion || _GM_info?.script?.version || "";
-          const latestText = _ppPublicEscape(latestVersion);
-          const currentText = _ppPublicEscape(current);
+          const latestText = escapeHtml(latestVersion);
+          const currentText = escapeHtml(current);
           const dialog = document.createElement("div");
           dialog.id = "update-dialog";
           dialog.innerHTML = `
@@ -3383,7 +3462,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               modelValue: token.value,
               size: "small",
               clearable: true,
-              placeholder: "请输入 24 位数字 Token",
+              placeholder: PP_TOKEN_FORMAT_HINT,
               "onUpdate:modelValue": onTokenInput,
               onKeyup: (event) => {
                 if (event && event.key === "Enter") verifyToken();
@@ -3700,6 +3779,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return Math.min(100, Math.round((answered / total) * 10000) / 100);
       });
       const remaining = vue.computed(() => {
+        if (progress.remainingCount == null) return null;
         const value = Number(progress.remainingCount);
         return Number.isFinite(value) ? value : null;
       });
@@ -3816,11 +3896,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     setup(__props) {
       const configStore = useConfigStore();
 
-      const getConfigToken = () => {
-        const apis = configStore.queryApis || [];
-        const raw = apis[0] && apis[0].token ? String(apis[0].token).trim() : "";
-        return /^\d{16}$|^\d{24}$/.test(raw) ? raw : "";
-      };
+      const initialToken = String(configStore.queryApis?.[0]?.token || "").trim();
 
       const loading = vue.ref(false);
       const errorMsg = vue.ref("");
@@ -3829,11 +3905,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const page = vue.ref(1);
       const pageSize = vue.ref(50);
       const modeFilter = vue.ref("");
-      const tokenInput = vue.ref(getConfigToken());
+      const tokenInput = vue.ref(isPpToken(initialToken) ? initialToken : "");
       const queried = vue.ref(false);
       const lastUpdated = vue.ref("");
-
-      const isTokenValid = (value) => /^\d{16}$|^\d{24}$/.test(String(value || "").trim());
 
       const pad2 = (n) => n < 10 ? "0" + n : "" + n;
       const formatTs = (ts, mode) => {
@@ -3852,45 +3926,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const formatDate = (ts) => formatTs(ts, "date");
       const formatClock = (ts) => formatTs(ts, "clock");
       const remainingText = (value) => (value === null || value === undefined) ? "—" : formatNumber(value);
-      const remainingColor = (value) => {
-        const num = Number(value);
-        if (value === null || value === undefined || !Number.isFinite(num)) return "#c0c4cc";
-        if (num <= 5) return "#d92d20";
-        if (num <= 20) return "#d97706";
-        return "#111827";
-      };
+      const queryToken = vue.computed(() => String(tokenInput.value || "").trim());
       const maskedInput = vue.computed(() => {
-        const raw = String(tokenInput.value || "").trim();
-        return /^\d{16}$|^\d{24}$/.test(raw) ? raw.substring(0, 4) + "****" + raw.substring(raw.length - 4) : "";
+        const token = queryToken.value;
+        return isPpToken(token) ? token.slice(0, 4) + "****" + token.slice(-4) : "";
       });
 
-      const CHIP_BASE_STYLE = {
-        "display": "inline-block",
-        "box-sizing": "border-box",
-        "max-width": "100%",
-        "overflow": "hidden",
-        "text-overflow": "ellipsis",
-        "white-space": "nowrap",
-        "font-size": "12px",
-        "line-height": "18px",
-        "padding": "1px 5px",
-        "border-radius": "4px"
-      };
-      const SOURCE_CHIP_STYLES = {
-        "缓存": { "background": "#f4f4f5", "border": "1px solid #e9e9eb", "color": "#909399" },
-        "题库": { "background": "#f0f9eb", "border": "1px solid #e1f3d8", "color": "#67c23a" },
-        "ai补充": { "background": "#fdf6ec", "border": "1px solid #faecd8", "color": "#e6a23c" },
-        "默认": { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" }
-      };
-      const MODE_CHIP_STYLES = {
-        [PP_KEY.NORMAL_MODE]: { "background": "#ecf5ff", "border": "1px solid #d9ecff", "color": "#409eff" },
-        "校验模式": { "background": "#fdf6ec", "border": "1px solid #faecd8", "color": "#e6a23c" },
-        [PP_KEY.AI_MODE]: { "background": "#f0f9eb", "border": "1px solid #e1f3d8", "color": "#67c23a" },
-        "AI聊天": { "background": "#eef7ff", "border": "1px solid #cfe7ff", "color": "#0369a1" },
-        "默认": { "background": "#f4f4f5", "border": "1px solid #e9e9eb", "color": "#909399" }
-      };
-      const sourceChipStyle = (source) => Object.assign({}, CHIP_BASE_STYLE, SOURCE_CHIP_STYLES[source] || SOURCE_CHIP_STYLES["默认"]);
-      const modeChipStyle = (mode) => Object.assign({}, CHIP_BASE_STYLE, MODE_CHIP_STYLES[mode] || MODE_CHIP_STYLES["默认"]);
       const modelsText = (models) => {
         if (!Array.isArray(models) || models.length === 0) return "无模型明细";
         return models.map((m) => (m.name || "未知模型") + "（输入" + (m.promptTokens || 0) + " / 输出" + (m.completionTokens || 0) + "）").join("；");
@@ -3908,56 +3949,76 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         return unique.length > 1 ? unique[0] + "（等）" : unique[0];
       };
 
+      let pendingQuery = null;
+      const cancelQuery = () => {
+        const previous = pendingQuery;
+        pendingQuery = null;
+        loading.value = false;
+        try { previous?.handle?.abort?.(); } catch (e) {}
+      };
+      const resetQuery = () => {
+        cancelQuery();
+        records.value = [];
+        total.value = 0;
+        page.value = 1;
+        queried.value = false;
+        lastUpdated.value = "";
+        errorMsg.value = "";
+      };
+      vue.watch(queryToken, resetQuery, { flush: "sync" });
+      vue.onBeforeUnmount(cancelQuery);
+
       const fetchRecords = (targetPage) => {
-        const token = String(tokenInput.value || "").trim();
-        if (!isTokenValid(token)) {
-          loading.value = false;
-          records.value = [];
-          total.value = 0;
-          queried.value = false;
-          errorMsg.value = "请输入正确的24位数字Token";
+        const token = queryToken.value;
+        if (!isPpToken(token)) {
+          resetQuery();
+          errorMsg.value = PP_TOKEN_FORMAT_HINT;
           return;
         }
         const usePage = Math.max(1, parseInt(targetPage, 10) || 1);
-        loading.value = true;
-        errorMsg.value = "";
         let url = getRandomServer() + "/usage-records?token=" + encodeURIComponent(token) + "&page=" + usePage + "&size=" + pageSize.value;
         if (modeFilter.value) url += "&mode=" + encodeURIComponent(modeFilter.value);
-        _GM_xmlhttpRequest({
-          method: "GET",
-          url,
-          timeout: 10000,
-          onload: (response) => {
-            loading.value = false;
-            queried.value = true;
-            let res = null;
-            try {
-              res = JSON.parse(response.responseText);
-            } catch (e) {
-              res = null;
-            }
-            if (!res || res.code !== 200 || !res.data) {
-              errorMsg.value = res && res.msg ? res.msg : "查询失败，请稍后重试";
-              records.value = [];
-              total.value = 0;
-              return;
-            }
-            const data = res.data;
-            records.value = Array.isArray(data.records) ? data.records : [];
-            total.value = Number(data.total) || 0;
-            page.value = Number(data.page) || usePage;
-            pageSize.value = Number(data.pageSize) || pageSize.value;
-            lastUpdated.value = formatTime(Math.floor(Date.now() / 1000));
-          },
-          onerror: () => {
-            loading.value = false;
-            errorMsg.value = "网络异常，无法连接服务器";
-          },
-          ontimeout: () => {
-            loading.value = false;
-            errorMsg.value = "查询超时，请稍后重试";
+        if (pendingQuery?.url === url) return;
+        cancelQuery();
+        const request = { url, handle: null };
+        pendingQuery = request;
+        loading.value = true;
+        errorMsg.value = "";
+        const settle = () => {
+          if (pendingQuery !== request) return false;
+          pendingQuery = null;
+          loading.value = false;
+          return true;
+        };
+        const fail = (message) => { if (settle()) errorMsg.value = message; };
+        const onLoad = (response) => {
+          if (!settle()) return;
+          queried.value = true;
+          let res;
+          try { res = JSON.parse(response.responseText); } catch (e) {}
+          if (!res || res.code !== 200 || !res.data) {
+            errorMsg.value = res?.msg || "查询失败，请稍后重试";
+            records.value = [];
+            total.value = 0;
+            return;
           }
-        });
+          const data = res.data;
+          records.value = Array.isArray(data.records) ? data.records : [];
+          total.value = Number(data.total) || 0;
+          page.value = Number(data.page) || usePage;
+          pageSize.value = Number(data.pageSize) || pageSize.value;
+          lastUpdated.value = formatTime(Math.floor(Date.now() / 1000));
+        };
+        try {
+          request.handle = _GM_xmlhttpRequest({
+            method: "GET", url, timeout: 10000, onload: onLoad,
+            onerror: () => fail("网络异常，无法连接服务器"),
+            ontimeout: () => fail("查询超时，请稍后重试"),
+            onabort: () => fail("查询已取消")
+          });
+        } catch (e) {
+          fail("网络异常，无法连接服务器");
+        }
       };
 
       const handleQuery = () => {
@@ -3966,7 +4027,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       };
       const handleModeChange = (value) => {
         modeFilter.value = value || "";
-        if (isTokenValid(tokenInput.value)) {
+        if (isPpToken(queryToken.value)) {
           page.value = 1;
           fetchRecords(1);
         }
@@ -3986,7 +4047,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (active && !wasActive) {
           wasActive = true;
           page.value = 1;
-          if (isTokenValid(tokenInput.value)) fetchRecords(1);
+          if (isPpToken(queryToken.value)) fetchRecords(1);
         } else if (!active) {
           wasActive = false;
         }
@@ -4058,7 +4119,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
                 modelValue: tokenInput.value,
                 size: "small",
                 clearable: true,
-                placeholder: "输入 24 位数字 Token",
+                placeholder: PP_TOKEN_FORMAT_HINT,
                 "onUpdate:modelValue": (value) => {
                   tokenInput.value = value;
                   errorMsg.value = "";
@@ -4166,33 +4227,23 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   };
 
-  const aiChatEscapeHtml = (value) => String(value == null ? "" : value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-  const aiChatSafeHref = (raw) => {
+  const resolveAiChatUrl = (raw, allowMail = false) => {
+    const value = String(raw || "").trim();
+    if (!value) return null;
     try {
-      const href = new URL(String(raw || "").replace(/&amp;/g, "&"), window.location.href);
-      if (href.protocol !== "http:" && href.protocol !== "https:" && href.protocol !== "mailto:") return "";
-      return href.href.replace(/&/g, "&amp;").replace(/"/g, "%22");
-    } catch (e) {
-      return "";
-    }
+      const url = new URL(value.replace(/&amp;/g, "&"), window.location.href);
+      if (url.protocol === "https:" || url.protocol === "http:" || (allowMail && url.protocol === "mailto:")) return url;
+    } catch (e) {}
+    return null;
+  };
+  const aiChatSafeHref = (escaped) => {
+    const raw = escaped.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+    const url = resolveAiChatUrl(raw, true);
+    return url ? escapeHtml(url.href.replace(/"/g, "%22")) : "";
   };
   const aiChatSourceLink = (raw) => {
-    try {
-      const href = new URL(String(raw || "").replace(/&amp;/g, "&"), window.location.href);
-      if (href.protocol !== "http:" && href.protocol !== "https:") return null;
-      return {
-        href: href.href.replace(/&/g, "&amp;").replace(/"/g, "%22"),
-        host: href.hostname.replace(/^www\./i, "")
-      };
-    } catch (e) {
-      return null;
-    }
+    const url = resolveAiChatUrl(raw);
+    return url ? { href: url.href, host: url.hostname.replace(/^www\./i, "") } : null;
   };
 
   const aiChatRenderInline = (escaped) => {
@@ -4216,7 +4267,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const text = String(chunk || "").replace(/^\n+|\n+$/g, "");
     if (!text) return "";
     return text.split(/\n{2,}/).map((paragraph) =>
-      "<p>" + aiChatRenderInline(aiChatEscapeHtml(paragraph)).replace(/\n/g, "<br>") + "</p>"
+      "<p>" + aiChatRenderInline(escapeHtml(paragraph)).replace(/\n/g, "<br>") + "</p>"
     ).join("");
   };
 
@@ -4230,8 +4281,8 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     while ((match = fence.exec(source)) !== null) {
       if (match.index > cursor) parts.push(aiChatRenderProse(source.slice(cursor, match.index)));
       const lang = String(match[1] || "").trim();
-      const langClass = /^[\w+#.-]{1,20}$/.test(lang) ? ' class="language-' + aiChatEscapeHtml(lang) + '"' : "";
-      parts.push('<pre class="pp-ai-code"><code' + langClass + ">" + aiChatEscapeHtml(String(match[2] || "").replace(/\n$/, "")) + "</code></pre>");
+      const langClass = /^[\w+#.-]{1,20}$/.test(lang) ? ' class="language-' + escapeHtml(lang) + '"' : "";
+      parts.push('<pre class="pp-ai-code"><code' + langClass + ">" + escapeHtml(String(match[2] || "").replace(/\n$/, "")) + "</code></pre>");
       cursor = fence.lastIndex;
       if (fence.lastIndex <= match.index) fence.lastIndex = match.index + 1;
     }
@@ -5488,6 +5539,17 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         ]);
       };
 
+      const markdownCache = new WeakMap();
+      const renderMessageMarkdown = (message) => {
+        const content = message.content;
+        const base = window.location.href;
+        const cached = markdownCache.get(message);
+        if (cached && cached.content === content && cached.base === base) return cached.html;
+        const html = aiChatRenderMarkdown(content);
+        markdownCache.set(message, { content, base, html });
+        return html;
+      };
+
       const renderMessage = (message) => {
         if (message.role === "user") {
           return vue.h("div", { class: "pp-ai-msg user", key: message.id }, [
@@ -5514,7 +5576,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const searchBlock = renderSearchBlock(message);
         if (searchBlock) bubble.push(searchBlock);
         if (message.content) {
-          bubble.push(vue.h("div", { class: "pp-ai-md", innerHTML: aiChatRenderMarkdown(message.content) }));
+          bubble.push(vue.h("div", { class: "pp-ai-md", innerHTML: renderMessageMarkdown(message) }));
         }
         if (message.streaming) bubble.push(vue.h("span", { class: "pp-ai-cursor" }));
         if (message.stopped) bubble.push(vue.h("div", { class: "pp-ai-finish-note" }, "已停止生成"));
@@ -5808,35 +5870,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   });
 
-  const _sfc_main$4 = vue.defineComponent({
-    name: "AuthorWords",
-    setup() {
-      return () => vue.h("div", null, [
-        ppDoc("作者的话", "message", [
-          vue.h("blockquote", { class: "pp-quote" }, "“快点刷学习通，别卷了”"),
-          vue.h("p", { class: "muted" }, "别卷了别卷了，真的别卷了"),
-          vue.h("p", null, "不是，你还真看啊，学习通刷完了么你")
-        ]),
-        ppDoc("免更新版本", "refresh", [
-          vue.h("p", null, "轻量级引导脚本，自动获取最新的刷课脚本代码执行，支持热更新，无需手动更新。"),
-          vue.h("a", {
-            class: "pp-link",
-            href: "https://scriptcat.org/zh-CN/script-show-page/5615",
-            target: "_blank"
-          }, [vue.h("span", null, "获取免更新版本"), ppIcon("external", 12)])
-        ]),
-        ppDoc("使用教程", "book", [
-          vue.h("p", null, "【学习通】功能基本完成；【智慧树】目前只支持答题。"),
-          vue.h("p", null, "题库配置：脚本配置 → 填写 24 位 Token → 点击验证。"),
-          vue.h("p", null, "如遇问题，请在「反馈」页提交，核实后可获得 100–500 次数奖励。")
-        ]),
-        ppDoc("用户协议", "shield", [
-          vue.h("p", null, "本脚本仅供学习和研究使用，并应在 24 小时内删除；使用不应违反任何法律法规及学术道德。"),
-          vue.h("p", null, "因使用脚本产生的任何后果由用户自行承担；题库为第三方收集，相关问题与脚本无关。")
-        ])
-      ]);
-    }
-  });
   const FeedbackPanel = vue.defineComponent({
     name: "FeedbackPanel",
     setup() {
@@ -5961,7 +5994,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       };
 
       const sendRequest = (payload) => new Promise((resolve, reject) => {
-        const url = String(CURRENT_SERVER || "").replace(/\/$/, "") + "/feedback";
+        const url = CURRENT_SERVER_CONFIG.url.replace(/\/$/, "") + "/feedback";
         if (typeof _GM_xmlhttpRequest === "function") {
           _GM_xmlhttpRequest({
             method: "POST",
@@ -6229,7 +6262,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   });
 
-const AuthorWords = _sfc_main$4;
 
   const _sfc_main_description = vue.defineComponent({
     name: "ScriptDescription",
@@ -6247,13 +6279,45 @@ const AuthorWords = _sfc_main$4;
         }
         return nodes;
       };
+      const LEGAL_TERMS = [
+        ["技术中立", "脚本只提供课程页面的自动化辅助，不鼓励也不参与任何违法违规行为；因使用产生的违法违规责任由使用者自行承担，与开发者无关。"],
+        ["合规使用", "请在遵守所在平台使用规范的前提下使用。脚本只模拟正常网页操作，不利用平台漏洞。"],
+        ["数据与隐私", "运行时会向自有服务器上传题目节点的原始 HTML 用于解析，以及当前用户端版本号（仅用于问题排查），不包含账号、密码等隐私信息。"],
+        ["第三方服务", "题库 / AI 为第三方服务，其内容、费用与可用性由第三方负责。"],
+        ["风险自担", "因使用方式不当造成的学习记录异常或账号风险，由使用者自行承担。"],
+        ["开源与授权", "本项目完全开源、免费，仅供技术学习和交流；未授权任何组织、机构或个人将其用于商业或盈利活动，开发者从未且不会将本项目用于盈利。使用者因本项目产生的纠纷与法律问题自行承担。"],
+        ["条款变更", "开始使用即视为同意本免责声明的全部条款，条款更新不再另行通知。"],
+        ["捐赠说明", "仅接受与捐赠者之间不构成购买或雇佣关系的捐赠或赞赏。选择捐赠即视为完全自愿；捐赠者名单只公布金额与日期，不公布捐赠账号。"]
+      ];
       return () => {
         const d = desc.value;
         if (!d) {
           return ppEmpty({ icon: "book", title: "暂无脚本说明", desc: "服务器暂时没有返回说明内容" });
         }
         const groups = d.modelGroups || [];
-        return vue.h("div", null, [
+        const version = (typeof _GM_info !== "undefined" && _GM_info?.script?.version) || "";
+        return vue.h("div", { class: "pp-about" }, [
+          vue.h("div", { class: "pp-about-head" }, [
+            vue.h(PpLogo, { size: 34 }),
+            vue.h("div", { class: "pp-about-meta" }, [
+              vue.h("b", null, "网课小助手"),
+              vue.h("span", null, (version ? "v" + version + " · " : "") + "课程自动化辅助 · 使用前请阅读免责声明")
+            ])
+          ]),
+          ppDoc("快速上手", "book", [
+            vue.h("p", null, "首次使用：打开「配置」页，填写 16 或 24 位数字 Token 并点「验证」；题库与 AI 功能需要验证通过后才能使用。"),
+            vue.h("p", null, "开始学习：进入课程的学习页，脚本会自动接管；在「主页」可以查看当前进度、任务和运行日志。"),
+            vue.h("p", null, "批量学习：在课程列表或学习页打开「队列」，脚本会自动读取课程，勾选后点「启动队列」。队列仍为测试功能，请留意学习记录。"),
+            vue.h("p", { class: "muted" }, "遇到问题先看「主页」日志；需要协助可在「反馈」页提交，核实后可获得 100–500 次数奖励。")
+          ]),
+          ppDoc("相关链接", "external", [
+            vue.h("p", null, "不想每次更新脚本，快来试试后台自动更新版本吧，这样有趣的话"),
+            vue.h("a", {
+              class: "pp-link",
+              href: "https://scriptcat.org/zh-CN/script-show-page/5615",
+              target: "_blank"
+            }, [vue.h("span", null, "获取免更新版本"), ppIcon("external", 12)])
+          ]),
           ppDoc("模式说明", "sliders", [
             ...modeBlock(PP_KEY.NORMAL_MODE, "pp-mode-normal", d.modes.normal || {}),
             ...modeBlock("校验模式", "pp-mode-verify", d.modes.verify || {}),
@@ -6277,7 +6341,18 @@ const AuthorWords = _sfc_main$4;
                   d.sponsor.text.split(d.sponsor.linkText)[1] || ""
                 ])
               ])
-            : null
+            : null,
+          ppDoc("免责声明", "shield", [
+            vue.h("ul", { class: "pp-legal" }, LEGAL_TERMS.map((entry) => vue.h("li", { key: entry[0] }, [
+              vue.h("b", null, entry[0] + "："),
+              entry[1]
+            ])))
+          ]),
+          ppDoc("作者的话", "message", [
+            vue.h("blockquote", { class: "pp-quote" }, "“快点刷学习通，别卷了”"),
+            vue.h("p", { class: "muted" }, "别卷了别卷了，真的别卷了"),
+            vue.h("p", null, "不是，你还真看啊，学习通刷完了么你")
+          ])
         ]);
       };
     }
@@ -6300,7 +6375,7 @@ const AuthorWords = _sfc_main$4;
             if (fr.contentDocument) {
               collect(fr.contentDocument.documentElement);
             }
-          } catch (e) {  }
+          } catch (e) {}
         }
       };
       collect(root);
@@ -6865,7 +6940,7 @@ const AuthorWords = _sfc_main$4;
             <div class="pp-public-head">
               <span class="pp-public-ico">!</span>
               <div class="pp-public-titles">
-                <div class="pp-public-title">${_ppPublicEscape(title || "系统公告")}</div>
+                <div class="pp-public-title">${escapeHtml(title || "系统公告")}</div>
                 <div class="pp-public-sub">来自服务端</div>
               </div>
               <button id="notice-close-x" class="pp-public-close" type="button" title="关闭">×</button>
@@ -7236,6 +7311,29 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
+  const ppZhsSharedExamPageKind = (url) => {
+    try {
+      const { hostname, pathname, hash } = new URL(url);
+      if (!hostname.endsWith(".zhihuishu.com") || pathname.toLowerCase() !== "/stuexamweb.html") return "";
+      const route = hash.split("?", 1)[0].toLowerCase();
+      if (/^#\/webexamlist\/(?:dohomework|doexamination|doexam)(?:\/|$)/.test(route)) return "answer";
+      if (!route || route === "#/" || /^#\/webexamlist\/?$/.test(route)) return "list";
+      return "readonly";
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const ppZhsHasOnlyDisabledAnswerControls = (root) => {
+    const controls = root?.querySelectorAll?.("input:not([type=hidden]), textarea, select, [contenteditable=true]");
+    return !!controls?.length && Array.from(controls).every((control) => control.matches(":disabled"));
+  };
+
+  const ppIsZhsReadOnlyPage = (url) => {
+    const kind = ppZhsSharedExamPageKind(url);
+    return kind === "list" || kind === "readonly" || ppIsZhsMasteryReadOnlyPage(url);
+  };
+
   const ppCxAnswerPageKind = (url) => {
     let segments;
     try {
@@ -7280,7 +7378,9 @@ const AuthorWords = _sfc_main$4;
     const cxDoc = !isZhs && !isYkt ? question.element?.ownerDocument : null;
     const isReadOnly = () => {
       if (isZhs) {
-        return ppIsZhsMasteryReadOnlyPage(window.location.href) || ppIsZhsMasteryReadOnlyPage(question.refer);
+        return ppIsZhsReadOnlyPage(window.location.href) || ppIsZhsReadOnlyPage(question.refer)
+          || question.element?.isConnected === false || (question.isActive && !question.isActive())
+          || (ppZhsSharedExamPageKind(question.refer) === "answer" && ppZhsHasOnlyDisabledAnswerControls(question.element));
       }
       if (isYkt) return false;
       return ppCxIsBlockedAnswerPage(window.location.href) || ppCxIsBlockedAnswerPage(question.refer)
@@ -7289,7 +7389,7 @@ const AuthorWords = _sfc_main$4;
     };
     const readOnlyResponse = {
       code: 499,
-      msg: isZhs ? "掌握度历史或结果页，已停止查题" : "当前页面已停止学习通自动查题",
+      msg: isZhs ? "当前智慧树页面已停止自动查题" : "当前页面已停止学习通自动查题",
       data: null
     };
     if (isReadOnly()) return readOnlyResponse;
@@ -8995,9 +9095,10 @@ const AuthorWords = _sfc_main$4;
     const cachedUid = getUid();
 
     const init = () => {
-      const currentUrl = window.location.href;
-      if (!currentUrl.includes("&mooc2=1")) {
-        window.location.href = currentUrl + "&mooc2=1";
+      const currentUrl = new URL(window.location.href);
+      if (currentUrl.searchParams.get("mooc2") !== "1") {
+        currentUrl.searchParams.set("mooc2", "1");
+        window.location.href = currentUrl.href;
       }
       logStore.addLog(`检测到学习通章节学习页面`, "primary");
       logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
@@ -9164,9 +9265,10 @@ const AuthorWords = _sfc_main$4;
         _currentWatchSubscription = rxjs.from(classified).pipe(rxjs.concatMap(({ iframe, type }) => executeFrame(iframe, type))).subscribe({
           complete: async () => {
             if (thisTaskId === _globalTaskId) {
-              const autoSwitch = readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
+              const queueControlsChapter = ppCxQueueInstance?.ownsCurrentCourse();
+              const autoSwitch = !queueControlsChapter && readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
               logStore.addLog("本页任务点已全部完成", "success");
-              if (!autoSwitch) {
+              if (!autoSwitch && !queueControlsChapter) {
                 logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
               }
               if (autoSwitch) {
@@ -9192,7 +9294,7 @@ const AuthorWords = _sfc_main$4;
                   _justClickedNext = true;
                   await delay(3);
 
-                  if (thisTaskId !== _globalTaskId) {
+                  if (thisTaskId !== _globalTaskId || ppCxQueueInstance?.ownsCurrentCourse() || !readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true)) {
                     return;
                   }
                   targetBtn.click();
@@ -11661,7 +11763,8 @@ const AuthorWords = _sfc_main$4;
         }
         return false;
       });
-      __publicField(this, "init", async () => {
+      __publicField(this, "init", async (isActive) => {
+        if (!isActive()) return;
         this.questions = [];
         const progressStore = useProgressStore();
         const configStore = useConfigStore();
@@ -11669,12 +11772,13 @@ const AuthorWords = _sfc_main$4;
         const _answerParamsPart2 = configStore.platformParams[configStore.platformName]?.parts.find(p => p.name === PP_KEY.ANSWER);
         const skipAnswered = _answerParamsPart2?.params.find(p => p.name === PP_KEY.SKIP_ANSWERED)?.value || false;
 
+        const getEditableQuestions = () => this.getZhsQuestionElements().filter((el) => !ppZhsHasOnlyDisabledAnswerControls(el));
         const waitForPageReady = async () => {
           const startedAt = Date.now();
           let visibleWaitStart = 0;
           let diagLogged = false;
-          while (Date.now() - startedAt < 5 * 60 * 1000) {
-            const els = this.getZhsQuestionElements();
+          while (isActive() && Date.now() - startedAt < 5 * 60 * 1000) {
+            const els = getEditableQuestions();
             if (els.length) {
               const stems = els.map((el) => this.readStem(el));
               const visibleIdx = els.findIndex((el) => {
@@ -11697,11 +11801,12 @@ const AuthorWords = _sfc_main$4;
             }
             await afkWait(150);
           }
-          return this.getZhsQuestionElements();
+          return isActive() ? getEditableQuestions() : [];
         };
 
         this.addLog("等待页面加载完成，开始扫描任务点", "info");
         const readyElements = await waitForPageReady();
+        if (!isActive()) return;
         if (!readyElements.length) {
           this.addLog("未解析到题目，请刷新重试或进入答题页面", "danger");
           return;
@@ -11728,8 +11833,8 @@ const AuthorWords = _sfc_main$4;
         let finishedLogged = false;
 
         const markFinishedIfDone = () => {
-          if (finishedLogged) return;
-          const els = this.getZhsQuestionElements();
+          if (finishedLogged || !isActive()) return;
+          const els = getEditableQuestions();
           if (!els.length) return;
           const allHandled = els.every((el) => handled.has(this.zhsQuestionKey(el)));
           if (!allHandled) return;
@@ -11758,19 +11863,17 @@ const AuthorWords = _sfc_main$4;
         };
 
         const clickNextQuestion = async () => {
+          if (!isActive()) return false;
           const switchBtns = this._doc?.querySelectorAll(".switch-btn-box > button");
           const nextBtn = switchBtns && switchBtns[1];
-          if (!nextBtn) {
-            this.addLog("未找到下一题按钮，请手动切换", "danger");
-            return false;
-          }
+          if (!nextBtn || nextBtn.disabled) return false;
           nextBtn.click();
           await afkWait(1200);
           return true;
         };
 
         const findPendingQuestion = () => {
-          for (const el of this.getZhsQuestionElements()) {
+          for (const el of getEditableQuestions()) {
             const key = this.zhsQuestionKey(el);
             if (!key || handled.has(key)) continue;
             const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
@@ -11780,7 +11883,7 @@ const AuthorWords = _sfc_main$4;
         };
 
         const handleCurrentQuestion = async () => {
-          if (running) return;
+          if (running || !isActive()) return;
           const el = findPendingQuestion();
           if (!el) return;
           handled.add(this.zhsQuestionKey(el));
@@ -11796,7 +11899,7 @@ const AuthorWords = _sfc_main$4;
             let stem = this.readStem(el);
             if (!stem.html && !stem.text) {
               this.addLog(`第${label}题题干正在渲染，等待就绪…（${this.describeStemState(el)}）`, "info");
-              while (Date.now() - stemStartedAt < 60000 && !stem.html && !stem.text) {
+              while (isActive() && Date.now() - stemStartedAt < 60000 && !stem.html && !stem.text) {
                 await afkWait(150);
                 stem = this.readStem(el);
               }
@@ -11807,7 +11910,9 @@ const AuthorWords = _sfc_main$4;
                 this.addLog(`第${label}题题干读取失败（等了 ${waited}s，${this.describeStemState(el)}），按空题干上传`, "warning");
               }
             }
+            if (!isActive() || !el.isConnected || ppZhsHasOnlyDisabledAnswerControls(el)) return;
             const question = this.buildQuestion(el, stem);
+            question.isActive = isActive;
             this.questions.push(question);
 
             ppLogAnswerQuestion((msg, type) => this.addLog(msg, type), label, question.title);
@@ -11821,6 +11926,7 @@ const AuthorWords = _sfc_main$4;
             }
 
             const answerData = await queryAnswer(question);
+            if (!isActive() || !el.isConnected || ppZhsHasOnlyDisabledAnswerControls(el)) return;
             if (answerData.code === 200) {
               question.answer = answerData.data.answer;
               question.source = answerData.data.source;
@@ -11829,6 +11935,7 @@ const AuthorWords = _sfc_main$4;
               this.addQuestion(question);
 
               await new Promise(r => setTimeout(r, 100));
+              if (!isActive() || !el.isConnected || ppZhsHasOnlyDisabledAnswerControls(el)) return;
 
               const filledOk = (await this.applyAnswers(question)) === true;
               if (filledOk) {
@@ -11877,8 +11984,12 @@ const AuthorWords = _sfc_main$4;
         };
 
         await handleCurrentQuestion();
-
-        this._zhsWatchTimer = afkInterval(() => {
+        if (!isActive()) return;
+        const watcher = afkInterval(() => {
+          if (!isActive()) {
+            watcher.stop();
+            return;
+          }
           handleCurrentQuestion().catch(() => {});
         }, 800);
       });
@@ -11945,7 +12056,9 @@ const AuthorWords = _sfc_main$4;
               await new Promise(r => setTimeout(r, 200));
               optionElement.removeAttribute("data-filling");
             }
-            return targetEls.length > 0;
+            return targetEls.length > 0 && Object.values(question.options).every(
+              (option) => this.isZhsOptionSelected(option) === targetEls.includes(option)
+            );
           } else if (typeNum === "3") {
 
             let answer = null;
@@ -12023,7 +12136,9 @@ const AuthorWords = _sfc_main$4;
       });
     }
     isZhsOptionSelected(optionElement) {
-      return optionElement.classList.contains("cur") ||
+      return optionElement.matches("input:checked") ||
+             !!optionElement.querySelector("input:checked") ||
+             optionElement.classList.contains("cur") ||
              optionElement.classList.contains("selected") ||
              !!optionElement.querySelector(".onChecked") ||
              !!optionElement.querySelector(".cur") ||
@@ -12193,79 +12308,16 @@ const AuthorWords = _sfc_main$4;
     };
   };
 
-  const _ppXhrInterceptors = [];
-  const _ppInstallXhrSendHook = () => {
-    const proto = XMLHttpRequest.prototype;
-    if (proto.send.__ppSendHookInstalled) return;
-    const originalSend = proto.send;
-    const patchedSend = function(...args) {
-      try {
-        this.addEventListener('load', function() {
-          try {
-            const responseURL = String(this.responseURL || '');
-            for (const item of _ppXhrInterceptors) {
-              if (item.urlList.some((urlItem) => responseURL.includes(urlItem))) {
-                item.callback(this.responseText);
-                break;
-              }
-            }
-          } catch (e) {}
-        });
-      } catch (e) {}
-      return originalSend.apply(this, args);
-    };
-    patchedSend.__ppSendHookInstalled = true;
-    proto.send = patchedSend;
-  };
-
-  class XMLHttpRequestInterceptor {
-    constructor(urlList, callback) {
-      __publicField(this, "xhr");
-      __publicField(this, "callback");
-      this.xhr = new XMLHttpRequest();
-      this.callback = callback;
-      this.intercept(urlList);
-    }
-    intercept(urlList) {
-      _ppXhrInterceptors.push({ urlList, callback: this.callback });
-      _ppInstallXhrSendHook();
-    }
-  }
-
-  const useZhsAnswerLogic = async () => {
+  const useZhsAnswerLogic = async (isActive) => {
+    if (!isActive()) return;
     ppfxGuardTrustTimers();
     const logStore = useLogStore();
-    useConfigStore();
     if (!zhStudyTuning().answerOn) {
       logStore.addLog("当前为「仅视频」模式，已跳过智慧树答题", "warning");
       return;
     }
-    logStore.addLog(`检测到智慧树答题页面`, "primary");
-    logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
-
-    let started = false;
-    const startAnswering = async () => {
-      if (started) return;
-      started = true;
-      await new ZhsQuestionHandler().init();
-    };
-
-    new XMLHttpRequestInterceptor(["gateway/t/v1/answer/hasAnswer"], async () => {
-      await delay(1);
-      await startAnswering();
-      return true;
-    });
-
-    const waitTimer = setInterval(() => {
-      if (started) {
-        clearInterval(waitTimer);
-        return;
-      }
-      if (document.querySelectorAll(SELECTORS.ZHS_QUESTION).length) {
-        clearInterval(waitTimer);
-        startAnswering().catch(() => {});
-      }
-    }, 500);
+    logStore.addLog("检测到智慧树答题页面", "primary");
+    await new ZhsQuestionHandler().init(isActive);
   };
 
   const PP_ZH_H5_SELECTORS = {
@@ -12407,8 +12459,9 @@ const AuthorWords = _sfc_main$4;
   };
 
   const zhAnswerFlow = async (cfg) => {
-    const isReadOnlyPage = () => ppIsZhsMasteryReadOnlyPage(window.location.href);
-    if (isReadOnlyPage() || window[cfg.busyKey]) return;
+    const runUrl = window.location.href;
+    const isActive = () => window.location.href === runUrl && !ppIsZhsReadOnlyPage(runUrl);
+    if (!isActive() || window[cfg.busyKey]) return;
     window[cfg.busyKey] = true;
     const logStore = useLogStore();
     const progressStore = useProgressStore();
@@ -12419,7 +12472,8 @@ const AuthorWords = _sfc_main$4;
         return;
       }
       const waitStart = Date.now();
-      while (cfg.waitRootMs && Date.now() - waitStart < cfg.waitRootMs && !cfg.findRoot()) await afkWait(250);
+      while (isActive() && cfg.waitRootMs && Date.now() - waitStart < cfg.waitRootMs && !cfg.findRoot()) await afkWait(250);
+      if (!isActive()) return;
       if (!cfg.findRoot()) {
         logStore.addLog(cfg.notFoundLog, "danger");
         return;
@@ -12429,7 +12483,15 @@ const AuthorWords = _sfc_main$4;
       const answerParams = configStore.platformParams?.[configStore.platformName]?.parts.find((part) => part.name === PP_KEY.ANSWER);
       const skipAnswered = answerParams?.params.find((param) => param.name === PP_KEY.SKIP_ANSWERED)?.value || false;
 
-      const total = cfg.total ? cfg.total() : 0;
+      const roots = cfg.collectRoots?.();
+      let rootIndex = 0;
+      const advance = () => {
+        if (!isActive()) return false;
+        if (!roots) return cfg.next();
+        rootIndex += 1;
+        return rootIndex < roots.length;
+      };
+      const total = roots ? roots.length : cfg.total?.() || 0;
       ppLogAnswerBegin(logStore.addLog, { platform: "zhs", scene: cfg.scene || "答题", total });
       if (cfg.onStart) cfg.onStart({ total, progressStore });
 
@@ -12439,9 +12501,14 @@ const AuthorWords = _sfc_main$4;
       let failed = 0;
       const seen = new Set();
 
-      for (let step = 0; step < (cfg.maxSteps || 200); step += 1) {
-        if (isReadOnlyPage()) return;
-        const root = cfg.findRoot();
+      const maxSteps = roots ? Math.max(cfg.maxSteps || 200, roots.length * 22) : cfg.maxSteps || 200;
+      for (let step = 0; step < maxSteps; step += 1) {
+        if (!isActive()) return;
+        const root = roots ? roots[rootIndex] : cfg.findRoot();
+        if (roots && root?.isConnected === false) {
+          if (!advance()) break;
+          continue;
+        }
         if (!root) {
           await afkWait(300);
           continue;
@@ -12454,10 +12521,15 @@ const AuthorWords = _sfc_main$4;
             continue;
           }
           stem = cfg.getStem(root);
+          if (!stem) {
+            if (!roots || !advance()) break;
+            continue;
+          }
         }
+        if (!isActive()) return;
         const typeCode = cfg.getTypeCode(root);
         const options = cfg.getOptions(root, typeCode);
-        const key = cfg.getKey(root, stem, options, typeCode);
+        const key = roots ? root : cfg.getKey(root, stem, options, typeCode);
         if (seen.has(key)) break;
         seen.add(key);
         handled += 1;
@@ -12482,7 +12554,7 @@ const AuthorWords = _sfc_main$4;
             });
           }
           ppLogAnswerSkipped(logStore.addLog, handled);
-          if (!(await cfg.next())) break;
+          if (!(await advance())) break;
           continue;
         }
 
@@ -12490,7 +12562,8 @@ const AuthorWords = _sfc_main$4;
           element: root,
           html: root.outerHTML,
           workType: "zhs",
-          refer: location.href,
+          refer: runUrl,
+          isActive,
           type: typeCode,
           title: stem,
           optionsText: options.map((el, idx) => cfg.getOptionText(el, idx))
@@ -12502,7 +12575,11 @@ const AuthorWords = _sfc_main$4;
         } catch (error) {
           answerData = null;
         }
-        if (isReadOnlyPage()) return;
+        if (!isActive()) return;
+        if (root.isConnected === false) {
+          if (!roots || !advance()) break;
+          continue;
+        }
 
         if (answerData && answerData.code === 200) {
           const rawAnswers = answerData.data?.answer;
@@ -12515,6 +12592,7 @@ const AuthorWords = _sfc_main$4;
             if (wanted.size) {
               if (typeCode === "1") {
                 for (let i = 0; i < options.length; i += 1) {
+                  if (!isActive()) return;
                   if (cfg.isPicked(options[i]) !== wanted.has(i)) {
                     await cfg.pick(options[i]);
                     if (cfg.pickGapMs) await afkWait(cfg.pickGapMs);
@@ -12524,7 +12602,7 @@ const AuthorWords = _sfc_main$4;
                 const target = options[Array.from(wanted)[0]];
                 if (target && !cfg.isPicked(target)) await cfg.pick(target);
               }
-              ok = true;
+              ok = options.every((option, index) => cfg.isPicked(option) === wanted.has(index));
             }
           } else {
             ok = cfg.writeText(root, answers.map((ans) => String(ans == null ? "" : ans)));
@@ -12563,16 +12641,16 @@ const AuthorWords = _sfc_main$4;
           ppLogAnswerQueryFailed(logStore.addLog, handled, msg);
         }
 
-        if (!(await cfg.next())) break;
+        if (!(await advance())) break;
         if (cfg.stepGapMs) await afkWait(cfg.stepGapMs);
       }
 
-      cfg.onFinish({ handled, filled, skipped, failed, total, progressStore, logStore });
+      if (isActive()) cfg.onFinish({ handled, filled, skipped, failed, total, progressStore, logStore });
     } catch (error) {
       logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
     } finally {
       window[cfg.busyKey] = false;
-      if (isReadOnlyPage()) progressStore.update({ isPlaying: false, detail: "已停止查题" });
+      if (!isActive()) progressStore.update({ isPlaying: false, detail: "已停止查题" });
     }
   };
 
@@ -12825,6 +12903,30 @@ const AuthorWords = _sfc_main$4;
     }
   };
 
+  const zhPaperRewindMastery = async (profile) => {
+    const runUrl = window.location.href;
+    if (!document.querySelector(".pre-next .pre-topic")) {
+      await zhPaperJumpToFirst(profile);
+      return;
+    }
+    for (let step = 0; step < 200 && window.location.href === runUrl; step += 1) {
+      const number = Number(zhPaperCurrentNumber(profile));
+      const prev = document.querySelector(".pre-next .pre-topic");
+      if (number <= 1 || !prev || prev.disabled || prev.classList.contains("noPre")) return;
+      prev.click();
+      let updated = false;
+      for (let attempt = 0; attempt < 10 && window.location.href === runUrl; attempt += 1) {
+        await afkWait(100);
+        const nextNumber = Number(zhPaperCurrentNumber(profile));
+        if (nextNumber > 0 && nextNumber < number) {
+          updated = true;
+          break;
+        }
+      }
+      if (!updated) return;
+    }
+  };
+
   const zhPaperPicked = (node) => {
     try {
       if (!node) return false;
@@ -12985,7 +13087,7 @@ const AuthorWords = _sfc_main$4;
       id: "paper",
       name: "作业/考试",
       roots: [".questionContent"],
-      prepare: zhPaperJumpToFirst,
+      prepare: zhPaperRewindMastery,
       stem: (scope) => (scope ? ppZhH5StemText(scope) : ""),
       typeCode: (scope) => (scope ? ppZhH5TypeCode(scope) : "999"),
       optionNodes: (scope, typeCode) => (scope ? ppZhH5OptionNodes(scope, typeCode) : []),
@@ -13006,20 +13108,18 @@ const AuthorWords = _sfc_main$4;
       id: "examitem",
       name: "AI掌握度",
       roots: [".exam-item"],
-      prepare: zhPaperJumpToFirst,
+      collectRoots: () => Array.from(document.querySelectorAll(".exam-item")),
       stem: (scope) => zhPaperTextOf(scope, [".quest-title .option-name", ".quest-title"]),
       typeCode: (scope) => ppZhTypeCodeOf(zhPaperTextOf(scope, [".quest-type"])),
       optionNodes: (scope) => (scope ? Array.from(scope.querySelectorAll("label")) : []),
       optionText: (node) => zhPaperClean((node || {}).textContent || ""),
-      nextButton: () => null,
-      number: (scope) => zhPaperTextOf(scope, [".quest-type", ".quest-number", ".exam-item-index"]),
-      signature: () => zhPaperTextOf(document.querySelector(".exam-item"), [".quest-title .option-name", ".quest-title"]),
     }
   ];
 
   const useZhsPaperAnswerLogic = async () => {
-    const isReadOnlyPage = () => ppIsZhsMasteryReadOnlyPage(window.location.href);
-    if (isReadOnlyPage() || window.__ppZhPaperBusy) return;
+    const runUrl = window.location.href;
+    const isActive = () => window.location.href === runUrl && !ppIsZhsReadOnlyPage(runUrl);
+    if (!isActive() || window.__ppZhPaperBusy) return;
     installZhPaperProbe();
     let profile = null;
     let stemWaits = 0;
@@ -13043,8 +13143,8 @@ const AuthorWords = _sfc_main$4;
 
     if (zhStudyTuning().answerOn) {
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 30000 && !isReadOnlyPage() && !findRoot()) await afkWait(250);
-      if (isReadOnlyPage()) return;
+      while (Date.now() - startedAt < 30000 && isActive() && !findRoot()) await afkWait(250);
+      if (!isActive()) return;
       if (profile && typeof profile.prepare === "function") {
         try { await profile.prepare(profile); } catch (e) {}
         findRoot();
@@ -13060,9 +13160,11 @@ const AuthorWords = _sfc_main$4;
       return currentInfo;
     };
 
+    if (!isActive()) return;
     await zhAnswerFlow({
       busyKey: "__ppZhPaperBusy",
       findRoot,
+      collectRoots: () => profile?.collectRoots?.(),
       notFoundLog: "未识别到智慧树题目区域，请刷新页面或手动进入答题页",
       detectLog: () => `检测到智慧树答题页面（${profile ? profile.name : "通用"}）`,
       scene: profile && /考试/.test(profile.name) ? "考试" : profile && /作业/.test(profile.name) ? "作业" : "答题",
@@ -13078,8 +13180,8 @@ const AuthorWords = _sfc_main$4;
         const scope = scopeOf(root);
         return profile && scope ? profile.stem(scope) : "";
       },
-      awaitStem: () => {
-        const scope = scopeOf(findRoot());
+      awaitStem: (root) => {
+        const scope = scopeOf(root);
         if (profile && scope && profile.stem(scope)) return true;
         if (stemWaits < 20) {
           stemWaits += 1;
@@ -13437,7 +13539,7 @@ const AuthorWords = _sfc_main$4;
       autoPlay: readParam(ZH_STUDY_PART, PP_KEY.NORMAL_PLAY, true) !== false,
       autoSpeed: readParam(ZH_STUDY_PART, PP_KEY.AUTO_RATE, true) !== false,
       speed: Math.min(Math.max(1, speedRaw), zhSpeedCeiling()),
-      autoNext: readParam(PP_KEY.ZHS_CHAPTER, PP_KEY.AUTO_NEXT, true) !== false,
+      autoNext: readParam(PP_KEY.ZHS_CHAPTER, PP_KEY.AUTO_NEXT, true) !== false || ppZhsQueueAllowsAdvance(),
       quizAuto: readParam(ZH_STUDY_PART, "弹题作答", true) !== false,
       ignoreHabit: readParam(PP_KEY.ZHS_CHAPTER, "忽略习惯弹窗", false) === true,
       captchaNotify: true
@@ -13856,7 +13958,7 @@ const AuthorWords = _sfc_main$4;
       const closeBtn = popup.querySelector(".header-slot-box .el-icon-error");
       if (closeBtn) {
         zhTapNode(closeBtn);
-        zhLogCadence(log, "zh-course-remind-legacy", "已关闭课程提醒弹窗（abc 同款选择器）", "info", 30);
+        zhLogCadence(log, "zh-course-remind-legacy", "课程提醒已关闭", "info", 30);
         return true;
       }
       zhHideMaskNode(zhMaskOf(popup) || popup);
@@ -13989,14 +14091,20 @@ const AuthorWords = _sfc_main$4;
     return true;
   };
 
-  const zhSectionProgress = (el) => {
-    const text = zhTxtOf(zhPick(".collapse-info-progress .progress-text", el));
-    const matched = text.replace(/\s/g, "").match(/(\d+)\/(\d+)/);
-    if (!matched) return null;
-    const done = parseInt(matched[1], 10);
-    const total = parseInt(matched[2], 10);
-    if (Number.isNaN(done) || Number.isNaN(total)) return null;
-    return { done, total };
+  const zhFindNextStudySection = (sections) => {
+    const needsStudy = (section) => {
+      const label = zhTxtOf(zhPick(".collapse-info-progress .progress-text", section));
+      const counts = /(\d+)\/(\d+)/.exec(label.replace(/\s+/g, ""));
+      if (!counts) return true;
+      const total = Number(counts[2]);
+      return total === 0 || Number(counts[1]) < total;
+    };
+    const active = sections.findIndex(section => /(^|\s)active(\s|$)/.test(section.className || ""));
+    const start = active >= 0 && needsStudy(sections[active]) ? active + 1 : 0;
+    for (let i = start; i < sections.length; i++) {
+      if (i !== active && needsStudy(sections[i])) return sections[i];
+    }
+    return null;
   };
 
   const zhOpenSection = async (section) => {
@@ -14248,19 +14356,7 @@ const AuthorWords = _sfc_main$4;
   const zhBoundMedia = new WeakSet();
 
   const zhAdvanceSection = async (tune, log) => {
-    const sections = zhPickAll(".section-item-collapse-info");
-    if (!sections.length) return false;
-
-    const unfinished = sections.filter((el) => {
-      const progress = zhSectionProgress(el);
-      if (!progress || !progress.total) return true;
-      return progress.done < progress.total;
-    });
-    if (!unfinished.length) return false;
-
-    const active = sections.find((el) => /(^|\s)active(\s|$)/.test(el.className || ""));
-    const pos = unfinished.indexOf(active);
-    const target = pos >= 0 ? unfinished[pos + 1] || null : unfinished[0] || null;
+    const target = zhFindNextStudySection(zhPickAll(".section-item-collapse-info"));
     if (!target) return false;
 
     const head = zhPick(".section-item-collapse-title", target) || target;
@@ -14579,6 +14675,12 @@ const AuthorWords = _sfc_main$4;
     log.addLog("检测到「考试」入口：请点击左侧「考试」进入考试列表，进入答题页后脚本会自动作答", "warning");
   };
 
+  const zhLogPageHidden = () => {
+    if (document.visibilityState === "hidden") {
+      zhRuntime.log.addLog("学习页已转入后台。如果进度暂停，请切回这个标签页。", "warning");
+    }
+  };
+
   const zhBootClassroom = async (stage, log) => {
     if (zhRuntime.booted) return;
     zhRuntime.booted = true;
@@ -14588,7 +14690,7 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`检测到智慧树${stage.label}学习页面`, "primary");
     log.addLog("正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）", "warning");
     log.addLog(`播放器最大倍速：${zhSpeedCeiling()}x`, "info");
-    const abcHideAllDialogs = () => {
+    const zhKickstartStudy = () => {
       try {
         zhDismissNoticeDialogs(log);
       } catch (e) {}
@@ -14603,10 +14705,10 @@ const AuthorWords = _sfc_main$4;
         }
       } catch (e) {}
     };
-    abcHideAllDialogs();
-    setTimeout(abcHideAllDialogs, 5000);
-    setTimeout(abcHideAllDialogs, 9000);
-    setTimeout(abcHideAllDialogs, 15000);
+    zhKickstartStudy();
+    setTimeout(zhKickstartStudy, 5000);
+    setTimeout(zhKickstartStudy, 9000);
+    setTimeout(zhKickstartStudy, 15000);
     zhInstallDialogGuard(log);
     zhRuntime.stage = stage;
     zhRuntime.log = log;
@@ -14670,15 +14772,20 @@ const AuthorWords = _sfc_main$4;
         }
       }, 2000);
     }
+    document.addEventListener("visibilitychange", zhLogPageHidden);
+    try {
+      zhLogPageHidden();
+      await zhRunClassroomSteps(stage, log, epoch);
+    } finally {
+      if (zhRuntime.epoch === epoch) document.removeEventListener("visibilitychange", zhLogPageHidden);
+    }
+  };
+
+  const zhRunClassroomSteps = async (stage, log, epoch) => {
     while (zhRuntime.epoch === epoch) {
       await zhSleep(1.1);
+      if (zhRuntime.epoch !== epoch) break;
       zhRuntime.lastBeat = Date.now();
-      if (document.visibilityState === "hidden" && !zhRuntime.visibilityWarned) {
-        zhRuntime.visibilityWarned = true;
-        log.addLog("页面未保持前台，学习流程可能无法正常推进..", "warning");
-      } else if (document.visibilityState === "visible") {
-        zhRuntime.visibilityWarned = false;
-      }
       let tune = null;
       try {
         tune = zhStudyTuning();
@@ -14891,14 +14998,17 @@ const AuthorWords = _sfc_main$4;
     return ok;
   };
 
-  const hikeSolveExamCards = async (log) => {
+  const hikeSolveExamCards = async (log, isActive) => {
     const cards = Array.from(document.querySelectorAll(HIKE_CARD_SEL));
     let filled = 0;
     for (const card of cards) {
+      if (!isActive()) return;
       if (card.querySelector(HIKE_SCORED_SEL)) continue;
       const question = hikeCardQuestion(card);
       if (!question.title) continue;
+      question.isActive = isActive;
       const result = await queryAnswer(question);
+      if (!isActive()) return;
       const answers = result && result.code === 200 && result.data ? result.data.answer : null;
       if (!Array.isArray(answers) || !answers.length) continue;
       if (question.type === "0" || question.type === "1" || question.type === "3") {
@@ -14911,15 +15021,16 @@ const AuthorWords = _sfc_main$4;
     log.addLog(`共 ${cards.length} 题，已填入 ${filled} 题，请检查后手动提交`, "warning");
   };
 
-  const hikeSolveLegacyCards = async (log) => {
+  const hikeSolveLegacyCards = async (log, isActive) => {
+    if (!isActive()) return;
     const cards = Array.from(document.querySelectorAll(".card_ul .card_li"));
     if (cards.length) cards[0].click();
     await zhSleep(2);
     let previous = "";
     let filled = 0;
-    for (let step = 0; step < 200; step++) {
+    for (let step = 0; step < 200 && isActive(); step++) {
       let question = null;
-      for (let wait = 0; wait < 20; wait++) {
+      for (let wait = 0; wait < 20 && isActive(); wait++) {
         const root = document.querySelector(".q_main");
         if (root) {
           const optionNodes = Array.from(root.querySelectorAll("label"));
@@ -14943,9 +15054,11 @@ const AuthorWords = _sfc_main$4;
         }
         await zhSleep(0.3);
       }
-      if (!question) break;
+      if (!question || !isActive()) break;
       previous = question.title;
+      question.isActive = isActive;
       const result = await queryAnswer(question);
+      if (!isActive()) return;
       const answers = result && result.code === 200 && result.data ? result.data.answer : null;
       if (Array.isArray(answers) && answers.length) {
         const optionNodes = Object.values(question.options);
@@ -14953,15 +15066,18 @@ const AuthorWords = _sfc_main$4;
           if (await hikeFillChoice(optionNodes, question.type, answers)) filled += 1;
         }
       }
+      if (!isActive()) return;
       const next = document.querySelector(".check_btn:not(.is-disabled)");
       if (!next) break;
       next.click();
       await zhSleep(1.5);
     }
-    log.addLog(`作业任务页已填入 ${filled} 题，请检查后手动提交`, "warning");
+    if (isActive()) log.addLog(`作业任务页已填入 ${filled} 题，请检查后手动提交`, "warning");
   };
 
   const useHikePaperAnswer = async () => {
+    const runUrl = window.location.href;
+    const isActive = () => window.location.href === runUrl;
     const page = hikePageType();
     if (!page) return;
 
@@ -14974,6 +15090,7 @@ const AuthorWords = _sfc_main$4;
 
     if (page === "training") {
       const response = await hikePrimeTraining(hikeParams(), setting.config.basicConfig.token.value);
+      if (!isActive()) return;
       if (response && response.code === 200) {
         const primed = response.data ? response.data.primed : 0;
         log.addLog(primed ? `已读取 ${primed} 道题的答案` : "答案已就绪");
@@ -14982,8 +15099,320 @@ const AuthorWords = _sfc_main$4;
       }
     }
 
-    if (page === "legacy") await hikeSolveLegacyCards(log);
-    else await hikeSolveExamCards(log);
+    if (page === "legacy") await hikeSolveLegacyCards(log, isActive);
+    else await hikeSolveExamCards(log, isActive);
+  };
+
+  const PP_HIKE_DETAIL_PATH = "/stu/study/resource-detail";
+  const PP_HIKE_API = "https://cloudapi.polymas.com";
+  const PP_HIKE_MEDIA = new Set(["mp4", "mov", "m4v", "flv", "avi", "wmv", "mkv", "webm", "mp3", "m4a", "wav", "aac", "ogg"]);
+
+  const ppHikeStudyPage = (href) => {
+    try {
+      const url = new URL(href);
+      if (url.origin !== PP_HIKE_STUDY_ORIGIN || url.username || url.password) return null;
+      const path = url.pathname.replace(/\/$/, "");
+      if (/^\/(?:custom-)?stu-hike\/agent-course-hike\/ai-course-center$/.test(path)) return { kind: "center" };
+      const course = path.match(/^(\/(?:custom-)?stu-hike\/agent-course-full\/([\w-]+))\/(.+)$/);
+      if (!course) return null;
+      const [, coursePath, courseId, rest] = course;
+      if (rest === "stu/course-home") return { kind: "home", coursePath, courseId };
+      const detail = rest.match(/^([\w-]+)\/([\w-]+)\/([\w-]+)\/stu\/study\/resource-detail$/);
+      if (!detail) return null;
+      const [, libraryFolderId, resourceId, classId] = detail;
+      return { kind: "detail", coursePath, courseId, libraryFolderId, resourceId, classId };
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const ppHikeStudyRead = async (path, body, signal) => {
+    const token = hikeCookieOf("ai-poly");
+    if (!token) throw new Error("未读取到平台登录状态，请刷新页面后重试");
+    const request = new AbortController();
+    const abort = () => request.abort();
+    if (signal?.aborted) abort();
+    else signal?.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, 12e3);
+    try {
+      const res = await fetch(PP_HIKE_API + path, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: token },
+        body: JSON.stringify(body),
+        signal: request.signal,
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        redirect: "error"
+      });
+      if (!res.ok) throw new Error(`平台接口返回 HTTP ${res.status}`);
+      const payload = await res.json();
+      if (Number(payload?.code) !== 200 || !Array.isArray(payload.data)) throw new Error("平台学习接口返回的数据有误");
+      return payload.data;
+    } finally {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+    }
+  };
+
+  const ppHikeStudyContext = async (page, signal) => {
+    const terms = await ppHikeStudyRead("/student-course/student/term/list", { courseId: page.courseId }, signal);
+    const active = terms.find((item) => Number(item?.isCurrent) === 1) ?? terms[0];
+    const term = Number(active?.term);
+    if (!Number.isSafeInteger(term) || term <= 0) throw new Error("未读取到有效课程学期");
+    return { ...page, term };
+  };
+
+  const ppHikeStudyTargets = async (context, signal) => {
+    const { courseId, classId, libraryFolderId, term } = context;
+    const tree = await ppHikeStudyRead("/student-course/study/student/resource/queryTree", { courseId, classId, libraryFolderId, term }, signal);
+    const resources = [];
+    const pending = [...tree].reverse().map((node) => ({ node, locked: false }));
+    while (pending.length) {
+      const { node, locked } = pending.pop();
+      if (!node || typeof node !== "object") throw new Error("平台学习资源目录有误");
+      const unavailable = locked || node.lock === true;
+      if (Number(node.type) === 2) {
+        const id = String(node.nodeId ?? "");
+        if (!/^[\w-]+$/.test(id)) throw new Error("未读取到有效学习资源编号");
+        resources.push({
+          id, locked: unavailable, required: node.isRequire === true, finished: node.isFinished === true,
+          title: String(node.detail?.title || "未命名资源").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+          media: PP_HIKE_MEDIA.has(String(node.detail?.bizSuffix || "").toLowerCase())
+        });
+      }
+      if (Array.isArray(node.children)) {
+        for (let i = node.children.length - 1; i >= 0; i--) pending.push({ node: node.children[i], locked: unavailable });
+      }
+    }
+    if (!resources.length) throw new Error("平台未返回学习资源");
+    const required = resources.filter((resource) => resource.required);
+    return { resources, targets: required.length ? required : resources };
+  };
+
+  const ppHikeStudyWait = (signal, ms) => new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve(false);
+      return;
+    }
+    const finish = (ok) => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      resolve(ok);
+    };
+    const abort = () => finish(false);
+    const timer = setTimeout(() => finish(true), ms);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+
+  const ppHikeStudyFrame = (fileId) => {
+    const iframe = document.querySelector("iframe#previewIframe");
+    const preview = iframe?.getAttribute("src");
+    const source = preview && ppHikePreviewUrl(preview, location.href);
+    return source && (!fileId || source.fileId === fileId) && iframe.contentWindow ? { ...source, frame: iframe.contentWindow } : null;
+  };
+
+  const ppHikeStudyPlayback = async (session, replay, checkFinished) => {
+    const { signal } = session.controller;
+    const canPlay = () => session.active() && zhStudyTuning().autoPlay;
+    const fileId = session.resourceId;
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    let peer;
+    let ready;
+    let outcome;
+    const post = (command, fields = {}) => peer?.frame.postMessage({
+      channel: PP_HIKE_BRIDGE, session: id, fileId, command, ...fields
+    }, peer.origin);
+    const receive = (event) => {
+      if (!peer || peer.frame !== event.source || peer.origin !== event.origin) return;
+      const live = ppHikeStudyFrame(fileId);
+      if (live?.frame !== peer.frame || live.origin !== peer.origin) return;
+      const data = event.data;
+      if (data?.channel !== PP_HIKE_BRIDGE || data.fileId !== fileId || data.session !== id) return;
+      if (data.event === "ready" && Number.isFinite(data.duration) && data.duration > 0 && Number.isFinite(data.currentTime)) ready = data;
+      else if (ready && ["ended", "paused", "blocked"].includes(data.event)) outcome = data.event;
+    };
+    const stop = () => post("stop");
+    window.addEventListener("message", receive);
+    signal.addEventListener("abort", stop, { once: true });
+    let keepAlive;
+    try {
+      const readyBy = Date.now() + 60e3;
+      while (!ready && canPlay() && Date.now() < readyBy) {
+        peer = ppHikeStudyFrame(fileId);
+        post("probe");
+        await ppHikeStudyWait(signal, 500);
+      }
+      if (!canPlay()) return "cancelled";
+      if (!ready) return "missing";
+      const tuning = zhStudyTuning();
+      const rate = tuning.autoSpeed ? Math.min(tuning.speed, PP_HIKE_MAX_RATE) : null;
+      post("start", { rate, replay });
+      const connected = () => {
+        const live = ppHikeStudyFrame(fileId);
+        return live?.frame === peer.frame && live.origin === peer.origin;
+      };
+      keepAlive = setInterval(() => {
+        if (canPlay() && connected()) post("keep");
+      }, 3000);
+      const remaining = Math.max(0, ready.duration - (replay ? 0 : ready.currentTime));
+      const deadline = Date.now() + Math.min(6 * 3600e3, remaining * 2e3 + 120e3);
+      let nextCheck = Date.now() + 30e3;
+      while (canPlay() && connected() && !outcome && Date.now() < deadline) {
+        if (Date.now() >= nextCheck) {
+          if (await checkFinished()) return "finished";
+          nextCheck = Date.now() + 30e3;
+        }
+        await ppHikeStudyWait(signal, 500);
+      }
+      if (!canPlay()) return "cancelled";
+      return outcome || (connected() ? "timeout" : "missing");
+    } finally {
+      stop();
+      clearInterval(keepAlive);
+      window.removeEventListener("message", receive);
+      signal.removeEventListener("abort", stop);
+    }
+  };
+
+  const ppHikeRecentSkips = (page, resourceId) => {
+    const key = `pp.hike.skips.${page.courseId}.${page.classId}.${page.libraryFolderId}`;
+    let recent = [];
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key) || "[]");
+      if (Array.isArray(saved)) recent = saved.filter((item) => Array.isArray(item) && item[1] > Date.now());
+      if (resourceId) {
+        recent = recent.filter((item) => item[0] !== resourceId);
+        recent.push([resourceId, Date.now() + 2 * 3600e3]);
+        sessionStorage.setItem(key, JSON.stringify(recent));
+      }
+    } catch (e) {
+      if (resourceId) return null;
+    }
+    return new Set(recent.map((item) => item[0]));
+  };
+
+  const ppRunHikeStudy = async (session, page) => {
+    const log = useLogStore();
+    const { signal } = session.controller;
+    const context = await ppHikeStudyContext(page, signal);
+    const read = () => ppHikeStudyTargets(context, signal);
+    let snapshot = await read();
+    if (!session.active()) return;
+    const id = page.resourceId;
+    const current = () => snapshot.resources.find((resource) => resource.id === id);
+    const resource = current();
+    if (!resource) throw new Error("未在平台学习目录中找到当前资源");
+    const checkFinished = async () => {
+      snapshot = await read();
+      return session.active() && current()?.finished === true;
+    };
+    if (resource.locked && !resource.finished) log.addLog(`「${resource.title}」暂未解锁`, "warning");
+    else if (!resource.finished) {
+      log.addLog(`AI智课正在学习「${resource.title}」`, "primary");
+      if (resource.media) {
+        if (!zhStudyTuning().autoPlay) {
+          log.addLog("自动播放已关闭，请手动播放当前资源", "info");
+          return;
+        }
+        for (let attempt = 0; attempt <= 3 && session.active(); attempt++) {
+          const result = await ppHikeStudyPlayback(session, attempt > 0, checkFinished);
+          if (!session.active() || result === "cancelled") return;
+          if (result === "paused" || result === "blocked") {
+            log.addLog("AI智课播放已暂停或无法启动，请手动继续", "warning");
+            return;
+          }
+          if (result === "finished" || !await ppHikeStudyWait(signal, 3000) || await checkFinished()) break;
+          if (result === "missing" || attempt === 3) break;
+          log.addLog(`平台尚未确认「${resource.title}」完成，准备重新播放（${attempt + 1}/3）`, "warning");
+        }
+      } else {
+        if (!await ppHikeStudyWait(signal, 15e3)) return;
+        await checkFinished();
+      }
+      if (!session.active()) return;
+      if (current()?.finished) log.addLog(`平台已确认「${resource.title}」完成`, "success");
+      else log.addLog(`平台尚未确认「${resource.title}」完成，请手动补学`, "warning");
+    }
+    const unfinished = snapshot.targets.filter((item) => !item.finished);
+    if (!unfinished.length) {
+      log.addLog("平台已确认全部目标学习资源完成", "success");
+      return;
+    }
+    if (!zhStudyTuning().autoNext) return;
+    const skipped = ppHikeRecentSkips(page, current()?.finished || resource.locked ? undefined : id);
+    if (!skipped) return;
+    const next = unfinished.find((item) => !item.locked && item.id !== id && !skipped.has(item.id));
+    if (!next) {
+      log.addLog(`平台仍有 ${unfinished.length} 项学习资源未完成，请查看未解锁或需补学的资源`, "warning");
+      return;
+    }
+    if (!await ppHikeStudyWait(signal, 1200) || !session.active() || !zhStudyTuning().autoNext) return;
+    log.addLog(`前往「${next.title}」`, "info");
+    location.assign(`${PP_HIKE_STUDY_ORIGIN}${page.coursePath}/${page.libraryFolderId}/${next.id}/${page.classId}${PP_HIKE_DETAIL_PATH}`);
+  };
+
+  let ppHikeStudyWatching = false;
+  const usePpHikeStudy = () => {
+    if (ppHikeStudyWatching || !ppHikeStudyPage(location.href)) return;
+    ppHikeStudyWatching = true;
+    const log = useLogStore();
+    let session;
+    let previousKey;
+    let resourcePath;
+    let previewHasMatched;
+    let timer;
+    const currentPage = () => {
+      const page = ppHikeStudyPage(location.href);
+      if (resourcePath !== location.pathname) {
+        resourcePath = location.pathname;
+        previewHasMatched = false;
+      }
+      if (page?.kind !== "detail") return page;
+      const preview = ppHikeStudyFrame();
+      if (preview?.fileId === page.resourceId) previewHasMatched = true;
+      if (previewHasMatched && /^[\w-]+$/.test(preview?.fileId || "")) page.resourceId = preview.fileId;
+      return page;
+    };
+    const stop = () => {
+      session?.controller.abort();
+      session = null;
+    };
+    const sync = () => {
+      const page = currentPage();
+      const allowed = zhStudyTuning().modeOn;
+      const key = `${location.pathname}:${page?.resourceId || ""}:${allowed}`;
+      if (key === previousKey) return;
+      previousKey = key;
+      stop();
+      if (!page) return;
+      if (page.kind !== "detail") {
+        log.addLog("请从 AI智课课程中打开具体学习资源", "info");
+        return;
+      }
+      if (!allowed) {
+        log.addLog("智慧树学习模式已关闭", "info");
+        return;
+      }
+      const controller = new AbortController();
+      const active = () => !controller.signal.aborted && `${location.pathname}:${currentPage()?.resourceId || ""}:true` === key && zhStudyTuning().modeOn;
+      session = { controller, active, resourceId: page.resourceId };
+      ppRunHikeStudy(session, page).catch(() => {
+        if (active()) log.addLog("无法读取 AI智课平台学习数据，请检查登录状态或刷新重试", "warning");
+      });
+    };
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(sync, 750);
+      sync();
+    };
+    window.addEventListener("pagehide", () => {
+      stop();
+      clearInterval(timer);
+      timer = null;
+      previousKey = null;
+    });
+    window.addEventListener("pageshow", start);
+    start();
   };
 
   const useZhClassroomStudy = async () => {
@@ -16517,20 +16946,30 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog("已进入考试说明页，请点击进入答题页面后使用", "primary");
   };
 
-  const useZhsExamListTipLogic = () => {
+  const useZhsSharedExamRouter = () => {
     const logStore = useLogStore();
-    logStore.addLog("当前是智慧树作业/考试列表页，请点击具体考试进入答题页", "warning");
-    let started = false;
-    const timer = setInterval(() => {
-      if (started) {
-        clearInterval(timer);
-        return;
+    let lastUrl;
+    let generation = 0;
+    const update = () => {
+      const url = window.location.href;
+      if (url === lastUrl) return;
+      const wasAnswering = ppZhsSharedExamPageKind(lastUrl) === "answer";
+      lastUrl = url;
+      const currentGeneration = ++generation;
+      const kind = ppZhsSharedExamPageKind(url);
+      if (wasAnswering) useProgressStore().update({ isPlaying: false, detail: "已停止查题" });
+      if (kind === "answer") {
+        const isActive = () => currentGeneration === generation && window.location.href === url;
+        startAfkHeartbeat();
+        useZhsAnswerLogic(isActive).catch((error) => logStore.addLog(String(error), "danger"));
+      } else if (kind === "list") {
+        logStore.addLog("当前是智慧树作业/考试列表页，请点击具体考试进入答题页", "info");
+      } else if (kind === "readonly") {
+        logStore.addLog("当前不是智慧树作答页，已跳过自动查题", "info");
       }
-      if (!/webExamList\/(doexamination|dohomework)/.test(String(location.hash || ""))) return;
-      started = true;
-      clearInterval(timer);
-      useZhsAnswerLogic();
-    }, 1000);
+    };
+    update();
+    setInterval(update, 500);
   };
 
   const useZhsMasteryTipLogic = () => {
@@ -16548,6 +16987,1907 @@ const AuthorWords = _sfc_main$4;
       useZhsPaperAnswerLogic();
     }, 1000);
   };
+
+function createPPChaoxingQueue(options = {}) {
+  const {
+    getValue = typeof GM_getValue === 'function' ? GM_getValue : (_, fallback) => fallback,
+    setValue = typeof GM_setValue === 'function' ? GM_setValue : () => {},
+    gmRequest = typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null,
+    getPage = () => ({ href: location.href, document, window: typeof unsafeWindow === 'object' ? unsafeWindow : window }),
+    navigate = (href) => location.assign(href),
+    onChange = () => {}, log = () => {}, request = null, canRun = () => "",
+    parseHtml = (text) => new DOMParser().parseFromString(text, 'text/html'),
+    now = Date.now
+  } = options;
+  const stateKey = 'pp:chaoxing-queue:v1';
+  const syncKey = 'pp:chaoxing-queue-sync:v1';
+  const defaultPortal = 'https://mooc1-1.chaoxing.com';
+  const defaultStudy = 'https://mooc1.chaoxing.com';
+  const listPage = /^\/(?:mooc2?-ans\/)?visit\/interaction\/?$/i;
+  const entryPage = /^\/(?:mooc2?-ans\/)?visit\/stucoursemiddle\/?$/i;
+  const homePage = /^\/(?:mooc2?-ans\/)?(?:mycourse|fanyav3)\/stu\/?$/i;
+  const studyPage = /^\/(?:mooc2?-ans\/)?mycourse\/studentstudy\/?$/i;
+  const transferPage = /^\/(?:mooc2?-ans\/)?mycourse\/transfer\/?$/i;
+  const catalogPage = /^\/(?:mooc2?-ans\/)?mycourse\/studentcourse\/?$/i;
+  const chapterSelector = '.chapter_item[onclick*="toOld"]';
+  const aborted = Symbol('queue moved');
+  const auth = '登录状态已失效，请重新登录后再试';
+  let inFlight = false;
+  let syncing = false;
+  let lastCatalogCheck = 0;
+  let lastAutoSync = -Infinity;
+  let sequence = 0;
+
+  const string = (value) => typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  const id = (value) => /^\d{1,32}$/.test(string(value)) ? string(value) : '';
+  const token = (value) => /^[a-z0-9_-]{1,256}$/i.test(string(value)) ? string(value) : '';
+  const message = (error) => string(error?.message || error) || '请求失败';
+  const platformUrl = (raw, base) => {
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    try {
+      const url = new URL(raw, base);
+      if (url.protocol !== 'https:' || url.port || url.username || url.password) return null;
+      return /^(?:[a-z0-9-]+\.)*chaoxing\.com$/i.test(url.hostname) ? url : null;
+    } catch { return null; }
+  };
+  const moocUrl = (raw, base) => {
+    const url = platformUrl(raw, base);
+    return url && /^mooc[\w-]*\.chaoxing\.com$/i.test(url.hostname) ? url : null;
+  };
+  const query = (url, ...keys) => {
+    for (const [key, value] of url?.searchParams || []) if (keys.includes(key.toLowerCase()) && value) return value;
+    return '';
+  };
+  const identity = (url) => {
+    const courseId = id(query(url, 'courseid', 'moocid'));
+    const clazzId = id(query(url, 'clazzid', 'classid'));
+    return courseId && clazzId ? { courseId, clazzId, key: `${courseId}_${clazzId}` } : null;
+  };
+  const hrefFor = (origin, path, params) => {
+    const url = new URL(path, origin);
+    if (params) url.search = new URLSearchParams(params).toString();
+    return url.href;
+  };
+  const typeOf = (url) => {
+    if (!url) return 'other';
+    if (studyPage.test(url.pathname)) return 'study';
+    if (homePage.test(url.pathname)) return 'course';
+    if (entryPage.test(url.pathname) || transferPage.test(url.pathname)) return 'handoff';
+    if (listPage.test(url.pathname) || /^\/base(?:\/|$)/i.test(url.pathname)) return 'list';
+    return 'other';
+  };
+  const trainingAt = (url) => {
+    if (!url) return null;
+    const detail = url.pathname.match(/^\/plan\/(\d{1,32})\/train\/detail\/?$/);
+    return detail || /^\/plan(?:\/online)?\/?$/.test(url.pathname)
+      ? { origin: url.origin, planId: detail?.[1] || null }
+      : null;
+  };
+  const nodes = (doc, selector) => Array.from(doc?.querySelectorAll?.(selector) || []);
+  const node = (doc, selector) => doc?.querySelector?.(selector) || null;
+  const attr = (element, name) => element?.getAttribute?.(name) || '';
+  function inspectFrames() {
+    const page = getPage();
+    const frames = [];
+    const seen = new Set();
+    function visit(doc, href, depth) {
+      if (seen.has(doc) || frames.length >= 100) return;
+      if (doc) seen.add(doc);
+      const url = platformUrl(href);
+      if (url) frames.push({ url, doc });
+      if (depth >= 5) return;
+      for (const frame of nodes(doc, 'iframe, frame')) {
+        const declared = platformUrl(attr(frame, 'src'), href);
+        let child;
+        let current;
+        try {
+          child = frame.contentDocument;
+          current = platformUrl(child?.location?.href);
+        } catch {}
+        if (current) visit(child, current.href, depth + 1);
+        else if (declared && frames.length < 100) frames.push({ url: declared, doc: null });
+      }
+    }
+    visit(page.document, page.href, 0);
+    return frames;
+  }
+  function trainingContext() {
+    const contexts = inspectFrames().map(({ url }) => trainingAt(url)).filter(Boolean);
+    return contexts.find((entry) => entry.planId) || contexts[0] || null;
+  }
+  function pageRole(href = getPage().href) {
+    const role = typeOf(platformUrl(href));
+    if (role === 'course' || role === 'study') return role;
+    if (trainingContext()) return 'training';
+    return role === 'handoff' ? 'course' : role;
+  }
+  function read(key, fallback) {
+    try {
+      const stored = getValue(key, '');
+      return (typeof stored === 'string' ? JSON.parse(stored) : stored) ?? fallback;
+    } catch { return fallback; }
+  }
+  const empty = () => ({ status: 'idle', items: [], activeKey: null, revision: '', expected: null, reason: '' });
+  const load = () => {
+    const state = read(stateKey, null);
+    return state && Array.isArray(state.items) && typeof state.revision === 'string' ? state : empty();
+  };
+  const syncEntries = () => {
+    const entries = read(syncKey, []);
+    return Array.isArray(entries) ? entries : [];
+  };
+  const refKey = (ref) => `${ref.origin}|${ref.planId}|${ref.taskId}`;
+  const syncIdentity = (ref) => `${ref.origin}|${ref.taskId}`;
+  const collectRefs = (refs) => {
+    const valid = new Map();
+    for (const ref of Array.isArray(refs) ? refs : []) {
+      const origin = platformUrl(ref?.origin);
+      const planId = id(ref?.planId);
+      const taskId = id(ref?.taskId);
+      if (!origin || origin.origin !== ref.origin || !planId || !taskId) continue;
+      const entry = { origin: origin.origin, planId, taskId, resourceCourseId: id(ref.resourceCourseId), resourceClassId: id(ref.resourceClassId) };
+      valid.set(refKey(entry), entry);
+    }
+    return [...valid.values()];
+  };
+  function snapshot() {
+    const state = load();
+    const pending = syncEntries();
+    const syncKeys = new Set(pending.map(syncIdentity));
+    state.items = state.items.map((item) => ({
+      ...item, syncPending: (item.trainingRefs || []).filter((ref) => syncKeys.has(syncIdentity(ref))).length
+    }));
+    return { ...state, syncPending: pending.length };
+  }
+  function notify() {
+    try { onChange(snapshot()); } catch {}
+  }
+  function commit(state) {
+    state.revision = `${now()}-${Math.random().toString(36).slice(2)}-${++sequence}`;
+    setValue(stateKey, JSON.stringify(state));
+    notify();
+  }
+  const scopeError = () => new Error('已阻止超出学习通队列范围的请求');
+  const isLogin = (url, text) => /(?:^|\.)passport(?:\.|$)/i.test(url?.hostname || '') ||
+    /\/(?:login|sso)(?:[/.]|$)/i.test(url?.pathname || '') || /<title>\s*(?:用户登录|学习通登录)/i.test(text);
+  const trainingEndpoint = /^(?:\/plan\/mytask\/data|\/api\/online\/\d{1,32}\/task\/list|\/taskuser\/resource\/\d{1,32}\/\d{1,32}\/study|\/taskuser\/complete\/\d{1,32})$/;
+  const listEndpoint = /^\/mooc2?-ans\/visit\/courselistdata$/;
+  async function transport(spec) {
+    if (request) return request(spec);
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    if (spec.document) {
+      const view = spec.document.defaultView;
+      if (typeof view?.fetch !== 'function') throw new Error('当前页面无法发出登录请求');
+      const timer = setTimeout(() => controller?.abort(), 15000);
+      try {
+        const response = await view.fetch(spec.url, {
+          method: spec.method, credentials: 'same-origin', mode: 'same-origin', redirect: 'error',
+          cache: 'no-store', body: spec.data, headers: spec.headers, signal: controller?.signal
+        });
+        return { status: response.status, text: await response.text(), finalUrl: response.url };
+      } finally { clearTimeout(timer); }
+    }
+    if (typeof gmRequest !== 'function') throw new Error('当前脚本管理器无法读取课程列表');
+    return new Promise((resolve, reject) => {
+      gmRequest({
+        url: spec.url, method: spec.method, data: spec.data, headers: spec.headers,
+        anonymous: false, redirect: 'error', timeout: 15000,
+        onload: (r) => resolve({ status: r.status, text: r.responseText, finalUrl: r.finalUrl }),
+        onerror: () => reject(new Error('课程列表请求失败')),
+        ontimeout: () => reject(new Error('课程列表请求超时')),
+        onabort: () => reject(new Error('课程列表请求已取消'))
+      });
+    });
+  }
+  async function ask(scope, href, method = 'GET', data) {
+    const url = platformUrl(href);
+    if (!url) throw scopeError();
+    let doc = null;
+    if (scope === 'training') {
+      if (!trainingEndpoint.test(url.pathname) || (/^\/taskuser\//.test(url.pathname) ? method !== 'POST' : method !== 'GET')) throw scopeError();
+      doc = inspectFrames().find((frame) => frame.doc && frame.url.origin === url.origin && trainingAt(frame.url))?.doc;
+      if (!doc && !request) throw new Error('请在研修中心页面或独立标签页打开对应研修中心后重试');
+    } else if (scope === 'catalog') {
+      const page = getPage();
+      const current = platformUrl(page.href);
+      if (!catalogPage.test(url.pathname) || method !== 'GET' || !['course', 'study'].includes(typeOf(current))) throw scopeError();
+      const active = identity(current);
+      if (!active || identity(url)?.key !== active.key) throw scopeError();
+      if (current.origin === url.origin) doc = page.document;
+      else {
+        const state = load();
+        if (typeOf(current) !== 'study' || state.activeKey !== active.key ||
+          state.context?.origin !== url.origin || state.context?.key !== active.key ||
+          query(url, 'stuenc') !== state.context.enc || query(url, 'cpi') !== state.context.cpi) throw scopeError();
+      }
+    } else if (scope === 'list') {
+      if (!moocUrl(href) || !(method === 'POST' && listEndpoint.test(url.pathname) || method === 'GET' && listPage.test(url.pathname))) throw scopeError();
+      const page = getPage();
+      if (platformUrl(page.href)?.origin === url.origin) doc = page.document;
+    } else throw scopeError();
+    const headers = data == null ? undefined : { 'Content-Type': 'application/x-www-form-urlencoded' };
+    const response = await transport({ scope, url: url.href, method, data, headers, document: doc });
+    const text = typeof response?.text === 'string' ? response.text : '';
+    const finalUrl = platformUrl(response?.finalUrl || url.href);
+    if (isLogin(finalUrl, text) || [401, 403].includes(response?.status)) throw new Error(auth);
+    if (!finalUrl || finalUrl.origin !== url.origin || finalUrl.pathname.replace(/\/$/, '') !== url.pathname.replace(/\/$/, '')) throw scopeError();
+    if (!(response?.status >= 200 && response.status < 300)) throw new Error(`请求失败（${response?.status || 0}）`);
+    return { text, finalUrl: finalUrl.href };
+  }
+  function api(text, operation) {
+    let payload;
+    try { payload = JSON.parse(text); } catch { throw new Error(`${operation}返回格式无效`); }
+    if (!payload || ![1, '1'].includes(payload.code)) throw new Error(string(payload?.message || payload?.msg) || `${operation}失败`);
+    return payload.data;
+  }
+  function entryFor(origin, courseId, clazzId, cpi) {
+    return hrefFor(origin, '/mooc-ans/visit/stucoursemiddle', { courseid: courseId, clazzid: clazzId, cpi, vc: '1', ismooc2: '1', v: '2' });
+  }
+  function parseList(doc, base) {
+    const records = new Map();
+    const add = (card, anchor) => {
+      const entry = moocUrl(attr(anchor, 'href'), base);
+      const fromLink = entry && entryPage.test(entry.pathname) ? identity(entry) : null;
+      const courseId = id(attr(card, 'courseid')) || fromLink?.courseId;
+      const clazzId = id(attr(card, 'clazzid')) || fromLink?.clazzId;
+      const cpi = id(attr(card, 'personid')) || id(query(entry, 'cpi'));
+      if (!courseId || !clazzId || !cpi) return;
+      const key = `${courseId}_${clazzId}`;
+      if (records.has(key)) return;
+      const name = node(card, '.course-name') || anchor;
+      records.set(key, {
+        key, title: string(attr(name, 'title') || name?.textContent) || `课程 ${courseId}`,
+        description: nodes(card, '.course-info p').map((p) => string(p.textContent)).filter(Boolean).slice(0, 2).join(' · '),
+        available: true, trainingRefs: [], source: 'default',
+        entryUrl: fromLink?.key === key ? entry.href : entryFor(new URL(base).origin, courseId, clazzId, cpi)
+      });
+    };
+    for (const card of nodes(doc, 'div.course, li.course')) add(card, node(card, 'a[href*="stucoursemiddle"]'));
+    for (const anchor of nodes(doc, 'a[href*="stucoursemiddle"]')) add(null, anchor);
+    return [...records.values()];
+  }
+  async function discover() {
+    const page = getPage();
+    const portalLinks = nodes(page.document, 'iframe#frame_content, [dataurl]').map((element) =>
+      moocUrl(attr(element, 'dataurl') || attr(element, 'src'), page.href)).filter(Boolean);
+    const portal = portalLinks.find((url) => listPage.test(url.pathname)) || portalLinks[0];
+    const origin = portal?.origin || moocUrl(page.href)?.origin || defaultPortal;
+    const form = new URLSearchParams({ courseType: '1', courseFolderId: '0', baseEducation: '0', superstarClass: '', courseFolderSize: '0' }).toString();
+    const attempts = [
+      ['/mooc-ans/visit/courselistdata', 'POST'], ['/mooc2-ans/visit/courselistdata', 'POST'],
+      [portal && listPage.test(portal.pathname) ? portal.href : '/visit/interaction', 'GET']
+    ];
+    const errors = [];
+    let recognizedEmpty = false;
+    for (const [path, method] of attempts) {
+      try {
+        const response = await ask('list', hrefFor(origin, path), method, method === 'POST' ? form : undefined);
+        const doc = parseHtml(response.text);
+        const items = parseList(doc, response.finalUrl);
+        if (items.length) return { items, errors: [] };
+        recognizedEmpty ||= Boolean(node(doc, '.noCourse, .no-course, .course-empty, .empty-course'));
+      } catch (error) {
+        if (message(error) === auth) return { items: [], errors: [auth] };
+        errors.push(message(error));
+      }
+    }
+    const current = platformUrl(page.href);
+    if (current && listPage.test(current.pathname)) {
+      const items = parseList(page.document, current.href);
+      if (items.length) return { items, errors: [] };
+      recognizedEmpty ||= Boolean(node(page.document, '.noCourse, .no-course, .course-empty, .empty-course'));
+    }
+    return { items: [], errors: recognizedEmpty ? [] : [...new Set(errors.length ? errors : ['未能读取课程列表'])] };
+  }
+  async function discoverTrainingPlans() {
+    const context = trainingContext();
+    if (!context) return { plans: [], errors: ['请先打开学习通研修中心'] };
+    void retrySync();
+    const { origin, planId } = context;
+    if (planId) return { plans: [{ id: planId, origin, title: `研修 ${planId}`, description: '', available: true }], errors: [] };
+    const plans = new Map();
+    let scanned = 0;
+    try {
+      for (let page = 1; page <= 20; page++) {
+        const url = hrefFor(origin, '/plan/mytask/data', {
+          page, pageSize: 50, type: '', modality: '', startDate: '', endDate: '', planPackageId: '', level: '', archived: 'false', status: ''
+        });
+        const body = api((await ask('training', url)).text, '研修列表')?.plans;
+        if (!Array.isArray(body?.list)) throw new Error('研修列表返回格式无效');
+        scanned += body.list.length;
+        for (const row of body.list) {
+          const itemId = id(row?.id);
+          const type = Number(row?.type);
+          if (!itemId || ![1, 5].includes(type) || Number(row.offlineFlag || 0) !== 0) continue;
+          plans.set(itemId, {
+            id: itemId, origin,
+            title: string(row.planPackageSubject || row.subject) || `研修 ${itemId}`,
+            description: `${type === 5 ? '选修课程' : '必修课程'} · ${string(row.completeHour || 0)}/${string(row.hour || 0)} 学时`,
+            available: ![3, -2, -1].includes(Number(row.completeStatus || 0))
+          });
+        }
+        const total = Number(body.total);
+        if (!body.list.length || (Number.isFinite(total) ? scanned >= total : body.list.length < 50)) break;
+        if (page === 20) return { plans: [...plans.values()], errors: ['研修计划过多，仅显示前 20 页'] };
+      }
+      return { plans: [...plans.values()], errors: [] };
+    } catch (error) { return { plans: [...plans.values()], errors: [message(error)] }; }
+  }
+  async function discoverTrainingCourses(plan) {
+    const origin = platformUrl(plan?.origin);
+    const planId = id(plan?.id);
+    if (!origin || origin.origin !== plan.origin || !planId || trainingContext()?.origin !== origin.origin) {
+      return { items: [], errors: ['请在对应的研修中心打开研修计划'] };
+    }
+    void retrySync();
+    try {
+      const url = hrefFor(origin.origin, `/api/online/${planId}/task/list`);
+      const tasks = api((await ask('training', url)).text, '研修课程')?.tasks;
+      if (!Array.isArray(tasks)) throw new Error('研修课程返回格式无效');
+      const items = [];
+      for (const row of tasks) {
+        const taskId = id(row?.id);
+        const resourceCourseId = id(row?.typeId) || id(row?.courseId);
+        const resourceClassId = id(row?.classId);
+        if (Number(row?.type) !== 1 || !taskId || !resourceCourseId || !resourceClassId) continue;
+        const earned = Number(row.check) === 3;
+        const rawProgress = Number(row.complete || 0);
+        const percent = Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, rawProgress)) : 0;
+        const scheduled = Number(row.flag) === 1 && !earned && row.status != null && Number(row.status) <= 0;
+        const label = earned ? '已完成' : scheduled ? (Number(row.status) === 0 ? '未到开始时间' : '已过截止时间') : `${percent}%`;
+        items.push({
+          key: `training:${origin.hostname}:${planId}:${taskId}`, source: 'training',
+          title: string(row.name || row.taskName) || `课程 ${resourceCourseId}`,
+          description: `${string(row.hour || 0)} 学时 · ${label}`, available: plan.available !== false && !earned && !scheduled,
+          entryUrl: '', trainingRefs: [{ origin: origin.origin, planId, taskId, resourceCourseId, resourceClassId }]
+        });
+      }
+      items.sort((a, b) => Number(b.available) - Number(a.available));
+      return { items, errors: [] };
+    } catch (error) { return { items: [], errors: [message(error)] }; }
+  }
+
+  function entryTarget(raw) {
+    const url = platformUrl(raw);
+    if (!url || !['course', 'study', 'handoff'].includes(typeOf(url))) return null;
+    const course = identity(url);
+    if (transferPage.test(url.pathname)) {
+      const refer = platformUrl(query(url, 'refer'));
+      if (!refer || !studyPage.test(refer.pathname) || identity(refer)?.key !== course?.key) return null;
+    }
+    for (const key of ['url', 'target', 'next', 'redirect', 'redirecturl', 'returnurl']) {
+      if (query(url, key)) return null;
+    }
+    return course ? { ...course, url } : null;
+  }
+  function makeOwner() {
+    if (typeof options.getOwnerId === 'function') return Promise.resolve().then(options.getOwnerId);
+    const readTab = typeof GM_getTab === 'function' ? GM_getTab : null;
+    const saveTab = typeof GM_saveTab === 'function' ? GM_saveTab : null;
+    const fresh = () => `${now()}-${Math.random().toString(36).slice(2)}`;
+    if (!readTab || !saveTab) return Promise.resolve(fresh());
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(fresh()), 1500);
+      try {
+        readTab((tab) => {
+          clearTimeout(timer);
+          try {
+            if (!tab || typeof tab !== 'object') return resolve(fresh());
+            if (!tab.ppChaoxingQueueOwner) {
+              tab.ppChaoxingQueueOwner = fresh();
+              saveTab(tab);
+            }
+            resolve(tab.ppChaoxingQueueOwner);
+          } catch { resolve(fresh()); }
+        });
+      } catch {
+        clearTimeout(timer);
+        resolve(fresh());
+      }
+    });
+  }
+  let ownerPromise;
+  let currentOwner;
+  const owner = () => ownerPromise ||= makeOwner().then((value) => (currentOwner = value));
+  void owner();
+  const ownsCurrentCourse = () => {
+    if (!currentOwner) return false;
+    const url = platformUrl(getPage().href);
+    if (typeOf(url) !== 'study') return false;
+    const state = load();
+    return state.status === 'running' && state.ownerId === currentOwner && !!state.activeKey && identity(url)?.key === state.activeKey;
+  };
+  const isCurrent = (draft, href) => load().revision === draft.revision && getPage().href === href;
+  function guard(draft, href) {
+    if (!isCurrent(draft, href)) throw aborted;
+    const reason = canRun(draft);
+    if (reason) {
+      pause(reason);
+      throw aborted;
+    }
+  }
+  function go(draft, currentHref, destination, phase, chapterId = '') {
+    guard(draft, currentHref);
+    draft.expected = { href: destination.href, from: currentHref, phase, chapterId, time: now() };
+    commit(draft);
+    if (!isCurrent(draft, currentHref)) return;
+    navigate(destination.href);
+  }
+  function pause(reason = '课程队列已暂停') {
+    const state = load();
+    if (state.status !== 'running') return snapshot();
+    state.status = 'paused';
+    state.reason = typeof reason === 'string' ? reason : '课程队列已暂停';
+    commit(state);
+    return snapshot();
+  }
+  function clear() {
+    commit(empty());
+    return snapshot();
+  }
+  function remove(key) {
+    const state = load();
+    if (state.activeKey === key) return snapshot();
+    state.items = state.items.filter((item) => item.key !== key);
+    commit(state);
+    return snapshot();
+  }
+  function normalizeSelection(selected) {
+    const items = new Map();
+    for (const raw of Array.isArray(selected) ? selected : []) {
+      if (raw?.available === false || !raw?.key) continue;
+      const refs = collectRefs(raw.trainingRefs);
+      const direct = entryTarget(raw.entryUrl);
+      if (!direct && !refs.some((ref) => ref.resourceCourseId && ref.resourceClassId)) continue;
+      const inputKey = direct?.key || String(raw.key);
+      const previous = items.get(inputKey);
+      if (previous) {
+        previous.trainingRefs = collectRefs([...previous.trainingRefs, ...refs]);
+        continue;
+      }
+      items.set(inputKey, {
+        key: inputKey, title: string(raw.title) || '学习通课程', description: string(raw.description),
+        source: direct ? 'default' : 'training', entryUrl: direct?.url.href || '', trainingRefs: refs,
+        status: 'queued', error: '', resolved: Boolean(direct)
+      });
+    }
+    return [...items.values()];
+  }
+  async function start(selectedItems, { allowQueueAdvance = false } = {}) {
+    const href = getPage().href;
+    const items = normalizeSelection(selectedItems);
+    const before = load();
+    if (!items.length || pageRole(href) === 'other' || ['running', 'paused'].includes(before.status)) return snapshot();
+    const ownerId = await owner();
+    if (!isCurrent(before, href)) return snapshot();
+    lastCatalogCheck = -Infinity;
+    commit({ ...empty(), status: 'running', ownerId, items, allowQueueAdvance });
+    return tick();
+  }
+  async function resume({ allowQueueAdvance = false } = {}) {
+    const href = getPage().href;
+    const state = load();
+    if (pageRole(href) === 'other' || !['running', 'paused'].includes(state.status)) return snapshot();
+    const ownerId = await owner();
+    if (!isCurrent(state, href)) return snapshot();
+    state.status = 'running';
+    state.reason = '';
+    state.ownerId = ownerId;
+    state.allowQueueAdvance = allowQueueAdvance;
+    state.expected = null;
+    state.arrived = false;
+    lastCatalogCheck = -Infinity;
+    commit(state);
+    return tick();
+  }
+  async function resolveSelection(state, href) {
+    const attempted = new Map();
+    for (const item of state.items) {
+      if (item.resolved || item.status !== 'queued') continue;
+      const refs = item.trainingRefs;
+      const targets = new Map();
+      const failures = [];
+      for (const ref of refs) {
+        guard(state, href);
+        const resource = `${ref.origin}|${ref.resourceCourseId}|${ref.resourceClassId}`;
+        try {
+          if (!ref.resourceCourseId || !ref.resourceClassId) throw new Error('研修课程参数不完整');
+          if (!attempted.has(resource)) {
+            const url = hrefFor(ref.origin, `/taskuser/resource/${ref.resourceCourseId}/${ref.resourceClassId}/study`);
+            attempted.set(resource, ask('training', url, 'POST').then(({ text }) => {
+              const target = entryTarget(text.trim());
+              if (!target) {
+                try { api(text, '查找研修学习地址'); } catch (error) { throw error; }
+                throw new Error('平台返回的研修学习地址无效');
+              }
+              return target;
+            }));
+          }
+          const target = await attempted.get(resource);
+          guard(state, href);
+          const found = targets.get(target.key);
+          if (found) found.trainingRefs.push(ref);
+          else targets.set(target.key, { ...item, key: target.key, entryUrl: target.url.href, trainingRefs: [ref], resolved: true });
+        } catch (error) {
+          if (error === aborted) throw error;
+          failures.push({ ref, error: message(error) });
+        }
+      }
+      guard(state, href);
+      const replacements = [...targets.values()];
+      if (failures.length) replacements.push({ ...item, resolved: true, status: 'failed', error: failures.map((entry) => entry.error).join('；'), trainingRefs: failures.map((entry) => entry.ref) });
+      const at = state.items.indexOf(item);
+      state.items[at] = { ...item, resolved: true, replacements };
+      commit(state);
+    }
+    const dedup = new Map();
+    for (const item of state.items.flatMap((entry) => entry.replacements || [entry])) {
+      const prior = dedup.get(item.key);
+      if (prior) prior.trainingRefs = collectRefs([...prior.trainingRefs, ...item.trainingRefs]);
+      else dedup.set(item.key, item);
+    }
+    const merged = [...dedup.values()];
+    if (state.items.some((entry) => entry.replacements) || merged.length !== state.items.length) {
+      guard(state, href);
+      state.items = merged;
+      commit(state);
+    }
+  }
+  function parseCatalog(doc, html = '') {
+    const chapters = new Map();
+    let represented = true;
+    for (const element of nodes(doc, chapterSelector)) {
+      const args = attr(element, 'onclick').match(/\btoOld\s*\(\s*['"]?\d+['"]?\s*,\s*['"]?(\d{1,32})['"]?\s*(?:,|\))/i);
+      if (!args) { represented = false; continue; }
+      const chapterId = args[1];
+      const input = node(element, 'input.knowledgeJobCount');
+      const rawCount = string(input?.value || attr(input, 'value'));
+      const taskCount = /^\d+$/.test(rawCount) ? Number(rawCount) : null;
+      const points = string(node(element, '.catalog_points_yi')?.textContent);
+      const status = node(element, '.icon_yiwanc') ? 'done' :
+        taskCount != null ? (taskCount > 0 ? 'pending' : 'done') : points === '0' ? 'done' : 'unknown';
+      const previous = chapters.get(chapterId);
+      if (previous && previous.status !== status) represented = false;
+      chapters.set(chapterId, { chapterId, status });
+    }
+    return {
+      chapters: [...chapters.values()], represented,
+      oldEnc: token(html.match(/\bvar\s+enc\s*=\s*['"]([a-z0-9_-]+)['"]/i)?.[1]),
+      cpi: id(html.match(/\bvar\s+cpi\s*=\s*['"]?(\d+)/i)?.[1])
+    };
+  }
+  function courseContext(page, url, history) {
+    const readField = (name) => string(node(page.document, name)?.value);
+    const activeIdentity = identity(url);
+    if (!activeIdentity) return null;
+    if (typeOf(url) === 'study' && history?.key === activeIdentity.key) return history;
+    const cpi = id(readField('#cpi')) || id(query(url, 'cpi'));
+    const enc = token(readField('#enc')) || token(query(url, 'stuenc')) || (typeOf(url) === 'course' ? token(query(url, 'enc')) : '');
+    const oldEnc = token(readField('#oldenc')) || (typeOf(url) === 'study' ? token(query(url, 'enc')) : '');
+    return { ...activeIdentity, origin: url.origin, cpi, enc, oldEnc };
+  }
+  async function readCatalog(page, url, context) {
+    let catalogError;
+    if (context?.enc && context.cpi) {
+      try {
+        const address = hrefFor(context.origin, '/mooc2-ans/mycourse/studentcourse', {
+          courseid: context.courseId, clazzid: context.clazzId, cpi: context.cpi, ut: 's', t: now(), stuenc: context.enc
+        });
+        const result = await ask('catalog', address);
+        const parsed = parseCatalog(parseHtml(result.text), result.text);
+        if (parsed.chapters.length) return parsed;
+      } catch (error) { catalogError = error; }
+    }
+    if (typeOf(url) === 'course') {
+      const candidates = [page.document];
+      const courseKey = identity(url)?.key;
+      const isCurrentCatalog = (address) => !!courseKey && address?.origin === url.origin &&
+        catalogPage.test(address.pathname) && identity(address)?.key === courseKey;
+      let hasFrame = false;
+      for (const frame of nodes(page.document, 'iframe')) {
+        const address = platformUrl(attr(frame, 'src'), url.href);
+        if (!address || address.origin !== url.origin || !catalogPage.test(address.pathname)) continue;
+        const declaredKey = identity(address)?.key;
+        if (declaredKey && declaredKey !== courseKey) continue;
+        hasFrame = true;
+        try {
+          const loaded = frame.contentDocument;
+          if (isCurrentCatalog(platformUrl(loaded?.location?.href))) candidates.unshift(loaded);
+        } catch {}
+      }
+      for (const doc of candidates) {
+        const parsed = parseCatalog(doc, doc?.documentElement?.innerHTML);
+        if (parsed.chapters.length) return parsed;
+      }
+        if (!hasFrame) {
+        const tab = node(page.document, '[data-url*="studentcourse"]');
+        const target = platformUrl(attr(tab, 'data-url'), url.href);
+        if (target?.origin === url.origin && catalogPage.test(target.pathname)) tab.click?.();
+      }
+    }
+    if (catalogError) throw catalogError;
+    return null;
+  }
+  function chapterUrl(page, context, chapterId) {
+    if (!context?.cpi || !context?.oldEnc || !chapterId) return null;
+    let configured;
+    try { configured = moocUrl(page.window?.ServerHost?.mooc1Domain); } catch {}
+    const origin = configured?.origin || defaultStudy;
+    const refer = hrefFor(origin, '/mycourse/studentstudy', {
+      chapterId, courseId: context.courseId, clazzid: context.clazzId, cpi: context.cpi, enc: context.oldEnc,
+      mooc2: '1', hidetype: '0', fanyaVersion: '0'
+    });
+    return platformUrl(hrefFor(origin, '/mycourse/transfer', {
+      moocId: context.courseId, clazzid: context.clazzId, linkTime: now(), ut: 's', refer
+    }));
+  }
+  function rememberForSync(item) {
+    const saved = new Map(syncEntries().map((ref) => [syncIdentity(ref), ref]));
+    for (const ref of collectRefs(item.trainingRefs)) {
+      const key = syncIdentity(ref);
+      if (!saved.has(key)) saved.set(key, ref);
+    }
+    setValue(syncKey, JSON.stringify([...saved.values()]));
+  }
+  function syncAccepted(text) {
+    try {
+      const body = JSON.parse(text);
+      if (body === true || body === 1 || body === '1' || /^success$/i.test(typeof body === 'string' ? body : '')) return true;
+      if (body?.success === false || body?.data === false) return false;
+      return body?.success === true || [1, '1'].includes(body?.code);
+    } catch { return /^success$/i.test(text.trim()); }
+  }
+  async function retrySync() {
+    const origin = trainingContext()?.origin;
+    const pending = syncEntries();
+    if (!origin || syncing || !pending.length) return { synced: 0, pending: pending.length, errors: [] };
+    syncing = true;
+    const synced = new Set();
+    const errors = [];
+    try {
+      for (const ref of collectRefs(pending).filter((entry) => entry.origin === origin)) {
+        if (trainingContext()?.origin !== origin) break;
+        try {
+          const url = hrefFor(origin, `/taskuser/complete/${ref.taskId}`);
+          const { text } = await ask('training', url, 'POST');
+          if (!syncAccepted(text)) throw new Error('平台未确认刷新进度');
+          synced.add(syncIdentity(ref));
+        } catch (error) { errors.push(`任务 ${ref.taskId}：${message(error)}`); }
+      }
+      if (synced.size) {
+        setValue(syncKey, JSON.stringify(syncEntries().filter((entry) => !synced.has(syncIdentity(entry)))));
+        notify();
+      }
+      return { synced: synced.size, pending: syncEntries().length, errors };
+    } finally { syncing = false; }
+  }
+  function finishItem(state, item, href, result, error = '') {
+    guard(state, href);
+    if (result === 'done' && item.trainingRefs.length) rememberForSync(item);
+    item.status = result;
+    item.error = error;
+    state.activeKey = null;
+    state.expected = null;
+    state.context = null;
+    state.problem = null;
+    state.arrived = false;
+    commit(state);
+    if (error) {
+      try { log(`${item.title}：${error}`); } catch {}
+    }
+  }
+  function issue(state, item, href, reason) {
+    const previous = state.problem;
+    if (previous?.href === href && previous.reason === reason && now() - previous.since >= 25000) {
+      finishItem(state, item, href, 'failed', reason);
+      return false;
+    }
+    if (previous?.href !== href || previous.reason !== reason) {
+      guard(state, href);
+      state.problem = { href, reason, since: now() };
+      commit(state);
+    }
+    return true;
+  }
+  async function processQueue(state, page) {
+    const href = page.href;
+    const url = platformUrl(href);
+    if (!url) return;
+    if (typeOf(url) === 'handoff' && (!state.expected || now() - state.expected.time < 25000)) return;
+    if (state.items.some((item) => !item.resolved || item.replacements)) await resolveSelection(state, href);
+    for (let pass = 0; pass <= state.items.length; pass++) {
+      guard(state, href);
+      let item = state.items.find((entry) => entry.key === state.activeKey);
+      const onCourse = ['course', 'study'].includes(typeOf(url));
+      const here = onCourse ? identity(url) : null;
+      const wasActive = Boolean(item);
+      if (!item) {
+        item = state.items.find((entry) => entry.status === 'queued');
+        if (!item) {
+          state.status = 'done';
+          state.activeKey = null;
+          commit(state);
+          return;
+        }
+        item.status = 'active';
+        state.activeKey = item.key;
+        state.context = null;
+        state.expected = null;
+        state.problem = null;
+        lastCatalogCheck = -Infinity;
+        commit(state);
+      }
+      if (here?.key !== item.key) {
+        if (typeOf(url) === 'handoff' && state.expected) {
+          finishItem(state, item, href, 'failed', '课程页面跳转超时');
+          if (state.items.some((entry) => entry.status === 'queued')) {
+            const fallback = platformUrl(item.entryUrl);
+            const destination = platformUrl(hrefFor(moocUrl(fallback?.href)?.origin || defaultPortal, '/visit/interaction'));
+            go(state, href, destination, 'list');
+            return;
+          }
+          continue;
+        }
+        if (state.expected?.phase === 'list' && listPage.test(url.pathname)) {
+          state.expected = null;
+          commit(state);
+        }
+        if (state.expected || wasActive && state.arrived) {
+          if (state.expected && href === state.expected.from && now() - state.expected.time < 15000) return;
+          if (page.document?.readyState === 'loading') return;
+          guard(state, href);
+          state.status = 'paused';
+          state.reason = '已离开队列课程，点击继续可回到该课程';
+          commit(state);
+          return;
+        }
+        const target = entryTarget(item.entryUrl);
+        if (!target || target.key !== item.key) {
+          finishItem(state, item, href, 'failed', '课程入口无效');
+          continue;
+        }
+        go(state, href, target.url, 'entry');
+        return;
+      }
+      if (state.expected) {
+        const currentChapter = id(query(url, 'chapterid', 'knowledgeid'));
+        if (href === state.expected.from && state.expected.phase !== 'entry' && now() - state.expected.time < 15000) return;
+        guard(state, href);
+        state.expected = null;
+        if (currentChapter || typeOf(url) === 'course') lastCatalogCheck = -Infinity;
+        commit(state);
+      }
+      if (!state.arrived) {
+        state.arrived = true;
+        commit(state);
+      }
+      if (now() - lastCatalogCheck < 8000) return;
+      lastCatalogCheck = now();
+      const context = courseContext(page, url, state.context);
+      if (context?.enc && context.cpi && typeOf(url) === 'course' && JSON.stringify(context) !== JSON.stringify(state.context)) {
+        state.context = context;
+        commit(state);
+      }
+      if (typeOf(url) === 'study' && !context?.enc && context?.cpi) {
+        const portal = moocUrl(url.href)?.origin || defaultPortal;
+        const target = platformUrl(entryFor(portal, context.courseId, context.clazzId, context.cpi));
+        go(state, href, target, 'catalog');
+        return;
+      }
+      let catalog;
+      try { catalog = await readCatalog(page, url, context); } catch (error) {
+        guard(state, href);
+        if (issue(state, item, href, message(error))) return;
+        continue;
+      }
+      guard(state, href);
+      if (!catalog?.chapters.length || !catalog.represented) {
+        if (issue(state, item, href, '未能验证完整章节目录')) return;
+        continue;
+      }
+      const next = catalog.chapters.find((chapter) => chapter.status === 'pending') || catalog.chapters.find((chapter) => chapter.status === 'unknown');
+      if (!next) {
+        finishItem(state, item, href, 'done');
+        continue;
+      }
+      if (typeOf(url) === 'study') {
+        const currentId = id(query(url, 'chapterid', 'knowledgeid')) || id(node(page.document, '#knowledgeid')?.value);
+        const current = catalog.chapters.find((chapter) => chapter.chapterId === currentId);
+        if (!current || current.status !== 'done') return;
+      }
+      const enriched = { ...context, cpi: catalog.cpi || context?.cpi, oldEnc: catalog.oldEnc || context?.oldEnc };
+      const target = chapterUrl(page, enriched, next.chapterId);
+      if (!target) {
+        if (issue(state, item, href, '无法验证章节学习地址')) return;
+        continue;
+      }
+      state.context = enriched;
+      state.problem = null;
+      go(state, href, target, 'chapter', next.chapterId);
+      return;
+    }
+  }
+  async function tick() {
+    if (now() - lastAutoSync >= 60000 && trainingContext() && syncEntries().length) {
+      lastAutoSync = now();
+      void retrySync();
+    }
+    if (inFlight || load().status !== 'running') return snapshot();
+    inFlight = true;
+    try {
+      const ownerId = await owner();
+      const state = load();
+      if (state.status !== 'running' || state.ownerId !== ownerId) return snapshot();
+      const reason = canRun(state);
+      if (reason) return pause(reason);
+      const page = getPage();
+      if (pageRole(page.href) === 'other') return pause('已离开学习通队列页面，请返回课程列表后继续');
+      await processQueue(state, page);
+    } catch (error) {
+      if (error !== aborted) {
+        try { log(message(error)); } catch {}
+      }
+    } finally { inFlight = false; }
+    return snapshot();
+  }
+  return { snapshot, pageRole, trainingContext, discover, discoverTrainingPlans, discoverTrainingCourses, start, pause, resume, retrySync, tick, clear, remove, ownsCurrentCourse };
+}
+
+function createPPZhsQueue(options = {}) {
+  const {
+    getValue = typeof GM_getValue === 'function' ? GM_getValue : (_, fallback) => fallback,
+    setValue = typeof GM_setValue === 'function' ? GM_setValue : () => {},
+    getPage = () => ({ href: location.href, document, window: typeof unsafeWindow === 'object' ? unsafeWindow : window }),
+    navigate = (href) => location.assign(href),
+    canRun = () => '', onChange = () => {}, log = () => {}, now = Date.now,
+    request = null, fetchImpl = (...args) => fetch(...args)
+  } = options;
+  const stateKey = 'pp:zhs-queue:v1';
+  const onlineList = 'https://onlineweb.zhihuishu.com/onlinestuh5';
+  const hikeOrigin = 'https://hike-teaching-center.polymas.com';
+  const cloudOrigin = 'https://cloudapi.polymas.com';
+  const legacyOrigin = 'https://studyvideoh5.zhihuishu.com';
+  const moved = Symbol('queue changed');
+  const text = (value) => typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  const id = (value) => /^[\w-]{1,128}$/.test(text(value)) ? text(value) : '';
+  const secret = (value) => /^[A-Za-z0-9_~.+=/-]{1,512}$/.test(text(value)) ? text(value) : '';
+  const object = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
+  const message = (error) => text(error?.message) || '读取平台数据失败';
+  const sharedPaths = new Map([
+    [legacyOrigin, ['/stuStudy']],
+    ['https://studyplush5.zhihuishu.com', ['/stuStudy', '/study/index']],
+    ['https://studywisdomh5.zhihuishu.com', ['/study/index']]
+  ]);
+  const endpoints = {
+    identity: '/oauth/token/getIdentity', courses: '/student-course/student/index/queryStudentCourse',
+    terms: '/student-course/student/term/list', classes: '/student-course/student/classList',
+    library: '/teacher-course/library/course/findStudyLibraryByCourseId', tree: '/student-course/study/student/resource/queryTree'
+  };
+
+  function route(raw, base) {
+    if (typeof raw !== 'string' || !raw || /[\\\u0000-\u0020]/.test(raw)) return null;
+    let url;
+    try { url = new URL(raw, base); } catch { return null; }
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+    if ([...url.searchParams.keys()].some((key) => /^(?:url|target|next|redirect|redirect_?url|return_?url|continue|service|callback)$/i.test(key))) return null;
+    const path = url.pathname.replace(/\/$/, '');
+    if (url.origin + path === onlineList) return { url, role: 'list', type: 'online' };
+    if (url.hash) return null;
+    if (url.origin === hikeOrigin && /^\/(?:custom-)?stu-hike\/agent-course-hike\/ai-course-center$/.test(path)) {
+      return { url, role: 'list', type: 'center' };
+    }
+    if (sharedPaths.get(url.origin)?.includes(path)) {
+      const values = url.searchParams.getAll('recruitAndCourseId');
+      const token = values.length === 1 && secret(values[0]);
+      return token ? { url, role: 'study', type: 'share', key: `share:${token}` } : null;
+    }
+    if (url.origin !== hikeOrigin) return null;
+    const match = /^(\/(?:custom-)?stu-hike\/agent-course-full\/([\w-]{1,128}))\/(.+)$/.exec(path);
+    if (!match) return null;
+    const [, prefix, courseId, suffix] = match;
+    const page = { url, type: 'hike', key: `hike:${courseId}`, prefix, courseId };
+    if (suffix === 'stu/course-home') return { ...page, role: 'course' };
+    const detail = /^([\w-]{1,128})\/([\w-]{1,128})\/([\w-]{1,128})\/stu\/study\/resource-detail$/.exec(suffix);
+    if (!detail) return null;
+    const [, libraryFolderId, resourceId, classId] = detail;
+    return { ...page, role: 'study', libraryFolderId, resourceId, classId };
+  }
+
+  const pageRole = (href = getPage().href) => route(href)?.role || 'other';
+  const isTop = (page) => !page.window?.top || page.window.top === page.window;
+  const sameCourse = (item, page) => !!item && item.key === page?.key &&
+    (!item.classId || !page.classId || item.classId === page.classId) &&
+    (!item.libraryFolderId || !page.libraryFolderId || item.libraryFolderId === page.libraryFolderId);
+  const empty = () => ({ status: 'idle', items: [], activeKey: '', reason: '', ownerId: '', revision: '', expected: null, arrived: false, allowQueueAdvance: false });
+  const freshId = () => globalThis.crypto?.randomUUID?.() || `${now()}-${Math.random().toString(36).slice(2)}`;
+  let fallbackState = empty();
+  let runtime = {};
+  let ownerId = '';
+  let activeRead;
+  const snapshot = () => {
+    const saved = getValue(stateKey, fallbackState);
+    return object(saved) && Array.isArray(saved.items)
+      ? { ...empty(), ...saved, expected: saved.expected ? { ...saved.expected } : null, items: saved.items.filter(object).map((item) => ({ ...item })) }
+      : empty();
+  };
+  function publish(state) {
+    state.revision = freshId();
+    fallbackState = { ...state, expected: state.expected ? { ...state.expected } : null, items: state.items.map((item) => ({ ...item })) };
+    setValue(stateKey, fallbackState);
+    try { onChange(snapshot()); } catch {}
+  }
+  function resolveOwner() {
+    if (typeof options.getOwnerId === 'function') return Promise.resolve().then(options.getOwnerId);
+    const getTab = typeof GM_getTab === 'function' ? GM_getTab : null;
+    const saveTab = typeof GM_saveTab === 'function' ? GM_saveTab : null;
+    if (!getTab || !saveTab) {
+      try {
+        const storage = getPage().window?.sessionStorage;
+        const key = 'pp:zhs-queue:tab';
+        if (storage) {
+          const value = storage.getItem(key) || freshId();
+          storage.setItem(key, value);
+          return Promise.resolve(value);
+        }
+      } catch {}
+      return Promise.resolve(freshId());
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(freshId()), 1500);
+      try {
+        getTab((tab) => {
+          clearTimeout(timer);
+          try {
+            if (!object(tab)) return resolve(freshId());
+            if (!text(tab.ppZhsQueueOwner)) {
+              tab.ppZhsQueueOwner = freshId();
+              saveTab(tab);
+            }
+            resolve(tab.ppZhsQueueOwner);
+          } catch { resolve(freshId()); }
+        });
+      } catch {
+        clearTimeout(timer);
+        resolve(freshId());
+      }
+    });
+  }
+  const owner = resolveOwner().then((value) => (ownerId = text(value) || freshId()), () => (ownerId = freshId()));
+  const activeItem = (state) => state.items.find((item) => item.key === state.activeKey && item.status === 'active');
+  const nextItem = (state) => state.items.find((item) => item.status === 'queued' || item.status === 'active');
+  function owns(state) {
+    const page = getPage();
+    const current = route(page.href);
+    return !!ownerId && isTop(page) && current?.role === 'study' && state.status === 'running' && state.ownerId === ownerId &&
+      sameCourse(activeItem(state), current) && !canRun(state);
+  }
+  const ownsCurrentCourse = () => owns(snapshot());
+  const allowsChapterAdvance = () => {
+    const state = snapshot();
+    return state.allowQueueAdvance === true && owns(state);
+  };
+
+  function deadline(work, signal) {
+    if (signal?.aborted) return Promise.reject(moved);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => finish(reject, new Error('平台读取超时')), 12000);
+      const abort = () => finish(reject, moved);
+      const finish = (settle, value) => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+        settle(value);
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      Promise.resolve().then(work).then((value) => finish(resolve, value), (error) => finish(reject, error));
+    });
+  }
+  async function readCloud(page, endpoint, body, signal, query) {
+    const current = route(page.href);
+    const expected = endpoint === 'identity' || endpoint === 'courses' ? 'center' : 'hike';
+    const check = () => {
+      if (getPage().href !== page.href || !isTop(page) || signal?.aborted || current?.type !== expected) throw moved;
+    };
+    check();
+    const path = endpoints[endpoint] + (query ? `?${new URLSearchParams(query)}` : '');
+    if (request) {
+      const data = await deadline(() => request({ path, body, signal }), signal);
+      check();
+      return data;
+    }
+    const cookie = (page.document?.cookie || '').match(/(?:^|;\s*)ai-poly=([^;]+)/)?.[1];
+    if (!cookie) throw new Error('未读取到 AI智课登录状态，请刷新课程页面');
+    let token;
+    try { token = decodeURIComponent(cookie); } catch { throw new Error('AI智课登录状态无效，请重新登录'); }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const payload = await deadline(async () => {
+        const response = await fetchImpl(cloudOrigin + path, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: { Accept: 'application/json', Authorization: token, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+          body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal,
+          credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer'
+        });
+        if (!response.ok) throw new Error(`平台接口返回 HTTP ${response.status}`);
+        return response.json();
+      }, signal);
+      check();
+      if (Number(payload?.code) !== 200 && !(expected === 'center' && payload?.success === true)) throw new Error('平台学习接口返回异常，请检查登录状态');
+      return payload.data;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      controller.abort();
+    }
+  }
+  const callVm = (vm, method, params) => deadline(() => {
+    if (typeof vm?.$api?.[method] !== 'function') throw new Error('当前课程列表未提供此类型的读取接口');
+    return vm.$api[method](params);
+  });
+  const describe = (...parts) => parts.map(text).filter(Boolean).join(' · ');
+  function candidate(row, label, entry, detail, index) {
+    const fallback = id(row.courseId) || index + 1;
+    return {
+      key: entry?.key || `unsupported:${label}:${fallback}`, source: 'default',
+      title: text(row.courseName) || `课程 ${fallback}`,
+      description: describe(label, detail, entry ? '' : '当前入口暂不支持队列'), entryUrl: entry?.url.href || '',
+      classId: entry?.classId || (entry?.type === 'hike' ? id(row.classId) : ''), available: !!entry
+    };
+  }
+  async function pages(read, errors, label) {
+    const rows = [];
+    let scanned = 0;
+    for (let index = 1; index <= 10; index++) {
+      const { list, total } = await read(index);
+      if (!Array.isArray(list)) throw new Error('平台课程列表格式有误');
+      rows.push(...list.filter(object));
+      scanned += list.length;
+      const count = text(total) ? Number(total) : NaN;
+      if (!list.length || (Number.isFinite(count) ? scanned >= count : list.length < 50)) return rows;
+    }
+    errors.push(`${label}仅显示前 10 页`);
+    return rows;
+  }
+  async function discover() {
+    const page = getPage();
+    const current = route(page.href);
+    if (!isTop(page) || current?.role !== 'list') {
+      return { items: [], errors: ['请在智慧树在线学堂或 AI智慧课程中心读取进行中的课程'], errorUrl: onlineList };
+    }
+    const errors = [];
+    const items = new Map();
+    const add = (item) => { if (!items.has(item.key)) items.set(item.key, item); };
+    const check = () => { if (getPage().href !== page.href) throw moved; };
+    const handle = async (label, read) => {
+      try { await read(); } catch (error) {
+        if (error === moved) throw error;
+        errors.push(`${label}读取失败：${message(error)}`);
+      }
+    };
+    try {
+      if (current.type === 'online') {
+        const components = Array.from(page.document?.querySelectorAll?.('*') || [], (node) => node.__vue__).filter(Boolean);
+        const vm = components.find((component) => component.$options?.name === 'courseList' && component.$api);
+        if (!vm) return { items: [], errors: ['平台课程列表尚未加载，或页面结构已更新，请稍后重试'] };
+        await handle('共享课', async () => {
+          const rows = await pages(async (pageNo) => {
+            check();
+            const reply = await callVm(vm, 'queryShareCourseInfo', { status: 0, pageNo, pageSize: 50 });
+            if (Number(reply?.code) !== 200) throw new Error('平台共享课列表返回异常');
+            return { list: reply.result?.courseOpenDtos, total: reply.result?.totalCount };
+          }, errors, '共享课');
+          rows.forEach((row, index) => {
+            const token = secret(row.secret);
+            const fallback = new URL('/stuStudy', legacyOrigin);
+            if (token) fallback.searchParams.set('recruitAndCourseId', token);
+            const found = route(text(row.linkUrl) || (token ? fallback.href : ''), page.href);
+            const entry = found?.type === 'share' && (!token || found.key === `share:${token}`) ? found : null;
+            add(candidate(row, '共享课', entry, describe(row.schoolName, row.teacherName, row.progress), index));
+          });
+        });
+        await handle('AI智课', async () => {
+          const rows = await pages(async (pageNo) => {
+            check();
+            const reply = await callVm(vm, 'getAgentCourseListApi', { term: '', status: 2, keyword: '', crateCourseType: '', page: pageNo, size: 50, allCourse: false });
+            if (Number(reply?.code) !== 200) throw new Error('平台 AI智课列表返回异常');
+            return { list: reply.data?.list, total: reply.data?.total };
+          }, errors, 'AI智课');
+          const schoolId = id(vm.authMsg?.schoolId) ? vm.authMsg.schoolId : components.find((component) => id(component.authMsg?.schoolId))?.authMsg?.schoolId;
+          for (const [index, row] of rows.entries()) {
+            check();
+            const courseId = id(row.courseId);
+            let found = route(text(row.linkUrl), page.href);
+            if (!found && courseId && id(schoolId) && typeof vm.$api.querySchoolCustomizationConfig === 'function') {
+              try {
+                const result = await callVm(vm, 'querySchoolCustomizationConfig', {
+                  schoolId, courseId, courseType: text(row.courseType) || 'hikeAiCourse', clientType: 'STUDENT', configType: 'REDIRECT'
+                });
+                found = route(text(result?.data?.value?.url), page.href);
+              } catch {}
+            }
+            const entry = found?.type === 'hike' && found.courseId === courseId ? found : null;
+            add(candidate(row, 'AI智课', entry, text(row.termName), index));
+          }
+        });
+      } else {
+        await handle('AI智慧课程中心', async () => {
+          let schoolId = '';
+          try { schoolId = id((await readCloud(page, 'identity'))?.schoolNid); } catch (error) { if (error === moved) throw error; }
+          if (!schoolId) {
+            try { schoolId = id(JSON.parse(page.window?.localStorage?.getItem('themeVariables') || '{}')?.schoolNid); } catch {}
+          }
+          if (!schoolId) throw new Error('未读取到学校信息，请检查平台登录状态');
+          const rows = await pages(async (pageNo) => {
+            const data = await readCloud(page, 'courses', { keyword: '', term: '', schoolId, status: 2, page: pageNo, size: 50 });
+            return { list: data?.list, total: data?.total };
+          }, errors, 'AI智慧课程中心');
+          rows.forEach((row, index) => {
+            const origin = row.origenParam;
+            const found = route(text(row.linkUrl) || text(origin?.url), page.href);
+            const courseId = id(row.courseId);
+            const entry = found?.key && (found.type !== 'hike' || !courseId || courseId === found.courseId) ? found : null;
+            const label = entry?.type === 'hike' ? 'AI智课' : entry?.type === 'share' ? '共享课' : '暂不支持的课程类型';
+            add(candidate(row, label, entry, describe(origin?.schoolName, origin?.progress), index));
+          });
+        });
+      }
+      check();
+      if (!items.size && !errors.length) errors.push('未读取到进行中的共享课或 AI智课');
+      return { items: [...items.values()], errors };
+    } catch (error) {
+      return { items: [], errors: [error === moved ? '当前课程列表页面已切换，请重新读取' : message(error)] };
+    }
+  }
+
+  async function hikeProgress(page, current, item, signal) {
+    const read = (endpoint, body, query) => readCloud(page, endpoint, body, signal, query);
+    let context = runtime.context;
+    if (!context) {
+      const { courseId } = current;
+      const terms = await read('terms', { courseId });
+      if (!Array.isArray(terms)) throw new Error('平台课程学期数据有误');
+      const active = terms.find((term) => Number(term?.isCurrent) === 1) || terms[0];
+      const term = Number(active?.term);
+      if (!Number.isSafeInteger(term) || term <= 0) throw new Error('未读取到有效课程学期');
+      let { classId, libraryFolderId } = current;
+      if (!classId) {
+        const classes = await read('classes', { courseId, term });
+        if (!Array.isArray(classes)) throw new Error('平台课程班级数据有误');
+        const allowed = [...new Set(classes.map((entry) => id(entry?.classId)).filter(Boolean))];
+        classId = item.classId ? allowed.find((value) => value === item.classId) : allowed.length === 1 ? allowed[0] : '';
+        if (!classId) throw new Error('无法确认当前班级，请从平台进入选定班级的学习资源后继续');
+      }
+      if (!libraryFolderId) {
+        libraryFolderId = id(await read('library', undefined, { courseId, term: String(term) }));
+        if (!libraryFolderId) throw new Error('未读取到课程学习资源目录');
+      }
+      context = { courseId, classId, libraryFolderId, term };
+      runtime.context = context;
+    }
+    const tree = await read('tree', context);
+    if (!Array.isArray(tree)) throw new Error('平台学习资源目录数据有误');
+    const stack = tree.map((node) => ({ node, locked: false })).reverse();
+    const resources = new Map();
+    let visited = 0;
+    while (stack.length) {
+      const { node, locked } = stack.pop();
+      if (!object(node) || ++visited > 20000) throw new Error('平台学习资源目录结构有误');
+      const unavailable = locked || node.lock === true || Number(node.lock) === 1;
+      if (Number(node.type) === 2) {
+        const resourceId = id(node.nodeId);
+        if (!resourceId || resources.has(resourceId)) throw new Error('无法验证平台学习资源编号');
+        resources.set(resourceId, {
+          id: resourceId, locked: unavailable, required: node.isRequire === true || Number(node.isRequire) === 1,
+          finished: node.isFinished === true || node.isFinished === 1 || node.isFinished === '1'
+        });
+      }
+      if (Array.isArray(node.children)) {
+        for (let index = node.children.length - 1; index >= 0; index--) stack.push({ node: node.children[index], locked: unavailable });
+      }
+    }
+    if (!resources.size || current.resourceId && !resources.has(current.resourceId)) throw new Error('未能从平台验证当前课程学习资源');
+    const all = [...resources.values()];
+    const required = all.filter((resource) => resource.required);
+    const pending = (required.length ? required : all).filter((resource) => !resource.finished);
+    return { pending, next: pending.find((resource) => !resource.locked), context };
+  }
+
+  function sharedProgress(page, current) {
+    const legacy = current.url.origin === legacyOrigin;
+    const rows = Array.from(page.document?.querySelectorAll?.(legacy ? 'li.video, .clearfix.video' : '.child-main') || []);
+    const lessons = legacy ? rows : rows.filter((row) => row.parentElement?.querySelector?.('.child-time'));
+    const currentLesson = lessons.find((row) => row.classList?.contains(legacy ? 'current_play' : 'current') ||
+      (legacy && row.querySelector?.('.current_play')));
+    if (!currentLesson) return null;
+    const marker = legacy ? '.time_icofinish' : '.finish-icon';
+    const allDone = lessons.every((lesson) => Boolean((legacy ? lesson : lesson.parentElement)?.querySelector?.(marker)));
+    return { lessons, allDone };
+  }
+
+  function pause(reason = '课程队列已暂停') {
+    const state = snapshot();
+    if (state.status !== 'running') return state;
+    activeRead?.abort();
+    Object.assign(state, { status: 'paused', expected: null, reason: typeof reason === 'string' ? reason : '课程队列已暂停' });
+    publish(state);
+    return snapshot();
+  }
+  function clear() {
+    activeRead?.abort();
+    runtime = {};
+    publish(empty());
+    return snapshot();
+  }
+  function remove(key) {
+    const state = snapshot();
+    if (!state.items.some((item) => item.key === key) || state.status === 'running' && state.activeKey === key) return state;
+    state.items = state.items.filter((item) => item.key !== key);
+    if (state.activeKey === key) Object.assign(state, { activeKey: '', arrived: false, expected: null });
+    if (!state.items.length) return clear();
+    if (!nextItem(state) && state.status !== 'done') Object.assign(state, { status: 'idle', reason: '' });
+    publish(state);
+    return snapshot();
+  }
+  async function start(selection, { allowQueueAdvance = false } = {}) {
+    const page = getPage();
+    const before = snapshot();
+    if (!isTop(page) || !route(page.href) || ['running', 'paused'].includes(before.status)) return before;
+    const items = new Map();
+    for (const raw of Array.isArray(selection) ? selection : []) {
+      if (raw?.available === false || raw?.finished === true) continue;
+      const entry = route(raw?.entryUrl);
+      if (!entry?.key || raw.key !== entry.key || items.has(entry.key)) continue;
+      items.set(entry.key, {
+        key: entry.key, title: text(raw.title) || '智慧树课程', description: text(raw.description),
+        source: 'default', entryUrl: entry.url.href, classId: entry.classId || (entry.type === 'hike' ? id(raw.classId) : ''),
+        libraryFolderId: entry.libraryFolderId || '', status: 'queued', error: ''
+      });
+    }
+    if (!items.size) return before;
+    const tab = await owner;
+    if (snapshot().revision !== before.revision || getPage().href !== page.href) return snapshot();
+    runtime = {};
+    publish({ ...empty(), items: [...items.values()], ownerId: tab, allowQueueAdvance: allowQueueAdvance === true, status: 'running' });
+    return tick();
+  }
+  async function resume({ allowQueueAdvance } = {}) {
+    const page = getPage();
+    const state = snapshot();
+    if (!isTop(page) || !route(page.href) || !['paused', 'running'].includes(state.status)) return state;
+    const tab = await owner;
+    if (snapshot().revision !== state.revision || getPage().href !== page.href) return snapshot();
+    if (state.status === 'running' && state.ownerId === tab) return tick();
+    activeRead?.abort();
+    runtime = {};
+    Object.assign(state, { status: 'running', ownerId: tab, reason: '', expected: null, arrived: false });
+    if (typeof allowQueueAdvance === 'boolean') state.allowQueueAdvance = allowQueueAdvance;
+    publish(state);
+    return tick();
+  }
+  function guard(state, page) {
+    if (snapshot().revision !== state.revision || getPage().href !== page.href) throw moved;
+    const blocker = canRun(state);
+    if (blocker) {
+      pause(blocker);
+      throw moved;
+    }
+  }
+  function go(state, page, item, target) {
+    guard(state, page);
+    if (!sameCourse(item, target)) return pause('无法验证选中课程的学习入口');
+    state.expected = { from: page.href, href: target.url.href, time: now() };
+    publish(state);
+    guard(state, page);
+    try { navigate(target.url.href); } catch { pause('平台学习页面打开失败，请重试'); }
+  }
+  function activate(state, page, item) {
+    state.activeKey = item.key;
+    item.status = 'active';
+    if (sameCourse(item, route(page.href))) publish(state);
+    else go(state, page, item, route(item.entryUrl));
+  }
+  function finish(state, page, item) {
+    guard(state, page);
+    item.status = 'done';
+    Object.assign(state, { activeKey: '', expected: null, arrived: false });
+    const next = nextItem(state);
+    if (next) return activate(state, page, next);
+    Object.assign(state, { status: 'done', reason: '平台已确认队列中的目标学习资源完成' });
+    publish(state);
+  }
+  async function step(state, page, signal) {
+    if (!isTop(page)) return;
+    guard(state, page);
+    const current = route(page.href);
+    if (!current) return pause('已离开智慧树队列支持的课程页面，请返回课程列表后继续');
+    let item = activeItem(state);
+    if (!item) {
+      item = nextItem(state);
+      if (!item) return pause('队列没有待学习课程');
+      activate(state, page, item);
+      if (state.expected || !sameCourse(item, current)) return;
+    }
+    if (state.expected) {
+      const expected = state.expected;
+      if (page.href === expected.from) {
+        if (now() - expected.time >= 15000) pause('未进入预期的课程学习页面，请检查平台页面后继续');
+        return;
+      }
+      if (!sameCourse(item, current)) return pause('平台跳转到了未能验证的课程，请核对后继续');
+      if (current.type === 'hike' && route(expected.href)?.role === 'study' && current.role !== 'study') {
+        return pause('平台未进入 AI智课资源页，请检查学习权限后继续');
+      }
+      state.expected = null;
+      publish(state);
+    }
+    if (!sameCourse(item, current)) {
+      if (state.arrived) return pause('已离开当前队列课程，点击继续可返回');
+      return go(state, page, item, route(item.entryUrl));
+    }
+    if (!state.arrived) {
+      state.arrived = true;
+      publish(state);
+    }
+    if (runtime.href !== page.href || runtime.key !== item.key) runtime = { href: page.href, key: item.key, since: now(), problems: 0 };
+    if (current.type === 'share') {
+      const progress = sharedProgress(page, current);
+      if (!progress) {
+        runtime.confirm = null;
+        if (now() - runtime.since >= 45000) pause('无法验证共享课学习目录，请打开平台课程目录后继续');
+        return;
+      }
+      runtime.since = now();
+      if (!progress.allDone) {
+        runtime.confirm = null;
+        return;
+      }
+      const previous = runtime.confirm?.lessons;
+      const sameLessons = previous?.length === progress.lessons.length && previous.every((lesson, index) => lesson === progress.lessons[index]);
+      if (!sameLessons) runtime.confirm = { lessons: progress.lessons, at: now() };
+      else if (now() - runtime.confirm.at >= 2500) finish(state, page, item);
+      return;
+    }
+    if (runtime.lastRead !== undefined && now() - runtime.lastRead < 15000) return;
+    runtime.lastRead = now();
+    let progress;
+    try {
+      progress = await hikeProgress(page, current, item, signal);
+      guard(state, page);
+      runtime.problems = 0;
+    } catch (error) {
+      guard(state, page);
+      if (error === moved) throw error;
+      if (++runtime.problems >= 3) pause(`AI智课进度读取失败：${message(error)}`);
+      return;
+    }
+    if (!progress.pending.length) return finish(state, page, item);
+    if (!progress.next) return pause('AI智课仍有未解锁的目标学习资源，请在平台确认后继续');
+    if (current.role !== 'course') return;
+    const { libraryFolderId, classId } = progress.context;
+    item.classId = classId;
+    item.libraryFolderId = libraryFolderId;
+    const href = `${hikeOrigin}${current.prefix}/${libraryFolderId}/${progress.next.id}/${classId}/stu/study/resource-detail`;
+    go(state, page, item, route(href));
+  }
+  async function tick() {
+    if (activeRead || snapshot().status !== 'running') return snapshot();
+    const controller = new AbortController();
+    activeRead = controller;
+    try {
+      const tab = await owner;
+      const state = snapshot();
+      if (state.status === 'running' && state.ownerId === tab) await step(state, getPage(), controller.signal);
+    } catch (error) {
+      if (error !== moved) {
+        try { log(message(error)); } catch {}
+        pause('无法读取课程队列状态，请检查平台页面后继续');
+      }
+    } finally {
+      activeRead = null;
+    }
+    return snapshot();
+  }
+  return { snapshot, pageRole, discover, start, resume, tick, pause, clear, remove, ownsCurrentCourse, allowsChapterAdvance };
+}
+
+  let ppCxQueueInstance;
+  let ppZhsQueueInstance;
+  const ppZhsQueueAllowsAdvance = () => !!ppZhsQueueInstance?.allowsChapterAdvance();
+  const ppCxQueueState = vue.shallowRef(null);
+  const ppZhsQueueState = vue.shallowRef(null);
+  const ppQueueForPage = () => {
+    if (window.self !== window.top) return null;
+    const platform = ppPlatformOf(location.href);
+    if (platform !== "cx" && platform !== "zhs") return null;
+    if (platform === "cx" && ppCxQueueInstance) return ppCxQueueInstance;
+    if (platform === "zhs" && ppZhsQueueInstance) return ppZhsQueueInstance;
+    const logStore = useLogStore();
+    const stateRef = platform === "cx" ? ppCxQueueState : ppZhsQueueState;
+    const createQueue = platform === "cx" ? createPPChaoxingQueue : createPPZhsQueue;
+    const controller = createQueue({
+      getValue: _GM_getValue,
+      setValue: _GM_setValue,
+      canRun: (state) => {
+        const settings = ppQueuePrerequisites(useConfigStore(), platform);
+        if (settings.review) return "当前为复习模式，请切换学习模式后继续队列";
+        if (settings.answerOnly) return "智慧树当前为仅答题模式，请切换学习模式后继续队列";
+        if (settings.needsAdvance && !state.allowQueueAdvance) return "自动切换章节已关闭，请确认后继续队列";
+        return "";
+      },
+      onChange: (snapshot) => { stateRef.value = snapshot; },
+      log: (message, type) => logStore.addLog(message, type || "info")
+    });
+    stateRef.value = controller.snapshot();
+    if (platform === "cx") ppCxQueueInstance = controller;
+    else ppZhsQueueInstance = controller;
+    return controller;
+  };
+
+  const ppQueuePrerequisites = (store, platform) => {
+    const parts = store.platformParams?.[platform]?.parts || [];
+    const value = (part, key) => parts.find((item) => item.name === part)?.params?.find((item) => item.name === key)?.value;
+    return {
+      review: value(PP_KEY.MODE, PP_KEY.REVIEW) === true,
+      answerOnly: platform === "zhs" && value(PP_KEY.MODE, PP_KEY.ONLY_ANSWER) === true,
+      needsAdvance: value(platform === "zhs" ? PP_KEY.ZHS_CHAPTER : PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT) === false
+    };
+  };
+
+  const PP_CX_COURSES_URL = "https://mooc1.chaoxing.com/visit/courses";
+  const PP_ZHS_COURSES_URL = "https://onlineweb.zhihuishu.com/onlinestuh5";
+
+  const ppCxQueueStyles = `
+.pp-cx-queue{display:flex;flex-direction:column;height:100%;min-height:0;gap:9px;font-size:11px;line-height:1.5;color:var(--pp-text-2);}
+.pp-cx-queue h2,.pp-cx-queue p,.pp-cx-queue ul{margin:0;}
+.pp-cx-queue h2{display:flex;align-items:center;gap:5px;margin:0;font-size:13px;font-weight:700;line-height:1.3;color:var(--pp-text);letter-spacing:.01em;}
+.pp-cx-queue .queue-test-note{flex:none;display:flex;align-items:flex-start;gap:4px;padding:5px 8px;border:1px solid var(--pp-warning-line);border-radius:8px;background:var(--pp-warning-bg);color:#92400e;font-size:9.5px;line-height:1.4;}
+.pp-cx-queue .queue-test-note svg{flex:none;margin-top:1px;}
+.pp-cx-queue .queue-head{flex:none;display:flex;align-items:flex-start;gap:7px;min-width:0;}
+.pp-cx-queue .queue-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.pp-cx-queue .queue-sub{font-size:9.5px;color:var(--pp-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-cx-queue .queue-unsupported{font-size:10.5px;line-height:1.55;color:var(--pp-text-3);}
+.pp-cx-queue .queue-head .pp-chip{flex:none;margin-top:1px;}
+.pp-cx-queue .queue-ico-btn{flex:none;width:25px;height:25px;margin-top:-2px;border:1px solid var(--pp-line);border-radius:8px;background:#fff;color:#7c899d;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
+.pp-cx-queue .queue-ico-btn:hover:not(:disabled){background:var(--pp-surface-2);border-color:#cfd8e5;color:var(--pp-brand);}
+.pp-cx-queue .queue-ico-btn:disabled{opacity:.45;cursor:not-allowed;}
+.pp-cx-queue .queue-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.pp-cx-queue .queue-body.is-blank{justify-content:center;overflow:hidden;}
+.pp-cx-queue .queue-note{font-size:10px;color:var(--pp-text-3);}
+.pp-cx-queue .queue-tools{display:flex;align-items:center;gap:5px;min-width:0;}
+.pp-cx-queue .queue-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:26px;padding:0 10px;border:1px solid var(--pp-line);border-radius:8px;background:#fff;color:var(--pp-text-2);font:inherit;font-size:10.5px;font-weight:600;text-decoration:none;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s,opacity .15s;}
+.pp-cx-queue .queue-btn:hover:not(:disabled){background:var(--pp-surface-2);border-color:#cfd8e5;color:var(--pp-text);}
+.pp-cx-queue .queue-btn.is-primary{border-color:var(--pp-brand);background:var(--pp-brand);color:#fff;}
+.pp-cx-queue .queue-btn.is-primary:hover:not(:disabled){border-color:var(--pp-brand-hover);background:var(--pp-brand-hover);color:#fff;}
+.pp-cx-queue .queue-btn.is-primary:disabled{border-color:var(--pp-line);background:var(--pp-surface);color:var(--pp-text-4);}
+.pp-cx-queue .queue-btn:disabled{opacity:.55;cursor:not-allowed;}
+.pp-cx-queue .queue-text-btn{flex:none;height:20px;padding:0 5px;border:0;border-radius:6px;background:transparent;color:var(--pp-brand);font:inherit;font-size:10px;font-weight:600;cursor:pointer;}
+.pp-cx-queue .queue-text-btn:hover:not(:disabled){background:var(--pp-brand-weak);}
+.pp-cx-queue .queue-text-btn:disabled{color:var(--pp-text-4);cursor:not-allowed;}
+.pp-cx-queue .queue-card{display:flex;flex-direction:column;min-height:0;border:1px solid var(--pp-line);border-radius:12px;background:#fff;overflow:hidden;}
+.pp-cx-queue .queue-sec-head{width:100%;display:flex;align-items:center;gap:6px;padding:8px 10px;border:0;background:var(--pp-surface-2);color:var(--pp-text);font:inherit;text-align:left;cursor:pointer;transition:background .15s;}
+.pp-cx-queue .queue-sec-head:hover{background:#eef2f7;}
+.pp-cx-queue .queue-sec-title{flex:1;min-width:0;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;}
+.pp-cx-queue .queue-sec-title>svg{flex:none;color:#7c899d;}
+.pp-cx-queue .queue-sec-count{flex:none;padding:0 6px;border:1px solid var(--pp-line);border-radius:99px;background:#fff;color:var(--pp-text-3);font-size:9px;font-weight:600;line-height:16px;font-variant-numeric:tabular-nums;}
+.pp-cx-queue .queue-sec-chev{flex:none;display:flex;color:#a7b2c2;transition:transform .2s var(--ppfx-ease-soft,ease);}
+.pp-cx-queue .queue-sec-chev.is-open{transform:rotate(180deg);}
+.pp-cx-queue .queue-sec-body{display:flex;flex-direction:column;gap:8px;padding:9px 10px;border-top:1px solid var(--pp-line-soft);}
+.pp-cx-queue .queue-field{position:relative;display:flex;align-items:center;flex:1;min-width:0;}
+.pp-cx-queue .queue-field>svg{position:absolute;left:8px;color:#aab6c6;pointer-events:none;}
+.pp-cx-queue .queue-field input{width:100%;box-sizing:border-box;height:27px;padding:0 9px 0 26px;border:1px solid var(--pp-line);border-radius:8px;background:var(--pp-surface-2);color:var(--pp-text);font:inherit;font-size:10.5px;outline:none;transition:border-color .15s,background .15s;}
+.pp-cx-queue .queue-field input:focus{border-color:var(--pp-brand);background:#fff;}
+.pp-cx-queue .queue-seg{flex:none;display:flex;gap:2px;padding:2px;border:1px solid var(--pp-line);border-radius:8px;background:var(--pp-surface);}
+.pp-cx-queue .queue-seg-btn{height:21px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--pp-text-3);font:inherit;font-size:9.5px;font-weight:600;cursor:pointer;}
+.pp-cx-queue .queue-seg-btn.is-active{background:#fff;color:var(--pp-brand);box-shadow:0 1px 2px rgba(16,24,40,.08);}
+.pp-cx-queue .queue-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;max-height:250px;overflow-y:auto;}
+.pp-cx-queue .queue-list>li{border-top:1px solid var(--pp-line-soft);}
+.pp-cx-queue .queue-list>li:first-child{border-top:0;}
+.pp-cx-queue .queue-option{display:flex;align-items:flex-start;gap:7px;width:100%;box-sizing:border-box;padding:8px 6px;border-radius:8px;cursor:pointer;transition:background .15s;}
+.pp-cx-queue .queue-option:hover{background:var(--pp-surface-2);}
+.pp-cx-queue .queue-option input{flex:none;margin:2px 0 0;accent-color:var(--pp-brand);}
+.pp-cx-queue .queue-option.is-disabled{cursor:not-allowed;opacity:.55;}
+.pp-cx-queue .queue-course{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.pp-cx-queue .queue-course-title{font-size:11.5px;font-weight:600;line-height:1.4;color:var(--pp-text);overflow-wrap:anywhere;}
+.pp-cx-queue .queue-course-meta{font-size:9.5px;line-height:1.45;color:var(--pp-text-3);overflow-wrap:anywhere;}
+.pp-cx-queue .queue-pct{flex:none;margin-top:1px;padding:1px 6px;border-radius:6px;background:var(--pp-surface);color:var(--pp-text-3);font-size:9px;font-weight:600;line-height:15px;font-variant-numeric:tabular-nums;}
+.pp-cx-queue .queue-pct.is-done{background:var(--pp-success-bg);color:#0b7a46;}
+.pp-cx-queue .queue-plan-option{width:100%;display:flex;flex-direction:column;gap:1px;padding:7px 8px;border:1px solid var(--pp-line);border-radius:8px;background:#fff;font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background .15s;}
+.pp-cx-queue .queue-plan-option:hover:not(:disabled){border-color:var(--pp-brand);background:var(--pp-brand-weak);}
+.pp-cx-queue .queue-plan-option:disabled{opacity:.5;cursor:not-allowed;}
+.pp-cx-queue .queue-plan-option b{font-size:10.5px;font-weight:600;color:var(--pp-text);}
+.pp-cx-queue .queue-empty{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;font-size:10px;color:var(--pp-text-3);}
+.pp-cx-queue .queue-plan{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;}
+.pp-cx-queue .queue-plan>li{display:flex;align-items:flex-start;gap:7px;padding:8px 10px;border-top:1px solid var(--pp-line-soft);}
+.pp-cx-queue .queue-plan>li:first-child{border-top:0;}
+.pp-cx-queue .queue-plan-main{min-width:0;display:flex;flex-direction:column;gap:1px;}
+.pp-cx-queue .queue-plan-main b{font-size:11px;font-weight:600;color:var(--pp-text);overflow-wrap:anywhere;}
+.pp-cx-queue .queue-dot{flex:none;width:6px;height:6px;margin-top:5px;border-radius:50%;background:#c3ccd9;}
+.pp-cx-queue .queue-dot.ok{background:#0f9d58;}
+.pp-cx-queue .queue-dot.run{background:var(--pp-brand);}
+.pp-cx-queue .queue-dot.bad{background:#e5484d;}
+.pp-cx-queue .queue-dot.warn{background:#f59e0b;}
+.pp-cx-queue .queue-footer{flex:none;display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--pp-line-soft);}
+.pp-cx-queue .queue-sel{flex:1;min-width:0;font-size:10px;color:var(--pp-text-3);font-variant-numeric:tabular-nums;}
+.pp-cx-queue .queue-confirm{display:flex;flex-direction:column;gap:7px;padding:10px;border:1px solid var(--pp-line);border-radius:12px;background:var(--pp-surface-2);}
+.pp-cx-queue .queue-confirm strong{font-size:11px;color:var(--pp-text);}
+.pp-cx-queue .queue-confirm ul{font-size:10px;color:var(--pp-text-3);padding-left:15px;}
+.pp-cx-queue .queue-alert{display:flex;flex-direction:column;gap:3px;padding:0;list-style:none;font-size:10px;color:#b42318;}
+`;
+
+  const PpCxQueuePanel = vue.defineComponent({
+    name: "PpCxQueuePanel",
+    props: { controller: { type: Object, default: null }, platform: { type: String, default: "cx" } },
+    setup(props) {
+      const queueTitle = props.platform === "zhs" ? "智慧树课程队列" : "超星课程队列";
+      const platformName = props.platform === "zhs" ? "智慧树" : "超星";
+      const coursesPage = props.platform === "zhs" ? PP_ZHS_COURSES_URL : PP_CX_COURSES_URL;
+      const jumpButton = (label, primary) => vue.h("a", {
+        class: ["queue-btn", primary ? "is-primary" : ""],
+        href: coursesPage,
+        target: "_blank",
+        rel: "noopener noreferrer"
+      }, [ppIcon("external", 12), label]);
+      if (!props.controller) {
+        if (props.platform !== "cx" && props.platform !== "zhs") {
+          return () => vue.h("section", { class: "pp-cx-queue", "aria-label": "课程队列" }, [
+            vue.h("style", null, ppCxQueueStyles),
+            vue.h("div", { class: "queue-head" }, [
+              vue.h("div", { class: "queue-title" }, [
+                vue.h("h2", null, "课程队列"),
+                vue.h("p", { class: "queue-sub" }, "当前平台暂不支持")
+              ])
+            ]),
+            vue.h("div", { class: "queue-body is-blank" }, [
+              vue.h("div", { class: "pp-empty" }, [
+                vue.h("span", { class: "pp-empty-ico" }, ppIcon("queue", 18)),
+                vue.h("span", { class: "queue-unsupported" }, "队列暂不支持此平台")
+              ])
+            ])
+          ]);
+        }
+        return () => vue.h("section", { class: "pp-cx-queue", "aria-label": "课程队列" }, [
+          vue.h("style", null, ppCxQueueStyles),
+          vue.h("div", { class: "queue-head" }, [
+            vue.h("div", { class: "queue-title" }, [
+              vue.h("h2", null, "课程队列"),
+              vue.h("p", { class: "queue-sub" }, "在当前页面读取不到课程")
+            ])
+          ]),
+          vue.h("div", { class: "queue-body is-blank" }, [
+            vue.h("div", { class: "pp-empty" }, [
+              vue.h("span", { class: "pp-empty-ico" }, ppIcon("queue", 18)),
+              vue.h("b", null, "队列不在当前页面"),
+              vue.h("span", null, "队列需要读取课程列表或课程学习页。先打开下面的入口，再从左侧「队列」进入。"),
+              vue.h("div", { class: "queue-tools" }, [jumpButton(platformName + "课程列表", true)])
+            ])
+          ])
+        ]);
+      }
+      const store = useConfigStore();
+      const supportsTraining = typeof props.controller.discoverTrainingPlans === "function";
+      const source = vue.ref("courses");
+      const plan = vue.shallowRef(null);
+      const plans = vue.shallowRef([]);
+      const courses = vue.shallowRef([]);
+      const selected = vue.ref([]);
+      const keyword = vue.ref("");
+      const errors = vue.shallowRef([]);
+      const busy = vue.ref(false);
+      const loaded = vue.ref(false);
+      const confirm = vue.shallowRef(null);
+      const expanded = vue.ref(true);
+      let loadVersion = 0;
+      const queue = () => (props.platform === "zhs" ? ppZhsQueueState : ppCxQueueState).value || props.controller.snapshot();
+      const filtered = (items) => {
+        const text = keyword.value.trim().toLocaleLowerCase();
+        return text ? items.filter((item) => `${item.title || ""} ${item.description || ""}`.toLocaleLowerCase().includes(text)) : items;
+      };
+      const coursePct = (item) => {
+        const matched = /(\d{1,3}(?:\.\d+)?)\s*%/.exec(String(item.description || ""));
+        if (!matched) return null;
+        const value = Number(matched[1]);
+        return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : null;
+      };
+      const courseMeta = (item) => String(item.description || "")
+        .replace(/\s*[·,，|]?\s*\d{1,3}(?:\.\d+)?\s*%\s*$/, "")
+        .trim();
+      const subLine = vue.computed(() => {
+        if (!loaded.value) return busy.value ? `${platformName} · 正在读取课程…` : `${platformName} · 未读取课程列表`;
+        if (source.value === "training" && !plan.value) return `${platformName} · ${plans.value.length} 个研修计划`;
+        if (!courses.value.length) return `${platformName} · 未读取到课程`;
+        const done = courses.value.filter((item) => coursePct(item) >= 100).length;
+        return done ? `${platformName} · 共 ${courses.value.length} 门 · 已完成 ${done} 门` : `${platformName} · 共 ${courses.value.length} 门`;
+      });
+      const selectable = () => courses.value.filter((item) => item.available !== false);
+      const allSelected = vue.computed(() => {
+        const list = selectable();
+        return list.length > 0 && list.every((item) => selected.value.includes(item.key));
+      });
+      const toggleAll = () => {
+        selected.value = allSelected.value ? [] : selectable().map((item) => item.key);
+      };
+      const toggleOne = (key, checked) => {
+        selected.value = checked ? [...selected.value, key] : selected.value.filter((item) => item !== key);
+      };
+      const refresh = async () => {
+        const revision = ++loadVersion;
+        const training = source.value === "training";
+        const currentPlan = plan.value;
+        const loadingPlans = training && !currentPlan;
+        busy.value = true;
+        loaded.value = false;
+        errors.value = [];
+        if (loadingPlans) plans.value = [];
+        courses.value = [];
+        selected.value = [];
+        try {
+          const controller = props.controller;
+          const result = loadingPlans ? await controller.discoverTrainingPlans()
+            : currentPlan ? await controller.discoverTrainingCourses(currentPlan) : await controller.discover();
+          if (revision !== loadVersion) return;
+          errors.value = result.errors || [];
+          if (loadingPlans) plans.value = result.plans || [];
+          else {
+            courses.value = result.items || [];
+            if (currentPlan) selected.value = courses.value.filter((item) => item.available !== false && item.finished !== true).map((item) => item.key);
+          }
+        } catch (error) {
+          if (revision === loadVersion) errors.value = [error.message || String(error)];
+        } finally {
+          if (revision === loadVersion) {
+            busy.value = false;
+            loaded.value = true;
+          }
+        }
+      };
+      vue.onMounted(() => { void refresh(); });
+      const go = (nextSource, nextPlan = null) => {
+        source.value = nextSource;
+        plan.value = nextPlan;
+        keyword.value = "";
+        confirm.value = null;
+        void refresh();
+      };
+      const run = async (action) => {
+        busy.value = true;
+        errors.value = [];
+        try {
+          await action();
+        } catch (error) {
+          errors.value = [error.message || String(error)];
+        } finally {
+          busy.value = false;
+        }
+      };
+      const startOrContinue = (continuing) => {
+        const items = selected.value.map((key) => courses.value.find((item) => item.key === key)).filter(Boolean);
+        if (!continuing && !items.length) return;
+        const perform = (allowQueueAdvance) => run(() => {
+          const options = { allowQueueAdvance };
+          return continuing ? props.controller.resume(options) : props.controller.start(items, options);
+        });
+        const { review, answerOnly, needsAdvance } = ppQueuePrerequisites(store, props.platform || "cx");
+        if (review || answerOnly) {
+          errors.value = [`当前为${review ? "复习" : "仅答题"}模式，请切换学习模式后再使用队列`];
+          return;
+        }
+        if (!needsAdvance) return perform(false);
+        confirm.value = {
+          label: `本队列允许切换并${continuing ? "继续" : "启动"}`,
+          details: ["仅允许本次队列自动切换章节。原有章节设置继续用于手动打开的课程。"],
+          run: () => {
+            confirm.value = null;
+            return perform(true);
+          }
+        };
+      };
+      const button = (label, handler, options = {}) => {
+        const { class: extra, ...rest } = options;
+        return vue.h("button", { type: "button", ...rest, class: ["queue-btn", extra], onClick: handler }, label);
+      };
+      const statusLabels = {
+        idle: "待启动", running: "运行中", paused: "已暂停", queued: "待学习",
+        resolving: "正在获取地址", active: "学习中", done: "已完成", failed: "失败"
+      };
+      const dotTone = (status) => status === "failed" ? "bad"
+        : status === "done" ? "ok"
+          : status === "paused" ? "warn"
+            : (status === "running" || status === "active" || status === "resolving" || status === "queued") ? "run" : "";
+      const statusLabel = (state) => {
+        if (state.status === "done" && state.items?.some((item) => item.status === "failed")) return "队列已结束，有课程失败";
+        return statusLabels[state.status] || state.status || "待启动";
+      };
+      const renderHead = (state) => vue.h("div", { class: "queue-head" }, [
+        vue.h("div", { class: "queue-title" }, [
+          vue.h("h2", null, "课程队列"),
+          vue.h("p", { class: "queue-sub", title: subLine.value }, subLine.value)
+        ]),
+        vue.h("span", { class: ["pp-chip", state.status === "running" ? "ok" : state.status === "paused" ? "warn" : ""] }, statusLabel(state)),
+        vue.h("button", {
+          type: "button",
+          class: "queue-ico-btn",
+          title: "刷新课程列表",
+          "aria-label": "刷新课程列表",
+          disabled: busy.value || state.status === "running",
+          onClick: refresh
+        }, ppIcon("refresh", 13))
+      ]);
+      const renderControls = (state) => {
+        const buttons = [];
+        if (state.status === "running") buttons.push(button("暂停", () => props.controller.pause()));
+        if (state.status === "paused") buttons.push(button("继续学习", () => startOrContinue(true), { class: "is-primary" }));
+        if (state.status !== "running" && state.items?.length) {
+          buttons.push(button("清空队列", () => { props.controller.clear(); confirm.value = null; }));
+        }
+        if (state.syncPending && props.controller.trainingContext?.()) {
+          buttons.push(button("补同步进度", () => run(async () => {
+            const result = await props.controller.retrySync();
+            errors.value = result.errors || [];
+          })));
+        }
+        return buttons.length ? vue.h("div", { class: "queue-tools" }, buttons) : null;
+      };
+      const renderPlan = (state) => {
+        const items = state.items || [];
+        if (!items.length) return null;
+        const done = items.filter((item) => item.status === "done").length;
+        return vue.h("div", { class: "queue-card" }, [
+          vue.h("div", { class: "queue-sec-head", style: { cursor: "default" } }, [
+            vue.h("span", { class: "queue-sec-title" }, [ppIcon("list", 13), "队列进度"]),
+            vue.h("span", { class: "queue-sec-count" }, `${done} / ${items.length}`)
+          ]),
+          vue.h("ol", { class: "queue-plan", "aria-label": "已加入队列的课程" }, items.map((item) => vue.h("li", { key: item.key }, [
+            vue.h("span", { class: ["queue-dot", dotTone(item.status)] }),
+            vue.h("div", { class: "queue-plan-main" }, [
+              vue.h("b", null, item.title),
+              vue.h("span", { class: "queue-note" }, [statusLabels[item.status] || item.status, item.syncPending ? " · 待同步" : "", item.error ? ` · ${item.error}` : ""].join(""))
+            ])
+          ])))
+        ]);
+      };
+      const renderSeg = () => {
+        if (!supportsTraining) return null;
+        const seg = (label, value) => vue.h("button", {
+          type: "button",
+          class: ["queue-seg-btn", source.value === value ? "is-active" : ""],
+          "aria-pressed": source.value === value,
+          disabled: busy.value,
+          onClick: () => go(value)
+        }, label);
+        return vue.h("div", { class: "queue-seg", role: "group", "aria-label": "课程来源" }, [
+          seg("我的课程", "courses"),
+          seg("研修任务", "training")
+        ]);
+      };
+      const renderPicker = () => {
+        const viewingPlans = source.value === "training" && !plan.value;
+        const items = viewingPlans ? filtered(plans.value) : filtered(courses.value);
+        const total = viewingPlans ? plans.value.length : courses.value.length;
+        const count = !loaded.value ? "未读取" : `${total} 门`;
+        const head = vue.h("button", {
+          type: "button",
+          class: "queue-sec-head",
+          "aria-expanded": expanded.value,
+          "aria-controls": "pp-queue-picker",
+          onClick: () => { expanded.value = !expanded.value; }
+        }, [
+          vue.h("span", { class: "queue-sec-title" }, [ppIcon("queue", 13), "课程列表"]),
+          vue.h("span", { class: "queue-sec-count" }, count),
+          vue.h("span", { class: ["queue-sec-chev", expanded.value ? "is-open" : ""] }, ppIcon("chevronDown", 14))
+        ]);
+        if (!expanded.value) return vue.h("div", { class: "queue-card" }, [head]);
+        const body = [];
+        if (!loaded.value && !busy.value) {
+          body.push(vue.h("p", { class: "queue-note", role: "status" }, "正在读取课程列表…"));
+        }
+        if (busy.value) body.push(vue.h("p", { class: "queue-note", role: "status" }, "正在读取课程列表…"));
+        if (loaded.value) {
+          const tools = [];
+          if (!viewingPlans) {
+            tools.push(vue.h("div", { class: "queue-field" }, [
+              ppIcon("search", 12),
+              vue.h("input", {
+                type: "search",
+                value: keyword.value,
+                placeholder: "搜索课程",
+                "aria-label": "搜索课程",
+                onInput: (event) => { keyword.value = event.target.value; }
+              })
+            ]));
+            if (total) {
+              tools.push(vue.h("button", {
+                type: "button",
+                class: "queue-text-btn",
+                disabled: busy.value,
+                onClick: toggleAll
+              }, allSelected.value ? "取消全选" : "全选"));
+            }
+          }
+          tools.push(renderSeg());
+          if (plan.value) tools.push(button("返回计划", () => go("training")));
+          if (tools.length) body.push(vue.h("div", { class: "queue-tools" }, tools));
+          if (plan.value) body.push(vue.h("p", { class: "queue-note" }, plan.value.title));
+          if (items.length && viewingPlans) {
+            body.push(vue.h("ul", { class: "queue-list" }, items.map((item) => vue.h("li", { key: `${item.origin}:${item.id}` }, [
+              vue.h("button", {
+                type: "button",
+                class: "queue-plan-option",
+                disabled: busy.value || item.available === false,
+                onClick: () => go("training", item)
+              }, [
+                vue.h("b", null, item.title),
+                item.description ? vue.h("span", { class: "queue-note" }, item.description) : null
+              ])
+            ]))));
+          }
+          if (items.length && !viewingPlans) {
+            body.push(vue.h("ul", { class: "queue-list" }, items.map((item) => {
+              const pct = coursePct(item);
+              const meta = courseMeta(item);
+              return vue.h("li", { key: item.key }, [
+                vue.h("label", { class: ["queue-option", item.available === false ? "is-disabled" : ""] }, [
+                  vue.h("input", {
+                    type: "checkbox",
+                    disabled: item.available === false || busy.value,
+                    checked: selected.value.includes(item.key),
+                    onChange: (event) => toggleOne(item.key, event.target.checked)
+                  }),
+                  vue.h("span", { class: "queue-course" }, [
+                    vue.h("b", { class: "queue-course-title", title: item.title }, item.title),
+                    meta ? vue.h("span", { class: "queue-course-meta", title: item.description }, meta) : null
+                  ]),
+                  pct == null ? null : vue.h("span", { class: ["queue-pct", pct >= 100 ? "is-done" : ""] }, `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`)
+                ])
+              ]);
+            })));
+          }
+          if (!items.length) {
+            body.push(vue.h("div", { class: "queue-empty" }, [
+              vue.h("span", null, viewingPlans ? "没有读取到研修计划" : "没有读取到课程，可点右上角刷新重试")
+            ]));
+          }
+        }
+        return vue.h("div", { class: "queue-card" }, [head, vue.h("div", { id: "pp-queue-picker", class: "queue-sec-body" }, body)]);
+      };
+      const renderFooter = () => {
+        if (!loaded.value) return null;
+        if (source.value === "training" && !plan.value) return null;
+        if (!courses.value.length) return null;
+        return vue.h("div", { class: "queue-footer" }, [
+          vue.h("span", { class: "queue-sel" }, `已选 ${selected.value.length} / ${courses.value.length} 门`),
+          button("启动队列", () => startOrContinue(false), {
+            class: "is-primary",
+            disabled: busy.value || !selected.value.length
+          })
+        ]);
+      };
+      return () => {
+        const state = queue();
+        const showCandidates = state.status !== "running" && state.status !== "paused";
+        return vue.h("section", { class: "pp-cx-queue", "aria-label": queueTitle }, [
+          vue.h("style", null, ppCxQueueStyles),
+          renderHead(state),
+          vue.h("p", { class: "queue-test-note" }, [ppIcon("info", 11), vue.h("span", null, "队列为测试功能，可能存在较多问题，请留意学习进度。")]),
+          vue.h("div", { class: "queue-body" }, [
+            renderControls(state),
+            renderPlan(state),
+            showCandidates ? renderPicker() : null,
+            state.syncPending ? vue.h("p", { class: "queue-note" }, `待同步研修任务 ${state.syncPending} 项`) : null,
+            errors.value.length ? vue.h("ul", { class: "queue-alert", role: "alert" }, errors.value.map((error) => vue.h("li", null, error))) : null,
+            confirm.value ? vue.h("section", { class: "queue-confirm", role: "dialog", "aria-label": "确认队列设置" }, [
+              vue.h("strong", null, "队列需要调整设置"),
+              vue.h("ul", null, confirm.value.details.map((detail) => vue.h("li", null, detail))),
+              vue.h("div", { class: "queue-tools" }, [
+                button(confirm.value.label, confirm.value.run, { class: "is-primary" }),
+                button("取消", () => { confirm.value = null; })
+              ])
+            ]) : null
+          ]),
+          renderFooter()
+        ]);
+      };
+    }
+  });
 
   const cxAnswerPageLogic = {
     work: useCxWorkLogic,
@@ -16581,6 +18921,7 @@ const AuthorWords = _sfc_main$4;
     { keyword: "hike.zhihuishu.com", logic: useZhClassroomStudy },
     { keyword: "wenda.zhihuishu.com", logic: useZhClassroomStudy },
     { keyword: "polymas.com", logic: useZhClassroomStudy },
+    { keyword: "hike-teaching-center.polymas.com", match: ppHikeStudyPage, logic: usePpHikeStudy },
     { keyword: "hike-teaching-center.polymas.com/stu/answer-homework", logic: useHikePaperAnswer },
     { keyword: "hike-teaching-center.polymas.com/stu/answer-training", logic: useHikePaperAnswer },
     { keyword: "hike-teaching-center.polymas.com/stu-exam/answer-exam", logic: useHikePaperAnswer },
@@ -16592,10 +18933,8 @@ const AuthorWords = _sfc_main$4;
     { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
     { keyword: "studywisdomh5.zhihuishu.com/study/mastery", logic: useZhsMasteryTipLogic },
     { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
-    { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhsPaperAnswerLogic },
-    { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsPaperAnswerLogic },
-    { keyword: "stuExamWeb.html#/webExamList?", logic: useZhsExamListTipLogic },
-    { keyword: "/stuExamWeb.html", logic: useZhsAnswerLogic }
+    { keyword: "zhihuishu.com/atHomeworkExam/stu/homeworkQ/exerciseList", logic: useZhsPaperAnswerLogic },
+    { keyword: "zhihuishu.com/atHomeworkExam/stu/examQ/examexercise", logic: useZhsPaperAnswerLogic }
   ];
 
   const yktLogicRules = [
@@ -16663,6 +19002,11 @@ const AuthorWords = _sfc_main$4;
       };
 
       const executeLogicByUrl = (url22) => {
+        if (ppZhsSharedExamPageKind(url22)) {
+          isShow.value = true;
+          useZhsSharedExamRouter();
+          return;
+        }
         if (ppIsZhsMasteryReadOnlyPage(url22)) {
           isShow.value = true;
           logStore.addLog("掌握度历史或结果页，已跳过自动答题", "info");
@@ -16693,7 +19037,7 @@ const AuthorWords = _sfc_main$4;
         const routePool = urlLogicGroups[platformKey] || urlLogicPairs;
         let matchedRule = null;
         for (const rule of routePool) {
-          if (!matchTarget.includes(rule.keyword)) continue;
+          if (!matchTarget.includes(rule.keyword) || (rule.match && !rule.match(url22))) continue;
           if (matchedRule === null || rule.keyword.length > matchedRule.keyword.length) matchedRule = rule;
         }
         const logic = cxAnswerLogic || matchedRule?.logic;
@@ -16725,6 +19069,32 @@ const AuthorWords = _sfc_main$4;
         isShow.value = false;
       };
       executeLogicByUrl(url2);
+      const queueController = ppQueueForPage();
+      const queuePlatform = ppPlatformOf(location.href);
+      const showQueue = !!queueController && queueController.pageRole() !== "other";
+      if (showQueue) {
+        isShow.value = true;
+        let queueTimer;
+        let runningTick = false;
+        const tickQueue = async () => {
+          if (runningTick) return;
+          runningTick = true;
+          try {
+            const stateRef = queuePlatform === "zhs" ? ppZhsQueueState : ppCxQueueState;
+            stateRef.value = await queueController.tick();
+          } catch (error) {
+            logStore.addLog(`课程队列暂停：${error.message || String(error)}`, "warning");
+            queueController.pause();
+          } finally {
+            runningTick = false;
+          }
+        };
+        vue.onMounted(() => {
+          void tickQueue();
+          queueTimer = setInterval(tickQueue, 3500);
+        });
+        vue.onUnmounted(() => clearInterval(queueTimer));
+      }
       const emit = __emit;
       emit("customEvent", isShow.value);
       const tabs = [
@@ -16735,6 +19105,14 @@ const AuthorWords = _sfc_main$4;
           icon: "home",
           component: ScriptHome,
           props: { "log-list": logStore.logList, "server-config": CURRENT_SERVER_CONFIG }
+        },
+        {
+          label: "队列",
+          full: "课程队列",
+          id: "cx-queue",
+          icon: "queue",
+          component: PpCxQueuePanel,
+          props: { controller: showQueue ? queueController : null, platform: queuePlatform }
         },
         {
           label: "记录",
@@ -16773,14 +19151,6 @@ const AuthorWords = _sfc_main$4;
           props: {}
         },
         {
-          label: "作者",
-          full: "作者的话",
-          id: "author-words",
-          icon: "heart",
-          component: AuthorWords,
-          props: {}
-        },
-        {
           label: "查询",
           full: "使用查询",
           id: "token-usage",
@@ -16797,17 +19167,38 @@ const AuthorWords = _sfc_main$4;
           props: {}
         }
       ];
+      const extraTabs = new Set(["script-description", "token-usage", "feedback-panel"]);
+      const moreExpanded = vue.ref(false);
       const activeTab = vue.ref("main-log");
       const ppfxPaneShift = vue.ref("6px");
       const ppfxRailRef = vue.ref(null);
       let ppfxInkRO = null;
+      let ppfxMoreScrollTimer = null;
+      const ppfxRevealMore = (open) => {
+        if (ppfxMoreScrollTimer) clearTimeout(ppfxMoreScrollTimer);
+        ppfxMoreScrollTimer = setTimeout(() => {
+          ppfxMoreScrollTimer = null;
+          const rail = ppfxRailRef.value;
+          if (rail) rail.scrollTop = open ? rail.scrollHeight : 0;
+        }, 320);
+      };
       const switchTab = (tabId) => {
         const ppfxFrom = tabs.findIndex((tab) => tab.id === activeTab.value);
         const ppfxTo = tabs.findIndex((tab) => tab.id === tabId);
         if (ppfxFrom >= 0 && ppfxTo >= 0 && ppfxFrom !== ppfxTo) {
           ppfxPaneShift.value = ppfxTo > ppfxFrom ? "7px" : "-7px";
         }
+        if (extraTabs.has(tabId)) {
+          moreExpanded.value = true;
+          ppfxRevealMore(true);
+        }
         activeTab.value = tabId;
+      };
+      const toggleMore = () => {
+        const closing = moreExpanded.value;
+        if (closing && extraTabs.has(activeTab.value)) switchTab("main-log");
+        moreExpanded.value = !closing;
+        ppfxRevealMore(!closing);
       };
       const ppfxSyncInk = () => {
         const rail = ppfxRailRef.value;
@@ -16828,7 +19219,7 @@ const AuthorWords = _sfc_main$4;
           ink.classList.add("ppfx-slide");
         }
       };
-      vue.watch(activeTab, ppfxSyncInk, { flush: "post" });
+      vue.watch([activeTab, moreExpanded], ppfxSyncInk, { flush: "post" });
       vue.onMounted(() => {
         vue.nextTick(ppfxSyncInk);
         window.addEventListener("resize", ppfxSyncInk);
@@ -16844,22 +19235,38 @@ const AuthorWords = _sfc_main$4;
           ppfxInkRO = null;
         }
       });
+      const renderRailTab = (tab) => {
+        const active = activeTab.value === tab.id;
+        const warn = tab.id === "config-panel" && !configStore.tokenVerified;
+        return vue.h("button", {
+          type: "button",
+          key: tab.id,
+          class: ["pp-rail-item", active ? "active" : "", warn ? "pp-warn" : ""],
+          title: tab.full,
+          "aria-current": active ? "page" : undefined,
+          onClick: () => switchTab(tab.id)
+        }, [
+          typeof tab.iconNode === "function" ? tab.iconNode() : ppIcon(tab.icon, 17),
+          vue.h("span", null, tab.label)
+        ]);
+      };
       return () => vue.h("div", { class: "pp-shell" }, [
-        vue.h("nav", { class: "pp-rail", ref: ppfxRailRef }, [
+        vue.h("nav", { class: "pp-rail", ref: ppfxRailRef, "aria-label": "脚本导航" }, [
           vue.h("div", { class: "pp-rail-ink", "aria-hidden": "true" }),
-          ...tabs.map((tab) => {
-            const warn = tab.id === "config-panel" && !configStore.tokenVerified;
-            return vue.h("button", {
-              type: "button",
-              key: tab.id,
-              class: ["pp-rail-item", activeTab.value === tab.id ? "active" : "", warn ? "pp-warn" : ""],
-              title: tab.full,
-              onClick: () => switchTab(tab.id)
-            }, [
-              typeof tab.iconNode === "function" ? tab.iconNode() : ppIcon(tab.icon, 17),
-              vue.h("span", null, tab.label)
-            ]);
-          }),
+          ...tabs.filter((tab) => !extraTabs.has(tab.id)).map(renderRailTab),
+          vue.h("div", {
+            id: "pp-rail-more-items",
+            class: ["pp-rail-more-items", moreExpanded.value ? "is-open" : ""],
+            "aria-hidden": !moreExpanded.value
+          }, tabs.filter((tab) => extraTabs.has(tab.id)).map(renderRailTab)),
+          vue.h("button", {
+            type: "button",
+            class: "pp-rail-item pp-rail-more",
+            "aria-label": moreExpanded.value ? "收起更多" : "展开更多",
+            "aria-controls": "pp-rail-more-items",
+            "aria-expanded": moreExpanded.value,
+            onClick: toggleMore
+          }, [vue.h("span", { class: "pp-rail-more-arrow" }, ppIcon("chevronDown", 17))]),
           vue.h("div", { class: "pp-rail-spacer" })
         ]),
         vue.h("div", { class: "pp-main", style: { "--ppfx-pane-shift": ppfxPaneShift.value } }, tabs.map((tab) => vue.withDirectives(
@@ -17696,6 +20103,58 @@ const AuthorWords = _sfc_main$4;
         }
       } catch (e) {}
     }, 400);
+
+    var apiStems = null;
+    var pickApiStems = function (payload) {
+      try {
+        var rt = payload && (payload.rt || (payload.data && payload.data.rt));
+        var base = rt && rt.examBase;
+        var parts = base && base.workExamParts;
+        if (!parts || !parts.length) return null;
+        var out = [];
+        for (var pi = 0; pi < parts.length; pi++) {
+          var dtos = parts[pi] && parts[pi].questionDtos;
+          if (!dtos || !dtos.length) continue;
+          for (var di = 0; di < dtos.length; di++) {
+            var dto = dtos[di] || {};
+            var name = dto.name || dto.questionName || dto.question || "";
+            out.push(String(name).trim());
+          }
+        }
+        for (var k = 0; k < out.length; k++) { if (out[k]) return out; }
+        return null;
+      } catch (e) { return null; }
+    };
+    var onStemApiLoad = function (xhr) {
+      try {
+        if (xhr.status !== 200) return;
+        var url = String(xhr.responseURL || "");
+        if (url.indexOf("doHomework") < 0 && url.indexOf("doExam") < 0) return;
+        var text = typeof xhr.response === "string" ? xhr.response : xhr.responseText;
+        if (!text) return;
+        var stems = pickApiStems(JSON.parse(text));
+        if (stems) apiStems = stems;
+      } catch (e) {}
+    };
+    try {
+      var origXhrSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function () {
+        try { this.addEventListener("load", function () { onStemApiLoad(this); }); } catch (e) {}
+        return origXhrSend.apply(this, arguments);
+      };
+    } catch (e) {}
+    setInterval(function () {
+      try {
+        if (!apiStems) return;
+        var qs = document.querySelectorAll(".examPaper_subject");
+        if (!qs.length || qs.length !== apiStems.length) return;
+        for (var i = 0; i < qs.length; i++) {
+          if (qs[i].getAttribute("data-pp-stem")) continue;
+          if (!apiStems[i]) continue;
+          qs[i].setAttribute("data-pp-stem", apiStems[i]);
+        }
+      } catch (e) {}
+    }, 600);
   })();`;
   const installZhsPageBridge = () => {
     try {
