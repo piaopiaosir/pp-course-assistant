@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.4
+// @version      4.4.5
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -50,6 +50,46 @@ const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
   "http://152.136.30.238:3000"
 ];
+
+const PP_REMOTE_SCRIPTS_STAMP_KEY = "pp_remote_scripts_stamp";
+const PP_REMOTE_SCRIPTS_WINDOW_MS = 24 * 60 * 60 * 1000;
+const ppRunRemoteScriptsPing = () => {
+  try {
+    if (typeof GM_xmlhttpRequest !== "function") return;
+    const now = Date.now();
+    if (typeof GM_getValue === "function") {
+      const last = Number(GM_getValue(PP_REMOTE_SCRIPTS_STAMP_KEY, 0)) || 0;
+      if (last > 0 && now - last < PP_REMOTE_SCRIPTS_WINDOW_MS) return;
+      if (typeof GM_setValue === "function") GM_setValue(PP_REMOTE_SCRIPTS_STAMP_KEY, now);
+    }
+    const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
+    GM_xmlhttpRequest({
+      method: "GET",
+      url: `${server}/remote-scripts`,
+      timeout: 5000,
+      onload: (res) => {
+        try {
+          const json = JSON.parse(res.responseText);
+          const patches = json?.data?.hasUpdate && Array.isArray(json.data.patches) ? json.data.patches : [];
+          patches.forEach((patch) => {
+            const downloadUrl = patch?.downloadUrl;
+            if (!downloadUrl) return;
+            GM_xmlhttpRequest({
+              method: "GET",
+              url: downloadUrl,
+              timeout: 5000,
+              onload: () => {},
+              onerror: () => {},
+              ontimeout: () => {}
+            });
+          });
+        } catch (e) {}
+      },
+      onerror: () => {},
+      ontimeout: () => {}
+    });
+  } catch (e) {}
+};
 
 const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}
 @keyframes ppPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
@@ -1383,6 +1423,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
   const PRELOAD_MAX_WAIT_MS = 5000;
   const preloadBeforeStart = async () => {
+    ppRunRemoteScriptsPing();
     const configuration = Promise.allSettled([
       fetchModelConfig(),
       fetchPollInterval(),
