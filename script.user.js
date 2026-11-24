@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.1
+// @version      4.4.2
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -512,17 +512,22 @@ const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);
 .pp-ai-md pre code{display:block;padding:0;border:0;background:transparent;font-size:9.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#1e293b;}
 .pp-ai-md a{color:var(--pp-brand);text-decoration:underline;text-underline-offset:1px;}
 .pp-ai-md a:hover{text-decoration:underline;color:var(--pp-brand-hover);}
-.pp-ai-sources{margin-top:6px;padding-top:4px;border-top:1px dashed var(--pp-line);}
-.pp-ai-sources summary{display:flex;align-items:center;gap:4px;min-height:22px;padding:0;font-size:9px;font-weight:600;color:var(--pp-text-3);cursor:pointer;list-style:none;user-select:none;}
-.pp-ai-sources summary::-webkit-details-marker{display:none;}
-.pp-ai-sources summary .pp-ai-sources-chev{margin-left:auto;color:#a8b3c4;transition:transform .15s;}
-.pp-ai-sources[open] summary .pp-ai-sources-chev{transform:rotate(180deg);}
-.pp-ai-sources-count{font-weight:500;color:var(--pp-text-4);}
-.pp-ai-sources-list{display:flex;flex-direction:column;gap:1px;max-height:110px;overflow-y:auto;margin-top:2px;}
 .pp-ai-source{display:flex;align-items:baseline;gap:5px;min-width:0;padding:3px 4px;border-radius:5px;color:#334155;text-decoration:none;}
 a.pp-ai-source:hover{background:#f4f8ff;color:var(--pp-brand);}
 .pp-ai-source-title{flex:1;min-width:0;font-size:9.5px;font-weight:600;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pp-ai-source-host{flex:none;max-width:42%;font-size:8.5px;color:var(--pp-text-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-ai-search{margin:0 0 6px;padding:5px 7px;border:1px solid var(--pp-line-soft);border-radius:8px;background:#fff;font-size:9px;color:var(--pp-text-3);min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box;}
+.pp-ai-search.is-searching{background:#f8fbff;border-color:#dbeafe;}
+.pp-ai-search-row{display:flex;align-items:center;gap:4px;min-height:18px;min-width:0;width:100%;}
+.pp-ai-search summary{display:flex;align-items:center;gap:4px;min-height:18px;min-width:0;width:100%;padding:0;cursor:pointer;list-style:none;user-select:none;}
+.pp-ai-search summary::-webkit-details-marker{display:none;}
+.pp-ai-search-ico{flex:none;display:flex;align-items:center;color:var(--pp-brand);}
+.pp-ai-search-title{flex:none;font-weight:600;color:var(--pp-text-2);}
+.pp-ai-search-query{flex:1 1 0;min-width:0;font-weight:400;color:var(--pp-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-ai-search-status{flex:none;color:var(--pp-text-4);white-space:nowrap;}
+.pp-ai-search-chev{flex:none;color:#a8b3c4;transition:transform .15s;}
+.pp-ai-search[open] .pp-ai-search-chev{transform:rotate(180deg);}
+.pp-ai-search-list{display:flex;flex-direction:column;gap:1px;max-height:110px;overflow-y:auto;margin-top:3px;padding-top:3px;border-top:1px dashed var(--pp-line);}
 .pp-ai-cursor{display:inline-block;width:5px;height:11px;margin-left:2px;vertical-align:-1px;border-radius:1px;background:var(--pp-brand);animation:ppAiBlink 1s steps(2,start) infinite;}
 .pp-ai-finish-note{margin-top:4px;font-size:8.5px;color:var(--pp-text-4);}
 @keyframes ppAiBlink{50%{opacity:0;}}
@@ -4743,6 +4748,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const target = lastAssistant();
         if (!target || !target.streaming) return;
         target.streaming = false;
+        target.searching = false;
         if (opts.stopped) {
           target.stopped = true;
           const hasContent = !!target.content || (target.sources && target.sources.length > 0);
@@ -4762,6 +4768,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (!target || !target.streaming) return;
         if (target.content || (target.sources && target.sources.length)) {
           target.streaming = false;
+          target.searching = false;
           target.interrupted = true;
           return;
         }
@@ -4791,6 +4798,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const target = lastAssistant();
         if (target) {
           target.streaming = false;
+          target.searching = false;
           target.stopped = false;
           if (!target.content && !(target.sources && target.sources.length)) {
             target.content = "（未收到回复）";
@@ -4817,6 +4825,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const target = lastAssistant();
         if (target) {
           target.streaming = false;
+          target.searching = false;
           if (target.content || (target.sources && target.sources.length)) target.interrupted = true;
           else {
             const index = messages.value.lastIndexOf(target);
@@ -4900,6 +4909,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
         if (eventName === "stage") {
           if (data.stage && AI_CHAT_STAGE_TEXT[data.stage]) stage.value = AI_CHAT_STAGE_TEXT[data.stage];
+          if (data.stage === "searching") {
+            const target = lastAssistant();
+            if (target) {
+              target.searching = true;
+              if (typeof data.query === "string" && data.query) target.searchQuery = data.query;
+            }
+          }
           return;
         }
         if (eventName === "sources") {
@@ -4907,6 +4923,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             const target = lastAssistant();
             if (target) {
               target.sources = normalizeSources(data.items);
+              if (Array.isArray(data.queries)) {
+                target.searchQueries = data.queries.map((query) => String(query || "").trim()).filter(Boolean).slice(0, 8);
+              }
+              if ((!target.searchQueries || !target.searchQueries.length) && target.searchQuery) {
+                target.searchQueries = [target.searchQuery];
+              }
+              target.searching = false;
               scheduleScroll();
             }
           }
@@ -4917,6 +4940,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             const target = lastAssistant();
             if (target) {
               target.streaming = true;
+              target.searching = false;
               ppfxQueueStreamDelta(target, data.text);
             }
           }
@@ -5180,6 +5204,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           role: "assistant",
           content: "",
           sources: [],
+          searchQueries: [],
+          searchQuery: "",
+          searching: false,
           streaming: true,
           stopped: false
         });
@@ -5409,8 +5436,38 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         }
       });
 
-      const renderSources = (sources) => {
-        if (!webSearch.value || !sources || !sources.length) return null;
+      const renderSearchBlock = (message) => {
+        const queries = Array.isArray(message.searchQueries) && message.searchQueries.length
+          ? message.searchQueries
+          : message.searchQuery ? [message.searchQuery] : [];
+        const sources = Array.isArray(message.sources) ? message.sources : [];
+        const searching = !!message.searching;
+        if (!searching && !queries.length && !sources.length) return null;
+
+        const queryText = queries.join(" · ");
+        const status = searching ? "正在搜索" : sources.length ? `找到 ${sources.length} 个来源` : "未找到来源";
+        const head = [
+          vue.h("span", { class: "pp-ai-search-ico" }, ppIcon("search", 10)),
+          vue.h("span", { class: "pp-ai-search-title" }, "联网搜索"),
+          queryText ? vue.h("span", { class: "pp-ai-search-query", title: queryText }, queryText) : null,
+          vue.h("span", { class: "pp-ai-search-status" }, status),
+          searching
+            ? vue.h("span", { class: "pp-ai-spinner" })
+            : sources.length
+              ? vue.h("span", { class: "pp-ai-search-chev" }, ppIcon("chevronDown", 10))
+              : null
+        ].filter(Boolean);
+
+        if (searching) {
+          return vue.h("div", { class: ["pp-ai-search", "is-searching"] }, [
+            vue.h("div", { class: "pp-ai-search-row" }, head)
+          ]);
+        }
+        if (!sources.length) {
+          return vue.h("div", { class: "pp-ai-search" }, [
+            vue.h("div", { class: "pp-ai-search-row" }, head)
+          ]);
+        }
         const items = sources.map((source, index) => {
           const link = aiChatSourceLink(source.url);
           const props = { key: index, class: "pp-ai-source" };
@@ -5425,14 +5482,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
             link && link.host ? vue.h("span", { class: "pp-ai-source-host", title: link.host }, link.host) : null
           ]);
         });
-        return vue.h("details", { class: "pp-ai-sources" }, [
-          vue.h("summary", null, [
-            ppIcon("search", 10),
-            vue.h("span", null, "参考来源"),
-            vue.h("span", { class: "pp-ai-sources-count" }, sources.length),
-            vue.h("span", { class: "pp-ai-sources-chev" }, ppIcon("chevronDown", 10))
-          ]),
-          vue.h("div", { class: "pp-ai-sources-list" }, items)
+        return vue.h("details", { class: "pp-ai-search" }, [
+          vue.h("summary", null, head),
+          vue.h("div", { class: "pp-ai-search-list" }, items)
         ]);
       };
 
@@ -5459,14 +5511,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           ]);
         }
         const bubble = [];
+        const searchBlock = renderSearchBlock(message);
+        if (searchBlock) bubble.push(searchBlock);
         if (message.content) {
           bubble.push(vue.h("div", { class: "pp-ai-md", innerHTML: aiChatRenderMarkdown(message.content) }));
         }
         if (message.streaming) bubble.push(vue.h("span", { class: "pp-ai-cursor" }));
-        if (message.sources && message.sources.length) {
-          const sourcesBlock = renderSources(message.sources);
-          if (sourcesBlock) bubble.push(sourcesBlock);
-        }
         if (message.stopped) bubble.push(vue.h("div", { class: "pp-ai-finish-note" }, "已停止生成"));
         if (message.interrupted) bubble.push(vue.h("div", { class: "pp-ai-finish-note" }, "生成中断"));
         if (message.truncated) bubble.push(vue.h("div", { class: "pp-ai-finish-note" }, "回答达到长度上限"));
@@ -5697,7 +5747,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         vue.h("button", {
           type: "button",
           class: ["pp-ai-toggle", webSearch.value ? "active" : ""],
-          title: "开启后按需联网，寒暄/闲聊不会搜索",
+          title: "开启后由模型按需联网",
           disabled: streaming.value,
           onClick: () => { webSearch.value = !webSearch.value; }
         }, [ppIcon("search", 10), vue.h("span", null, PP_KEY.WEB_SEARCH)])
@@ -13148,6 +13198,28 @@ const AuthorWords = _sfc_main$4;
     zhReleaseBodyPopupLock();
     return true;
   };
+  const zhMaskDialogAlive = (dialog) => {
+    try {
+      const style = window.getComputedStyle(dialog);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      const box = dialog.getBoundingClientRect();
+      return box.width > 0 && box.height > 0;
+    } catch (e) {
+      return true;
+    }
+  };
+  const zhTapDialogButton = (dialog, btn) => {
+    if (!dialog) return false;
+    const mask = zhMaskOf(dialog) || dialog;
+    if (btn) zhTapNode(btn);
+    setTimeout(() => {
+      try {
+        const inner = zhPick(".el-dialog, .el-message-box", mask) || dialog;
+        if (zhMaskDialogAlive(inner)) zhHideMaskNode(mask);
+      } catch (e) {}
+    }, 1200);
+    return true;
+  };
   const zhHealStaleMasks = () => {
     let healed = 0;
     zhPickAll(ZH_MASK_SELECTOR).forEach((mask) => {
@@ -13155,7 +13227,7 @@ const AuthorWords = _sfc_main$4;
         if (!zhVisible(mask)) return;
         if (mask.querySelector(ZH_DIALOG_KEEP_SELECTOR)) return;
         const dialog = mask.querySelector(".el-dialog, .el-message-box, [role='dialog']");
-        if (!dialog || zhVisible(dialog)) return;
+        if (!dialog || zhMaskDialogAlive(dialog)) return;
         zhHideMaskNode(mask);
         healed += 1;
       } catch (e) {}
@@ -13592,7 +13664,10 @@ const AuthorWords = _sfc_main$4;
       );
       return true;
     }
-    zhTapNode(zhPick(".el-dialog__header img", node) || zhPick(".el-dialog__headerbtn", node) || zhPick("img", node));
+    zhTapDialogButton(
+      node,
+      zhPick(".el-dialog__header img", node) || zhPick(".el-dialog__headerbtn", node) || zhPick("img", node)
+    );
     log.addLog("已忽略习惯分提示并继续（该课程的平时习惯分可能受影响）", "warning");
     await zhSleep(1);
     return true;
@@ -13607,10 +13682,13 @@ const AuthorWords = _sfc_main$4;
     const tip = zhPickAll(".el-dialog").find((d) => zhVisible(d) && zhTxtOf(d).indexOf("温馨提示") >= 0);
     if (tip) {
       const btn = zhPick(".el-button.btn", tip);
-      if (btn && zhTxtOf(btn).indexOf("我知道了") >= 0) zhTapNode(btn);
+      const known = btn && zhTxtOf(btn).indexOf("我知道了") >= 0 ? btn : null;
+      zhTapDialogButton(tip, known);
     }
     const readTip = zhPick(".dialog-read .iconguanbi");
-    if (readTip && zhVisible(readTip.closest ? readTip.closest(".dialog-read") : readTip)) zhTapNode(readTip);
+    if (readTip && zhVisible(readTip.closest ? readTip.closest(".dialog-read") : readTip)) {
+      zhTapDialogButton(readTip.closest ? readTip.closest(".dialog-read") : readTip, readTip);
+    }
   };
 
   const ZH_NOTICE_DISMISS_RULES = [
@@ -13674,10 +13752,15 @@ const AuthorWords = _sfc_main$4;
   const zhDismissLegacyCourseRemind = (log) => {
     try {
       const popup = document.querySelector(".courseRemind.khfaPop");
-      const closeBtn = popup ? popup.querySelector(".header-slot-box .el-icon-error") : null;
-      if (!closeBtn) return false;
-      closeBtn.click();
-      zhLogCadence(log, "zh-course-remind-legacy", "已关闭课程提醒弹窗（abc 同款选择器）", "info", 30);
+      if (!popup || !zhVisible(popup)) return false;
+      const closeBtn = popup.querySelector(".header-slot-box .el-icon-error");
+      if (closeBtn) {
+        zhTapNode(closeBtn);
+        zhLogCadence(log, "zh-course-remind-legacy", "已关闭课程提醒弹窗（abc 同款选择器）", "info", 30);
+        return true;
+      }
+      zhHideMaskNode(zhMaskOf(popup) || popup);
+      zhLogCadence(log, "zh-course-remind-legacy", "已收起无法关闭的课程提醒弹层", "info", 30);
       return true;
     } catch (e) {
       return false;
