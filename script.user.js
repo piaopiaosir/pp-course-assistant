@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.2
+// @version      4.4.3
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -7226,7 +7226,74 @@ const AuthorWords = _sfc_main$4;
     return `当前模式：${taskMode}`;
   };
 
+  const ppIsZhsMasteryReadOnlyPage = (url) => {
+    try {
+      const { hostname, pathname } = new URL(url);
+      return (hostname === "ai-smart-course-student-pro.zhihuishu.com" || hostname === "smartcoursestudent.zhihuishu.com")
+        && /^\/(?:point|masteryHistory)(?:\/|$)/.test(pathname);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const ppCxAnswerPageKind = (url) => {
+    let segments;
+    try {
+      segments = new URL(url).pathname.toLowerCase().split("/").filter(Boolean);
+    } catch (e) {
+      return "";
+    }
+    if (segments.length > 1 && (segments[0] === "mooc-ans" || segments[0] === "exam-ans")) segments.shift();
+    const last = segments[segments.length - 1] || "";
+    if (!last) return "";
+    if (last === "examnotes" || last === "examcode") return "notes";
+    if (last.startsWith("reversionteststart")) return "exam";
+    if (last === "preview") return "preview";
+    if (last === "dohomeworknew" || last === "dowork" || last === "dotest") return "work";
+    if (segments.includes("work") && last === "index") return "work";
+    if (last === "view" || last === "calcanswer" || last === "review") return "blocked";
+    if (last.includes("result") || last.includes("score") || last.includes("analysis")) return "blocked";
+    return "";
+  };
+  const ppCxIsBlockedAnswerPage = (url) => {
+    const kind = ppCxAnswerPageKind(url);
+    return kind === "blocked" || kind === "notes";
+  };
+
+  const ppCxHasCompletedAnswerState = (doc, chapterFrame) => {
+    if (!doc) return false;
+    if (ppCxIsBlockedAnswerPage(doc.location?.href)) return true;
+    if (chapterFrame) {
+      if (isCompletedAnswerTaskPoint(chapterFrame)) return true;
+      if (/(已完成|待批阅)/.test(doc.documentElement?.innerText || "")) return true;
+    }
+    const status = /^(?:(?:当前|本次|本场)?(?:作业|考试|测验|试卷)\s*)?(?:状态\s*[：:]\s*)?(?:已完成|待批阅|待批改|已批阅|已批改|已提交|已交卷|交卷成功|提交成功|考试已结束)[。！!]?$/;
+    return Array.from(doc.querySelectorAll(".mark_info, .ceyan_name")).some((header) => {
+      if (header.closest(".questionLi, .TiMu, .question-item") || !header.getClientRects().length) return false;
+      return (header.innerText || "").split(/\r?\n/).some((line) => status.test(line.trim()));
+    });
+  };
+
   const fetchAnswerData = async (question) => {
+    const isZhs = String(question.workType) === "zhs";
+    const isYkt = String(question.workType) === "ykt";
+    const cxDoc = !isZhs && !isYkt ? question.element?.ownerDocument : null;
+    const isReadOnly = () => {
+      if (isZhs) {
+        return ppIsZhsMasteryReadOnlyPage(window.location.href) || ppIsZhsMasteryReadOnlyPage(question.refer);
+      }
+      if (isYkt) return false;
+      return ppCxIsBlockedAnswerPage(window.location.href) || ppCxIsBlockedAnswerPage(question.refer)
+        || question.element?.isConnected === false
+        || ppCxHasCompletedAnswerState(cxDoc, question.workType === "zj" ? cxDoc?.defaultView?.frameElement : null);
+    };
+    const readOnlyResponse = {
+      code: 499,
+      msg: isZhs ? "掌握度历史或结果页，已停止查题" : "当前页面已停止学习通自动查题",
+      data: null
+    };
+    if (isReadOnly()) return readOnlyResponse;
+
     var _a;
     const _self = _unsafeWindow;
     const configStore = useConfigStore();
@@ -7276,8 +7343,6 @@ const AuthorWords = _sfc_main$4;
 
     const userId = getUidRealtime();
 
-    const isZhs = String(question.workType) === "zhs";
-    const isYkt = String(question.workType) === "ykt";
     try {
       if (question.element && question.element.ownerDocument) {
         decodeCipherFontSafe(question.element.ownerDocument);
@@ -7317,6 +7382,7 @@ const AuthorWords = _sfc_main$4;
 
     let step1TaskId = null;
     const sendRequest = (checkOnly = false) => {
+      if (isReadOnly()) return Promise.resolve(readOnlyResponse);
       return new Promise((resolve) => {
 
         if (!checkOnly && !window.__answerModeLogged) {
@@ -7360,6 +7426,10 @@ const AuthorWords = _sfc_main$4;
           }),
           timeout: timeout,
           onload: (response) => {
+            if (isReadOnly()) {
+              resolve(readOnlyResponse);
+              return;
+            }
             try {
               const apiResponse = JSON.parse(response.responseText);
 
@@ -7385,6 +7455,10 @@ const AuthorWords = _sfc_main$4;
       const maxPolls = Math.max(120, Math.ceil(MAX_WAIT_MS / Math.max(500, pollInterval)));
 
       const poll = () => {
+        if (isReadOnly()) {
+          resolve(readOnlyResponse);
+          return;
+        }
         pollCount++;
         if (pollCount > maxPolls) {
           resolve(buildErrorResponse("查询超时"));
@@ -7396,6 +7470,10 @@ const AuthorWords = _sfc_main$4;
           method: "GET",
           timeout: 10000,
           onload: (response) => {
+            if (isReadOnly()) {
+              resolve(readOnlyResponse);
+              return;
+            }
             try {
               const result = JSON.parse(response.responseText);
               if (result.code === 200 && result.data) {
@@ -7589,8 +7667,11 @@ const AuthorWords = _sfc_main$4;
       __publicField(this, "_fillNoop", false);
 
       __publicField(this, "init", async () => {
+        const isCompleted = () => ppCxHasCompletedAnswerState(this._doc, iframe);
+        if (isCompleted()) return 0;
         await ppfxWaitFaceCheck();
         await waitForAudioFrames(this._doc, 5000);
+        if (isCompleted()) return 0;
         this.questions = [];
         this.collectQuestions();
         if (this.questions.length) {
@@ -10666,13 +10747,14 @@ const AuthorWords = _sfc_main$4;
             const taskId = _globalTaskId;
       return new Promise((resolve) => {
         (async () => {
-        if (!iframeDocument)
+        if (!iframeDocument || ppCxHasCompletedAnswerState(iframeDocument, iframe))
           return resolve();
 
         decodeCipherFontSafe(iframeDocument);
                 const handler = new CxQuestionHandler("zj", iframe);
         await handler.init();
-        if (taskId !== _globalTaskId) {
+        if (taskId !== _globalTaskId || iframe.contentDocument !== iframeDocument
+          || ppCxHasCompletedAnswerState(iframeDocument, iframe)) {
           return resolve();
         }
         iframeWindow.alert = () => {
@@ -11368,21 +11450,29 @@ const AuthorWords = _sfc_main$4;
     logStore.addLog(`检测到学习通作业页面`, "primary");
     logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     await new CxQuestionHandler("zy").init();
+    if (ppCxHasCompletedAnswerState(document)) return;
     logStore.addLog("作业不自动提交：请检查已填入的答案后手动保存", "warning");
   };
 
   const answerExamPreview = async () => {
+    if (ppCxHasCompletedAnswerState(document)) return;
     const logStore = useLogStore();
     logStore.addLog(`检测到学习通考试预览页面`, "primary");
     logStore.addLog(`正在解析任务点，请稍等5-10秒（如果长时间没有反应，请刷新页面）`, "warning");
     await new CxQuestionHandler("ks").init();
+    if (ppCxHasCompletedAnswerState(document)) return;
     logStore.addLog("考试不允许自动交卷：请检查答案后手动交卷", "warning");
     logStore.addLog("答题完成，请自行检查后保存或提交", "primary");
   };
 
   const useCxExamLogic = async () => {
     const logStore = useLogStore();
-    const configStore = useConfigStore();
+    const stopIfCompleted = () => {
+      if (!ppCxHasCompletedAnswerState(document)) return false;
+      _GM_setValue('pp_exam_sequential', false);
+      return true;
+    };
+    if (stopIfCompleted()) return;
 
     const inSequentialMode = _GM_getValue('pp_exam_sequential', false);
 
@@ -11399,9 +11489,11 @@ const AuthorWords = _sfc_main$4;
 
         logStore.addLog(`允许整卷预览，即将跳转到整卷预览页面`, "primary");
         await delay(3);
+        if (stopIfCompleted()) return;
         _unsafeWindow.topreview();
 
         await delay(5);
+        if (stopIfCompleted()) return;
         await answerExamPreview();
         return;
       }
@@ -11419,6 +11511,7 @@ const AuthorWords = _sfc_main$4;
 
     logStore.addLog(`正在解析题目，请等待5s`, "warning");
     await new CxQuestionHandler("ks").init();
+    if (stopIfCompleted()) return;
     logStore.addLog("考试不允许自动交卷：请检查答案后手动交卷", "warning");
 
     const currentQuestionNum = parseInt(_unsafeWindow.document.querySelector(".topicNumber_list .current")?.innerText || "0");
@@ -11439,6 +11532,7 @@ const AuthorWords = _sfc_main$4;
 
     logStore.addLog(`第${currentQuestionNum}题已完成，正在前往下一题`, "success");
     await delay(3);
+    if (stopIfCompleted()) return;
 
     const nextBtn = _unsafeWindow.document.querySelector('.nextDiv a.jb_btn');
     if (nextBtn) {
@@ -12313,7 +12407,8 @@ const AuthorWords = _sfc_main$4;
   };
 
   const zhAnswerFlow = async (cfg) => {
-    if (window[cfg.busyKey]) return;
+    const isReadOnlyPage = () => ppIsZhsMasteryReadOnlyPage(window.location.href);
+    if (isReadOnlyPage() || window[cfg.busyKey]) return;
     window[cfg.busyKey] = true;
     const logStore = useLogStore();
     const progressStore = useProgressStore();
@@ -12345,6 +12440,7 @@ const AuthorWords = _sfc_main$4;
       const seen = new Set();
 
       for (let step = 0; step < (cfg.maxSteps || 200); step += 1) {
+        if (isReadOnlyPage()) return;
         const root = cfg.findRoot();
         if (!root) {
           await afkWait(300);
@@ -12406,6 +12502,7 @@ const AuthorWords = _sfc_main$4;
         } catch (error) {
           answerData = null;
         }
+        if (isReadOnlyPage()) return;
 
         if (answerData && answerData.code === 200) {
           const rawAnswers = answerData.data?.answer;
@@ -12475,6 +12572,7 @@ const AuthorWords = _sfc_main$4;
       logStore.addLog(`智慧树答题出错：${error && error.message ? error.message : error}`, "danger");
     } finally {
       window[cfg.busyKey] = false;
+      if (isReadOnlyPage()) progressStore.update({ isPlaying: false, detail: "已停止查题" });
     }
   };
 
@@ -12920,8 +13018,9 @@ const AuthorWords = _sfc_main$4;
   ];
 
   const useZhsPaperAnswerLogic = async () => {
+    const isReadOnlyPage = () => ppIsZhsMasteryReadOnlyPage(window.location.href);
+    if (isReadOnlyPage() || window.__ppZhPaperBusy) return;
     installZhPaperProbe();
-    if (window.__ppZhPaperBusy) return;
     let profile = null;
     let stemWaits = 0;
     let currentInfo = null;
@@ -12944,7 +13043,8 @@ const AuthorWords = _sfc_main$4;
 
     if (zhStudyTuning().answerOn) {
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 30000 && !findRoot()) await afkWait(250);
+      while (Date.now() - startedAt < 30000 && !isReadOnlyPage() && !findRoot()) await afkWait(250);
+      if (isReadOnlyPage()) return;
       if (profile && typeof profile.prepare === "function") {
         try { await profile.prepare(profile); } catch (e) {}
         findRoot();
@@ -16449,16 +16549,15 @@ const AuthorWords = _sfc_main$4;
     }, 1000);
   };
 
+  const cxAnswerPageLogic = {
+    work: useCxWorkLogic,
+    preview: useCxExamPreviewLogic,
+    exam: useCxExamLogic,
+    notes: useCxExamNotesTipLogic,
+  };
+
   const cxLogicRules = [
     { keyword: "/mycourse/studentstudy", logic: useCxChapterLogic },
-    { keyword: "/mooc2/work/dowork", logic: useCxWorkLogic },
-    { keyword: "exam/preview", logic: useCxExamPreviewLogic },
-    { keyword: "/examcode/examnotes", logic: useCxExamNotesTipLogic },
-    { keyword: "/exam-ans/", logic: useCxExamLogic },
-    { keyword: "/exam/test", logic: useCxExamLogic },
-    { keyword: "/work/index", logic: useCxWorkLogic },
-    { keyword: "/work/doTest", logic: useCxWorkLogic },
-    { keyword: "/work/calcAnswer", logic: useCxWorkLogic },
     { keyword: "/knowledge/start", logic: useCxChapterLogic },
     { keyword: "/ztnodedetailcontroller/visitnodedetail", logic: useCxAutoReadLogic },
     { keyword: "/course/", logic: useCxAutoReadLogic },
@@ -16493,10 +16592,6 @@ const AuthorWords = _sfc_main$4;
     { keyword: "studywisdomh5.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
     { keyword: "studywisdomh5.zhihuishu.com/study/mastery", logic: useZhsMasteryTipLogic },
     { keyword: "wisdom-mooc.zhihuishu.com/exam", logic: useZhsPaperAnswerLogic },
-    { keyword: "ai-smart-course-student-pro.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
-    { keyword: "ai-smart-course-student-pro.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
-    { keyword: "smartcoursestudent.zhihuishu.com/masteryHistory/", logic: useZhsPaperAnswerLogic },
-    { keyword: "smartcoursestudent.zhihuishu.com/point/", logic: useZhsPaperAnswerLogic },
     { keyword: "zhihuishu.com/atHomeworkExam/", logic: useZhsPaperAnswerLogic },
     { keyword: "studentexamcomh5.zhihuishu.com", logic: useZhsPaperAnswerLogic },
     { keyword: "stuExamWeb.html#/webExamList?", logic: useZhsExamListTipLogic },
@@ -16568,6 +16663,11 @@ const AuthorWords = _sfc_main$4;
       };
 
       const executeLogicByUrl = (url22) => {
+        if (ppIsZhsMasteryReadOnlyPage(url22)) {
+          isShow.value = true;
+          logStore.addLog("掌握度历史或结果页，已跳过自动答题", "info");
+          return;
+        }
 
         if (url22.includes('out_link.shtml')) {
           try {
@@ -16582,19 +16682,33 @@ const AuthorWords = _sfc_main$4;
         }
         const matchTarget = ppMatchTargetOf(url22);
         const platformKey = ppPlatformOf(matchTarget);
+        const cxAnswerKind = (!platformKey || platformKey === "cx") ? ppCxAnswerPageKind(url22) : "";
+        if (cxAnswerKind === "blocked") {
+          _GM_setValue('pp_exam_sequential', false);
+          isShow.value = true;
+          logStore.addLog("已跳过当前学习通页面的自动查题", "info");
+          return;
+        }
+        const cxAnswerLogic = cxAnswerPageLogic[cxAnswerKind];
         const routePool = urlLogicGroups[platformKey] || urlLogicPairs;
         let matchedRule = null;
         for (const rule of routePool) {
           if (!matchTarget.includes(rule.keyword)) continue;
           if (matchedRule === null || rule.keyword.length > matchedRule.keyword.length) matchedRule = rule;
         }
-        if (matchedRule) {
+        const logic = cxAnswerLogic || matchedRule?.logic;
+        if (logic) {
           isShow.value = true;
           const modeLabel = getCxModeLabel();
           if (modeLabel) logStore.addLog(modeLabel, "info");
           startAfkHeartbeat();
           const _ppRunLogic = () => {
-            matchedRule.logic();
+            if (cxAnswerLogic && cxAnswerKind !== "notes" && ppCxHasCompletedAnswerState(document)) {
+              if (cxAnswerKind !== "work") _GM_setValue('pp_exam_sequential', false);
+              logStore.addLog("已跳过当前学习通页面的自动查题", "info");
+              return;
+            }
+            logic();
           };
           ppWaitPageLoaded(10000).then((reason) => {
             if (reason === "timeout") {
