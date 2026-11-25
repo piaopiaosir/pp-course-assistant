@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.6
+// @version      4.4.7
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -9157,15 +9157,31 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       });
   };
 
+  let ppCxQueueInstance;
+
+  const ppCxCanClickNext = (doc, button) => {
+    if (!button.isConnected || button.disabled || button.closest('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) return false;
+    const style = doc.defaultView?.getComputedStyle?.(button);
+    return button.style.display !== "none" && style?.display !== "none" && style?.visibility !== "hidden" &&
+      (!button.getClientRects || button.getClientRects().length > 0);
+  };
+
+  const ppCxIncompleteTaskNext = (doc) => {
+    const isNext = (button) => button.textContent?.trim() === "下一节" && ppCxCanClickNext(doc, button);
+    const known = Array.from(doc.querySelectorAll(".jobFinishTip .nextChapter")).find(isNext);
+    if (known) return known;
+    for (const dialog of doc.querySelectorAll(".maskDiv")) {
+      if (!dialog.textContent?.replace(/\s+/g, "").includes("当前章节还有任务点未完成") || !ppCxCanClickNext(doc, dialog)) continue;
+      const next = Array.from(dialog.querySelectorAll("a, button")).find(isNext);
+      if (next) return next;
+    }
+  };
+
   const ppCxNextButton = (doc) => {
     const selectors = ["#prevNextFocusNext", ".jb_btn.jb_btn_92.fr.fs14.nextChapter", "#nextBtn", ".nextChapter"];
     for (const selector of selectors) {
       for (const button of doc.querySelectorAll(selector)) {
-        if (!button.isConnected || button.disabled || button.closest('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) continue;
-        const style = doc.defaultView?.getComputedStyle?.(button);
-        if (button.style.display === "none" || style?.display === "none" || style?.visibility === "hidden" ||
-            (button.getClientRects && !button.getClientRects().length)) continue;
-        return button;
+        if (!button.closest(".jobFinishTip") && !button.closest(".maskDiv") && ppCxCanClickNext(doc, button)) return button;
       }
     }
     return null;
@@ -9179,16 +9195,20 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       onLogin();
       return "login";
     }
-    if (getMode() === "off") return "off";
+    const mode = getMode();
+    if (mode === "off" || mode === "held") return mode;
     await wait(3);
     if (!isCurrent()) return "changed";
     if (ppCxLoginIssue(doc) || ppCxLoginIssue(cardDoc)) {
       onLogin();
       return "login";
     }
-    const mode = getMode();
-    if (mode === "off") return "off";
-    const button = ppCxNextButton(doc);
+    const currentMode = getMode();
+    if (currentMode === "held") return mode === "queue" ? "held" : "changed";
+    if (currentMode === "off") return "off";
+    if (currentMode !== mode) return "changed";
+    const confirmation = ppCxIncompleteTaskNext(doc);
+    const button = confirmation || ppCxNextButton(doc);
     const tabs = Array.from(doc.querySelectorAll("#prev_tab .prev_ul li"));
     const finalTab = !tabs.length || tabs[tabs.length - 1].classList.contains("active");
     if (mode === "queue" && finalTab) {
@@ -9198,11 +9218,27 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         return "end";
       }
     }
-    if (button) {
-      button.click();
-      return "clicked";
+    if (!button) return "missing";
+    button.click();
+    if (confirmation) return "clicked";
+
+    for (let attempt = 0; attempt <= 12; attempt++) {
+      if (attempt) await wait(0.25);
+      if (!isCurrent()) break;
+      if (ppCxLoginIssue(doc) || ppCxLoginIssue(cardDoc)) {
+        onLogin();
+        return "login";
+      }
+      const currentMode = getMode();
+      if (currentMode === "held") return mode === "queue" ? "held" : "changed";
+      if (currentMode !== mode) break;
+      const next = ppCxIncompleteTaskNext(doc);
+      if (next) {
+        next.click();
+        break;
+      }
     }
-    return "missing";
+    return "clicked";
   };
 
   const useCxChapterLogic = () => {
@@ -9307,6 +9343,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       const afkEnabled = readGlobalAfk();
 
       const checkUrlChange = () => {
+        _resumeAdvance?.();
         if (currentUrl !== window.location.href) {
           currentUrl = window.location.href;
           if (_lastScanHref === currentUrl) return;
@@ -9355,10 +9392,12 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     let _lastIframeDoc = null;
     let _lastTaskTab = null;
     let _lastScanHref = "";
+    let _resumeAdvance = null;
 
     window.__getAnswerTaskId__ = () => _globalTaskId;
 
     const watchIframe = async (documentElement, iframe, cardDoc) => {
+      _resumeAdvance = null;
       if (_currentWatchSubscription) {
         _currentWatchSubscription.unsubscribe();
         _currentWatchSubscription = null;
@@ -9409,19 +9448,31 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           }
         }
 
+        const getMode = () => ppCxQueueInstance?.blocksStudyAdvance() ? "held" :
+          ppCxQueueInstance?.ownsCurrentCourse() ? "queue" :
+            readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true) ? "normal" : "off";
+        const advance = async () => {
+          const result = await ppCxAdvanceTaskPage({
+            doc: document, cardDoc, wait: delay, isCurrent, onLogin, getMode,
+            onEnd: () => ppCxQueueInstance?.noteStudyEnd(href)
+          });
+          if (result === "held" && isCurrent()) {
+            _resumeAdvance = () => {
+              if (!isCurrent()) { _resumeAdvance = null; return; }
+              const mode = getMode();
+              if (mode === "held") return;
+              _resumeAdvance = null;
+              if (mode === "queue") void advance();
+            };
+          }
+          if (result === "off") logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
+          if (result === "missing") logStore.addLog("未找到可用的下一任务按钮，请检查章节目录", "info");
+        };
         _currentWatchSubscription = rxjs.from(classified).pipe(rxjs.concatMap(({ iframe, type }) => executeFrame(iframe, type))).subscribe({
           complete: async () => {
             if (!isCurrent()) return;
             logStore.addLog("本页任务点已处理", "success");
-            const result = await ppCxAdvanceTaskPage({
-              doc: document, cardDoc, wait: delay, isCurrent, onLogin,
-              getMode: () => ppCxQueueInstance?.blocksStudyAdvance() ? "off" :
-                ppCxQueueInstance?.ownsCurrentCourse() ? "queue" :
-                  readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true) ? "normal" : "off",
-              onEnd: () => ppCxQueueInstance?.noteStudyEnd(href)
-            });
-            if (result === "off") logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
-            if (result === "missing") logStore.addLog("未找到可用的下一任务按钮，请检查章节目录", "info");
+            await advance();
           }
         });
       });
@@ -17542,7 +17593,7 @@ function createPPChaoxingQueue(options = {}) {
     if (!currentOwner) return false;
     const state = load();
     const active = state.ownerId === currentOwner && !!state.activeKey && identity(platformUrl(getPage().href))?.key === state.activeKey;
-    return active && (state.status === 'running' && !!canRun(state) || state.status === 'paused' && state.reason === auth);
+    return active && (state.status === 'paused' || state.status === 'running' && !!canRun(state));
   };
   function noteStudyEnd(href) {
     if (!ownsCurrentCourse() || getPage().href !== href || blocksStudyAdvance()) return;
@@ -17857,10 +17908,10 @@ function createPPChaoxingQueue(options = {}) {
       try { log(`${item.title}：${error}`); } catch {}
     }
   }
-  function issue(state, item, href, reason) {
+  function issue(state, item, href, reason, result = 'failed') {
     const previous = state.problem;
     if (previous?.href === href && previous.reason === reason && now() - previous.since >= 25000) {
-      finishItem(state, item, href, 'failed', reason);
+      finishItem(state, item, href, result, reason);
       return false;
     }
     if (previous?.href !== href || previous.reason !== reason) {
@@ -17973,25 +18024,32 @@ function createPPChaoxingQueue(options = {}) {
         if (issue(state, item, href, '未能验证完整章节目录')) return;
         continue;
       }
-      if (state.verifyChapter) {
-        const verified = catalog.chapters.find((chapter) => chapter.chapterId === state.verifyChapter);
+      const endChapter = state.verifyChapter || (typeOf(url) === 'study'
+        ? id(query(url, 'chapterid', 'knowledgeid')) || id(node(page.document, '#curChapterId, #knowledgeid')?.value) : '');
+      const pending = catalog.chapters.find((chapter) => chapter.status === 'pending');
+      if (catalog.chapters[catalog.chapters.length - 1].chapterId === endChapter) {
+        if (pending) {
+          if (issue(state, item, href, '已到最后一章，课程仍有未完成任务，请手动补做', 'skipped')) return;
+          continue;
+        }
+      }
+      if (endChapter) {
+        const verified = catalog.chapters.find((chapter) => chapter.chapterId === endChapter);
         if (verified?.status !== 'done') {
           pause('学习通尚未确认上一章节完成，请检查课程目录后继续');
           return;
         }
-        state.verifyChapter = null;
-        commit(state);
+        if (state.verifyChapter) {
+          state.verifyChapter = null;
+          commit(state);
+        }
       }
-      const next = catalog.chapters.find((chapter) => chapter.status === 'pending') || catalog.chapters.find((chapter) => chapter.status === 'unknown');
+      const next = pending || catalog.chapters.find((chapter) => chapter.status === 'unknown');
       if (!next) {
         finishItem(state, item, href, 'done');
         continue;
       }
-      if (typeOf(url) === 'study') {
-        const currentId = id(query(url, 'chapterid', 'knowledgeid')) || id(node(page.document, '#curChapterId, #knowledgeid')?.value);
-        const current = catalog.chapters.find((chapter) => chapter.chapterId === currentId);
-        if (!current || current.status !== 'done') return;
-      }
+      if (typeOf(url) === 'study' && !endChapter) return;
       const enriched = { ...context, cpi: catalog.cpi || context?.cpi, oldEnc: catalog.oldEnc || context?.oldEnc };
       const target = chapterUrl(page, enriched, next.chapterId);
       if (!target) {
@@ -18589,7 +18647,6 @@ function createPPZhsQueue(options = {}) {
   return { snapshot, pageRole, discover, start, resume, tick, pause, clear, remove, ownsCurrentCourse, allowsChapterAdvance };
 }
 
-  let ppCxQueueInstance;
   let ppZhsQueueInstance;
   const ppZhsQueueAllowsAdvance = () => !!ppZhsQueueInstance?.allowsChapterAdvance();
   const ppCxQueueState = vue.shallowRef(null);
@@ -18890,14 +18947,15 @@ function createPPZhsQueue(options = {}) {
       };
       const statusLabels = {
         idle: "待启动", running: "运行中", paused: "已暂停", queued: "待学习",
-        resolving: "正在获取地址", active: "学习中", done: "已完成", failed: "失败"
+        resolving: "正在获取地址", active: "学习中", done: "已完成", failed: "失败", skipped: "已跳过"
       };
       const dotTone = (status) => status === "failed" ? "bad"
         : status === "done" ? "ok"
-          : status === "paused" ? "warn"
+          : status === "paused" || status === "skipped" ? "warn"
             : (status === "running" || status === "active" || status === "resolving" || status === "queued") ? "run" : "";
       const statusLabel = (state) => {
         if (state.status === "done" && state.items?.some((item) => item.status === "failed")) return "队列已结束，有课程失败";
+        if (state.status === "done" && state.items?.some((item) => item.status === "skipped")) return "队列已结束，有课程跳过";
         return statusLabels[state.status] || state.status || "待启动";
       };
       const renderHead = (state, returnToList) => vue.h("div", { class: "queue-head" }, [
