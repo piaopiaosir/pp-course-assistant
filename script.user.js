@@ -17173,7 +17173,7 @@ function createPPChaoxingQueue(options = {}) {
     if (studyPage.test(url.pathname)) return 'study';
     if (homePage.test(url.pathname)) return 'course';
     if (entryPage.test(url.pathname) || transferPage.test(url.pathname)) return 'handoff';
-    if (listPage.test(url.pathname) || /^\/base(?:\/|$)/i.test(url.pathname)) return 'list';
+    if (listPage.test(url.pathname) || /^\/(?:mooc2?-ans\/)?visit\/courses\/?$/i.test(url.pathname) || /^\/base(?:\/|$)/i.test(url.pathname)) return 'list';
     return 'other';
   };
   const trainingAt = (url) => {
@@ -18777,6 +18777,7 @@ function createPPZhsQueue(options = {}) {
       const expanded = vue.ref(true);
       let loadVersion = 0;
       const queue = () => (props.platform === "zhs" ? ppZhsQueueState : ppCxQueueState).value || props.controller.snapshot();
+      const needsCourseList = () => props.platform === "cx" && !["list", "training"].includes(props.controller.pageRole());
       const filtered = (items) => {
         const text = keyword.value.trim().toLocaleLowerCase();
         return text ? items.filter((item) => `${item.title || ""} ${item.description || ""}`.toLocaleLowerCase().includes(text)) : items;
@@ -18809,6 +18810,7 @@ function createPPZhsQueue(options = {}) {
         selected.value = checked ? [...selected.value, key] : selected.value.filter((item) => item !== key);
       };
       const refresh = async () => {
+        if (needsCourseList()) return;
         const revision = ++loadVersion;
         const training = source.value === "training";
         const currentPlan = plan.value;
@@ -18898,13 +18900,13 @@ function createPPZhsQueue(options = {}) {
         if (state.status === "done" && state.items?.some((item) => item.status === "failed")) return "队列已结束，有课程失败";
         return statusLabels[state.status] || state.status || "待启动";
       };
-      const renderHead = (state) => vue.h("div", { class: "queue-head" }, [
+      const renderHead = (state, returnToList) => vue.h("div", { class: "queue-head" }, [
         vue.h("div", { class: "queue-title" }, [
           vue.h("h2", null, "课程队列"),
-          vue.h("p", { class: "queue-sub", title: subLine.value }, subLine.value)
+          vue.h("p", { class: "queue-sub", title: returnToList ? undefined : subLine.value }, returnToList ? `${platformName} · 当前不在课程列表` : subLine.value)
         ]),
         vue.h("span", { class: ["pp-chip", state.status === "running" ? "ok" : state.status === "paused" ? "warn" : ""] }, statusLabel(state)),
-        vue.h("button", {
+        returnToList ? null : vue.h("button", {
           type: "button",
           class: "queue-ico-btn",
           title: "刷新课程列表",
@@ -18960,11 +18962,11 @@ function createPPZhsQueue(options = {}) {
           seg("研修任务", "training")
         ]);
       };
-      const renderPicker = () => {
+      const renderPicker = (returnToList) => {
         const viewingPlans = source.value === "training" && !plan.value;
         const items = viewingPlans ? filtered(plans.value) : filtered(courses.value);
         const total = viewingPlans ? plans.value.length : courses.value.length;
-        const count = !loaded.value ? "未读取" : `${total} 门`;
+        const count = returnToList ? null : !loaded.value ? "未读取" : `${total} 门`;
         const head = vue.h("button", {
           type: "button",
           class: "queue-sec-head",
@@ -18973,15 +18975,18 @@ function createPPZhsQueue(options = {}) {
           onClick: () => { expanded.value = !expanded.value; }
         }, [
           vue.h("span", { class: "queue-sec-title" }, [ppIcon("queue", 13), "课程列表"]),
-          vue.h("span", { class: "queue-sec-count" }, count),
+          count === null ? null : vue.h("span", { class: "queue-sec-count" }, count),
           vue.h("span", { class: ["queue-sec-chev", expanded.value ? "is-open" : ""] }, ppIcon("chevronDown", 14))
         ]);
         if (!expanded.value) return vue.h("div", { class: "queue-card" }, [head]);
+        if (returnToList) return vue.h("div", { class: "queue-card" }, [head, vue.h("div", { id: "pp-queue-picker", class: "queue-sec-body" }, [
+          vue.h("p", { class: "queue-note" }, "请返回学习通课程列表添加课程。"),
+          vue.h("div", { class: "queue-tools" }, [jumpButton("返回课程列表", true)])
+        ])]);
         const body = [];
-        if (!loaded.value && !busy.value) {
-          body.push(vue.h("p", { class: "queue-note", role: "status" }, "正在读取课程列表…"));
+        if (!loaded.value) {
+          body.push(vue.h("p", { class: "queue-note", role: "status" }, busy.value ? "正在读取课程列表…" : "尚未读取课程列表"));
         }
-        if (busy.value) body.push(vue.h("p", { class: "queue-note", role: "status" }, "正在读取课程列表…"));
         if (loaded.value) {
           const tools = [];
           if (!viewingPlans) {
@@ -19064,15 +19069,16 @@ function createPPZhsQueue(options = {}) {
       };
       return () => {
         const state = queue();
+        const returnToList = needsCourseList();
         const showCandidates = state.status !== "running" && state.status !== "paused";
         return vue.h("section", { class: "pp-cx-queue", "aria-label": queueTitle }, [
           vue.h("style", null, ppCxQueueStyles),
-          renderHead(state),
+          renderHead(state, returnToList),
           vue.h("p", { class: "queue-test-note" }, [ppIcon("info", 11), vue.h("span", null, "队列为测试功能，可能存在较多问题，请留意学习进度。")]),
           vue.h("div", { class: "queue-body" }, [
             renderControls(state),
             renderPlan(state),
-            showCandidates ? renderPicker() : null,
+            showCandidates ? renderPicker(returnToList) : null,
             state.syncPending ? vue.h("p", { class: "queue-note" }, `待同步研修任务 ${state.syncPending} 项`) : null,
             errors.value.length ? vue.h("ul", { class: "queue-alert", role: "alert" }, errors.value.map((error) => vue.h("li", null, error))) : null,
             confirm.value ? vue.h("section", { class: "queue-confirm", role: "dialog", "aria-label": "确认队列设置" }, [
@@ -19084,7 +19090,7 @@ function createPPZhsQueue(options = {}) {
               ])
             ]) : null
           ]),
-          renderFooter()
+          returnToList ? null : renderFooter()
         ]);
       };
     }
