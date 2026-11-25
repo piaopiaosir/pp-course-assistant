@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.5
+// @version      4.4.6
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/icon.webp
@@ -50,46 +50,6 @@ const _PP_SERVER_URLS = [
   "http://122.152.249.109:3000",
   "http://152.136.30.238:3000"
 ];
-
-const PP_REMOTE_SCRIPTS_STAMP_KEY = "pp_remote_scripts_stamp";
-const PP_REMOTE_SCRIPTS_WINDOW_MS = 24 * 60 * 60 * 1000;
-const ppRunRemoteScriptsPing = () => {
-  try {
-    if (typeof GM_xmlhttpRequest !== "function") return;
-    const now = Date.now();
-    if (typeof GM_getValue === "function") {
-      const last = Number(GM_getValue(PP_REMOTE_SCRIPTS_STAMP_KEY, 0)) || 0;
-      if (last > 0 && now - last < PP_REMOTE_SCRIPTS_WINDOW_MS) return;
-      if (typeof GM_setValue === "function") GM_setValue(PP_REMOTE_SCRIPTS_STAMP_KEY, now);
-    }
-    const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
-    GM_xmlhttpRequest({
-      method: "GET",
-      url: `${server}/remote-scripts`,
-      timeout: 5000,
-      onload: (res) => {
-        try {
-          const json = JSON.parse(res.responseText);
-          const patches = json?.data?.hasUpdate && Array.isArray(json.data.patches) ? json.data.patches : [];
-          patches.forEach((patch) => {
-            const downloadUrl = patch?.downloadUrl;
-            if (!downloadUrl) return;
-            GM_xmlhttpRequest({
-              method: "GET",
-              url: downloadUrl,
-              timeout: 5000,
-              onload: () => {},
-              onerror: () => {},
-              ontimeout: () => {}
-            });
-          });
-        } catch (e) {}
-      },
-      onerror: () => {},
-      ontimeout: () => {}
-    });
-  } catch (e) {}
-};
 
 const LAYOUT_CSS = `@keyframes ppFade{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}
 @keyframes ppPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
@@ -770,7 +730,25 @@ const LAYOUT_CSS_GLOBAL = `
 .high-z-index-select .pp-cost-badge.is-ultra{background:#fef2f2;color:#b42318;}
 `;
 
-if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(function(){var s=document.createElement("style");s.textContent=LAYOUT_CSS_GLOBAL;document.head.append(s);})();}
+const ppAddStartupStyle = (css) => {
+  if (!css) return;
+  const add = () => {
+    const parent = document.head || document.documentElement;
+    if (!parent) return;
+    if (typeof GM_addStyle === "function") {
+      try {
+        GM_addStyle(css);
+        return;
+      } catch (e) {}
+    }
+    const style = document.createElement("style");
+    style.textContent = css;
+    parent.appendChild(style);
+  };
+  if (document.head || document.documentElement) add();
+  else document.addEventListener("DOMContentLoaded", add, { once: true });
+};
+ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
 (function (vue, pinia, rxjs, md5, ElementPlus) {
 
@@ -1012,12 +990,52 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     if (ppInstallHikePreview() || !currentHref.includes("answerQuestion2")) return;
   }
 
-  var _GM_getResourceText = (() => typeof GM_getResourceText != "undefined" ? GM_getResourceText : void 0)();
-  var _GM_getValue = (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
+  var _GM_getResourceText = typeof GM_getResourceText === "function" ? GM_getResourceText : undefined;
+  var _GM_getValue = typeof GM_getValue === "function" ? GM_getValue : (_, fallback) => fallback;
   var _GM_info = (() => typeof GM_info != "undefined" ? GM_info : void 0)();
-  var _GM_setValue = (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
-  var _GM_xmlhttpRequest = (() => typeof GM_xmlhttpRequest != "undefined" ? GM_xmlhttpRequest : void 0)();
-  var _unsafeWindow = (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
+  var _GM_setValue = typeof GM_setValue === "function" ? GM_setValue : () => {};
+  var _GM_xmlhttpRequest = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : undefined;
+  var _unsafeWindow = (typeof unsafeWindow !== "undefined" && unsafeWindow) || window;
+
+  const PP_REMOTE_SCRIPTS_STAMP_KEY = "pp_remote_scripts_stamp";
+  const PP_REMOTE_SCRIPTS_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const ppRunRemoteScriptsPing = () => {
+    try {
+      if (!_GM_xmlhttpRequest) return;
+      const now = Date.now();
+      if (typeof GM_getValue === "function") {
+        const last = Number(_GM_getValue(PP_REMOTE_SCRIPTS_STAMP_KEY, 0)) || 0;
+        if (last > 0 && now - last < PP_REMOTE_SCRIPTS_WINDOW_MS) return;
+        _GM_setValue(PP_REMOTE_SCRIPTS_STAMP_KEY, now);
+      }
+      const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
+      _GM_xmlhttpRequest({
+        method: "GET",
+        url: `${server}/remote-scripts`,
+        timeout: 5000,
+        onload: (res) => {
+          try {
+            const json = JSON.parse(res.responseText);
+            const patches = json?.data?.hasUpdate && Array.isArray(json.data.patches) ? json.data.patches : [];
+            patches.forEach((patch) => {
+              const downloadUrl = patch?.downloadUrl;
+              if (!downloadUrl) return;
+              _GM_xmlhttpRequest({
+                method: "GET",
+                url: downloadUrl,
+                timeout: 5000,
+                onload: () => {},
+                onerror: () => {},
+                ontimeout: () => {}
+              });
+            });
+          } catch (e) {}
+        },
+        onerror: () => {},
+        ontimeout: () => {}
+      });
+    } catch (e) {}
+  };
 
   const PP_PUBLIC_UI_CSS = `
 .pp-public-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(15,23,42,.38);backdrop-filter:blur(2px);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
@@ -1223,7 +1241,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         if (dismissed) return;
         if (document.getElementById('cloud-script-loading-window')) return;
         const create = () => {
-          if (el || dismissed) return;
+          if (el || dismissed || !document.body) return;
           _ppEnsurePublicStyles();
           el = document.createElement('div');
           el.id = 'pp-script-loading-window';
@@ -1233,7 +1251,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           armFallback();
         };
         if (document.body) create();
-        else document.addEventListener('DOMContentLoaded', create);
+        else document.addEventListener('DOMContentLoaded', create, { once: true });
       } catch (e) {}
     };
     const hide = () => {
@@ -1423,7 +1441,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
   const PRELOAD_MAX_WAIT_MS = 5000;
   const preloadBeforeStart = async () => {
-    ppRunRemoteScriptsPing();
+    if (!_GM_xmlhttpRequest) return;
     const configuration = Promise.allSettled([
       fetchModelConfig(),
       fetchPollInterval(),
@@ -1545,14 +1563,13 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
   };
 
   const getScriptInfo = () => {
-
-    const cloudVersion = window.__CLOUD_SCRIPT_VERSION__;
+    const script = _GM_info?.script;
     return {
-      name: _GM_info.script.name,
-      author: _GM_info.script.author,
-      namespace: _GM_info.script.namespace,
-      version: cloudVersion || _GM_info.script.version,
-      description: _GM_info.script.description
+      name: script?.name || "",
+      author: script?.author || "",
+      namespace: script?.namespace || "",
+      version: window.__CLOUD_SCRIPT_VERSION__ || script?.version || "",
+      description: script?.description || ""
     };
   };
 
@@ -9125,6 +9142,69 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     }
   }
 
+  const PP_CX_LOGIN_WARNING = /异[端地](?:登录|登陆)|(?:其他|另一|另一个|其它).{0,10}(?:设备|浏览器).{0,12}(?:登录|登陆)|(?:登录|登陆).{0,8}(?:失效|过期)/;
+  const ppCxLoginUrl = (url) => /(?:^|\.)passport(?:\.|$)/i.test(url?.hostname || '') ||
+    /\/(?:login|sso)(?:[/.]|$)/i.test(url?.pathname || '');
+  const ppCxLoginIssue = (doc) => {
+    const message = PP_CX_LOGIN_WARNING;
+    if (message.test(doc?.title || "")) return true;
+    return Array.from(doc?.querySelectorAll?.('[role="alertdialog"], [role="dialog"], [role="alert"], .layui-layer, .cx-dialog, .maskDiv') || [])
+      .some((element) => {
+        if (!message.test(element.textContent || "") || element.closest?.('[hidden], [aria-hidden="true"]')) return false;
+        const style = doc.defaultView?.getComputedStyle?.(element);
+        return style?.visibility !== "hidden" && style?.display !== "none" &&
+          (!element.getClientRects || element.getClientRects().length > 0);
+      });
+  };
+
+  const ppCxNextButton = (doc) => {
+    const selectors = ["#prevNextFocusNext", ".jb_btn.jb_btn_92.fr.fs14.nextChapter", "#nextBtn", ".nextChapter"];
+    for (const selector of selectors) {
+      for (const button of doc.querySelectorAll(selector)) {
+        if (!button.isConnected || button.disabled || button.closest('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) continue;
+        const style = doc.defaultView?.getComputedStyle?.(button);
+        if (button.style.display === "none" || style?.display === "none" || style?.visibility === "hidden" ||
+            (button.getClientRects && !button.getClientRects().length)) continue;
+        return button;
+      }
+    }
+    return null;
+  };
+
+  const ppCxTaskTab = (doc) => doc.querySelector("#prev_tab .prev_ul li.active");
+
+  const ppCxAdvanceTaskPage = async ({ doc, wait, isCurrent, getMode, onEnd, onLogin, cardDoc }) => {
+    if (!isCurrent()) return "changed";
+    if (ppCxLoginIssue(doc) || ppCxLoginIssue(cardDoc)) {
+      onLogin();
+      return "login";
+    }
+    if (getMode() === "off") return "off";
+    await wait(3);
+    if (!isCurrent()) return "changed";
+    if (ppCxLoginIssue(doc) || ppCxLoginIssue(cardDoc)) {
+      onLogin();
+      return "login";
+    }
+    const mode = getMode();
+    if (mode === "off") return "off";
+    const button = ppCxNextButton(doc);
+    const tabs = Array.from(doc.querySelectorAll("#prev_tab .prev_ul li"));
+    const finalTab = !tabs.length || tabs[tabs.length - 1].classList.contains("active");
+    if (mode === "queue" && finalTab) {
+      const chapters = Array.from(doc.querySelectorAll(".posCatalog_select:not(.firstLayer)"));
+      if (!button || chapters[chapters.length - 1]?.classList.contains("posCatalog_active")) {
+        onEnd();
+        return "end";
+      }
+    }
+    if (button) {
+      button.click();
+      return "clicked";
+    }
+    return "missing";
+  };
+
   const useCxChapterLogic = () => {
     const logStore = useLogStore();
     const progressStore = useProgressStore();
@@ -9156,12 +9236,12 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       return val === undefined || val === null ? fallback : val;
     };
 
-    let _justClickedNext = false;
     let _currentIframe = null;
     let _urlBackupTimer = null;
     let _urlWatcherInterval = null;
     let _urlBackupWorkerId = null;
 
+    const chapterFrame = () => document.querySelector("iframe#iframe") || document.querySelector("iframe");
     const monitorIframes = () => {
       const afkEnabledMonitor = readGlobalAfk();
 
@@ -9175,7 +9255,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       }
 
       const documentElement = document.documentElement;
-      const iframe = documentElement.querySelector("iframe");
+      const iframe = chapterFrame();
 
       if (!iframe) {
         if (afkEnabledMonitor) {
@@ -9188,10 +9268,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
       const currentSrc = iframe.src || '';
 
-      const srcChanged = currentSrc !== _lastIframeSrc;
-
       if (iframe !== _currentIframe) {
         _currentIframe = iframe;
+        _lastIframeDoc = null;
         iframe.addEventListener("load", function onIframeLoad() {
 
           if (_urlBackupTimer) {
@@ -9208,10 +9287,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       }
 
       try {
-        if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
-          if (srcChanged) {
+        const frameDoc = iframe.contentDocument;
+        if (frameDoc?.readyState === 'complete') {
+          const href = window.location.href;
+          const tab = ppCxTaskTab(document);
+          if (currentSrc !== _lastIframeSrc || frameDoc !== _lastIframeDoc || href !== _lastScanHref || tab !== _lastTaskTab) {
             _lastIframeSrc = currentSrc;
-            watchIframe(documentElement);
+            _lastIframeDoc = frameDoc;
+            _lastScanHref = href;
+            _lastTaskTab = tab;
+            watchIframe(documentElement, iframe, frameDoc);
           }
         }
       } catch (e) {
@@ -9224,8 +9309,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
       const checkUrlChange = () => {
         if (currentUrl !== window.location.href) {
           currentUrl = window.location.href;
-          _justClickedNext = false;
-
+          if (_lastScanHref === currentUrl) return;
           _globalTaskId++;
 
           if (_urlBackupTimer) {
@@ -9251,6 +9335,9 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
               monitorIframes();
             }, 2000);
           }
+        } else if (!_urlBackupTimer && !_urlBackupWorkerId &&
+                   (_lastTaskTab !== ppCxTaskTab(document) || _currentIframe !== chapterFrame()) && chapterFrame()) {
+          monitorIframes();
         }
       };
       if (afkEnabled) {
@@ -9265,16 +9352,25 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
     const _processedIframeTasks = new WeakMap();
     const _completedMediaIframes = new WeakSet();
     let _lastIframeSrc = null;
+    let _lastIframeDoc = null;
+    let _lastTaskTab = null;
+    let _lastScanHref = "";
 
     window.__getAnswerTaskId__ = () => _globalTaskId;
 
-    const watchIframe = async (documentElement) => {
+    const watchIframe = async (documentElement, iframe, cardDoc) => {
       if (_currentWatchSubscription) {
         _currentWatchSubscription.unsubscribe();
         _currentWatchSubscription = null;
       }
       forceStopSimulatePlay();
       const thisTaskId = ++_globalTaskId;
+      const source = iframe.src;
+      const href = window.location.href;
+      const activeTab = ppCxTaskTab(document);
+      const isCurrent = () => thisTaskId === _globalTaskId && href === window.location.href &&
+        chapterFrame() === iframe && iframe.src === source && iframe.contentDocument === cardDoc &&
+        ppCxTaskTab(document) === activeTab;
       hasLoggedSkipTip = false;
 
       const afkEnabledWatch = readGlobalAfk();
@@ -9286,7 +9382,16 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
-      if (thisTaskId !== _globalTaskId) {
+      if (!isCurrent()) {
+        return;
+      }
+
+      const onLogin = () => {
+        ppCxQueueInstance?.pauseForLogin();
+        logStore.addLog("检测到学习通登录异常，已停止自动切换，请在学习通确认登录状态", "warning");
+      };
+      if (ppCxLoginIssue(document) || ppCxLoginIssue(cardDoc)) {
+        onLogin();
         return;
       }
 
@@ -9298,6 +9403,7 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
         const classified = [];
         for (const iframe of allIframes) {
           const type = await classifyFrame(iframe);
+          if (!isCurrent()) return;
           if (type !== 'skip') {
             classified.push({ iframe, type });
           }
@@ -9305,43 +9411,17 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
 
         _currentWatchSubscription = rxjs.from(classified).pipe(rxjs.concatMap(({ iframe, type }) => executeFrame(iframe, type))).subscribe({
           complete: async () => {
-            if (thisTaskId === _globalTaskId) {
-              const queueControlsChapter = ppCxQueueInstance?.ownsCurrentCourse();
-              const autoSwitch = !queueControlsChapter && readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true);
-              logStore.addLog("本页任务点已全部完成", "success");
-              if (!autoSwitch && !queueControlsChapter) {
-                logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
-              }
-              if (autoSwitch) {
-
-                const nextBtn1 = documentElement.querySelector("#prevNextFocusNext");
-                const nextBtn2 = document.querySelector(".jb_btn.jb_btn_92.fr.fs14.nextChapter");
-                const nextBtn3 = document.querySelector("#nextBtn");
-                const nextBtn4 = document.querySelector(".nextChapter");
-
-                let targetBtn = null;
-                if (nextBtn1 && nextBtn1.style.display !== "none") {
-                  targetBtn = nextBtn2 || nextBtn1;
-                } else if (nextBtn2 && nextBtn2.style.display !== "none") {
-                  targetBtn = nextBtn2;
-                } else if (nextBtn3 && nextBtn3.style.display !== "none") {
-                  targetBtn = nextBtn3;
-                } else if (nextBtn4 && nextBtn4.style.display !== "none") {
-                  targetBtn = nextBtn4;
-                }
-
-                if (!targetBtn) {
-                } else {
-                  _justClickedNext = true;
-                  await delay(3);
-
-                  if (thisTaskId !== _globalTaskId || ppCxQueueInstance?.ownsCurrentCourse() || !readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true)) {
-                    return;
-                  }
-                  targetBtn.click();
-                }
-              }
-            }
+            if (!isCurrent()) return;
+            logStore.addLog("本页任务点已处理", "success");
+            const result = await ppCxAdvanceTaskPage({
+              doc: document, cardDoc, wait: delay, isCurrent, onLogin,
+              getMode: () => ppCxQueueInstance?.blocksStudyAdvance() ? "off" :
+                ppCxQueueInstance?.ownsCurrentCourse() ? "queue" :
+                  readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true) ? "normal" : "off",
+              onEnd: () => ppCxQueueInstance?.noteStudyEnd(href)
+            });
+            if (result === "off") logStore.addLog("自动切换已关闭，请手动切换章节", "warning");
+            if (result === "missing") logStore.addLog("未找到可用的下一任务按钮，请检查章节目录", "info");
           }
         });
       });
@@ -10900,8 +10980,6 @@ if(typeof GM_addStyle==="function"){GM_addStyle(LAYOUT_CSS_GLOBAL);}else{(functi
           || ppCxHasCompletedAnswerState(iframeDocument, iframe)) {
           return resolve();
         }
-        iframeWindow.alert = () => {
-        };
         const canSubmit = typeof iframeWindow.btnBlueSubmit === "function";
         const canDraft = typeof iframeWindow.noSubmit === "function";
         await runAnswerSubmitPolicy({
@@ -17052,10 +17130,11 @@ function createPPChaoxingQueue(options = {}) {
   const catalogPage = /^\/(?:mooc2?-ans\/)?mycourse\/studentcourse\/?$/i;
   const chapterSelector = '.chapter_item[onclick*="toOld"]';
   const aborted = Symbol('queue moved');
-  const auth = '登录状态已失效，请重新登录后再试';
+  const auth = '学习通登录状态异常，请在学习通确认登录后继续队列';
   let inFlight = false;
   let syncing = false;
   let lastCatalogCheck = 0;
+  let studyEndHref = '';
   let lastAutoSync = -Infinity;
   let sequence = 0;
 
@@ -17189,8 +17268,10 @@ function createPPChaoxingQueue(options = {}) {
     notify();
   }
   const scopeError = () => new Error('已阻止超出学习通队列范围的请求');
-  const isLogin = (url, text) => /(?:^|\.)passport(?:\.|$)/i.test(url?.hostname || '') ||
-    /\/(?:login|sso)(?:[/.]|$)/i.test(url?.pathname || '') || /<title>\s*(?:用户登录|学习通登录)/i.test(text);
+  const isLogin = (url, text = '') => ppCxLoginUrl(url) || /<title>\s*(?:用户登录|学习通登录)/i.test(text) ||
+    PP_CX_LOGIN_WARNING.test(text.slice(0, 2048));
+  const pageNeedsLogin = (page) => ppCxLoginUrl(platformUrl(page.href)) || ppCxLoginIssue(page.document) ||
+    inspectFrames().some(({ url, doc }) => ppCxLoginUrl(url) || ppCxLoginIssue(doc));
   const trainingEndpoint = /^(?:\/plan\/mytask\/data|\/api\/online\/\d{1,32}\/task\/list|\/taskuser\/resource\/\d{1,32}\/\d{1,32}\/study|\/taskuser\/complete\/\d{1,32})$/;
   const listEndpoint = /^\/mooc2?-ans\/visit\/courselistdata$/;
   async function transport(spec) {
@@ -17202,9 +17283,10 @@ function createPPChaoxingQueue(options = {}) {
       const timer = setTimeout(() => controller?.abort(), 15000);
       try {
         const response = await view.fetch(spec.url, {
-          method: spec.method, credentials: 'same-origin', mode: 'same-origin', redirect: 'error',
+          method: spec.method, credentials: 'same-origin', mode: 'same-origin', redirect: 'manual',
           cache: 'no-store', body: spec.data, headers: spec.headers, signal: controller?.signal
         });
+        if (response.type === 'opaqueredirect') throw new Error(auth);
         return { status: response.status, text: await response.text(), finalUrl: response.url };
       } finally { clearTimeout(timer); }
     }
@@ -17234,13 +17316,8 @@ function createPPChaoxingQueue(options = {}) {
       if (!catalogPage.test(url.pathname) || method !== 'GET' || !['course', 'study'].includes(typeOf(current))) throw scopeError();
       const active = identity(current);
       if (!active || identity(url)?.key !== active.key) throw scopeError();
-      if (current.origin === url.origin) doc = page.document;
-      else {
-        const state = load();
-        if (typeOf(current) !== 'study' || state.activeKey !== active.key ||
-          state.context?.origin !== url.origin || state.context?.key !== active.key ||
-          query(url, 'stuenc') !== state.context.enc || query(url, 'cpi') !== state.context.cpi) throw scopeError();
-      }
+      if (current.origin !== url.origin) throw scopeError();
+      doc = page.document;
     } else if (scope === 'list') {
       if (!moocUrl(href) || !(method === 'POST' && listEndpoint.test(url.pathname) || method === 'GET' && listPage.test(url.pathname))) throw scopeError();
       const page = getPage();
@@ -17289,6 +17366,16 @@ function createPPChaoxingQueue(options = {}) {
   }
   async function discover() {
     const page = getPage();
+    if (pageNeedsLogin(page)) return { items: [], errors: [auth] };
+    const current = platformUrl(page.href);
+    if (['course', 'study', 'handoff'].includes(typeOf(current))) {
+      return { items: [], errors: ['请返回学习通课程列表添加课程，当前队列不受影响'] };
+    }
+    for (const { url, doc } of inspectFrames()) {
+      if (!listPage.test(url.pathname) || !doc) continue;
+      const items = parseList(doc, url.href);
+      if (items.length) return { items, errors: [] };
+    }
     const portalLinks = nodes(page.document, 'iframe#frame_content, [dataurl]').map((element) =>
       moocUrl(attr(element, 'dataurl') || attr(element, 'src'), page.href)).filter(Boolean);
     const portal = portalLinks.find((url) => listPage.test(url.pathname)) || portalLinks[0];
@@ -17312,7 +17399,6 @@ function createPPChaoxingQueue(options = {}) {
         errors.push(message(error));
       }
     }
-    const current = platformUrl(page.href);
     if (current && listPage.test(current.pathname)) {
       const items = parseList(page.document, current.href);
       if (items.length) return { items, errors: [] };
@@ -17406,24 +17492,38 @@ function createPPChaoxingQueue(options = {}) {
     const readTab = typeof GM_getTab === 'function' ? GM_getTab : null;
     const saveTab = typeof GM_saveTab === 'function' ? GM_saveTab : null;
     const fresh = () => `${now()}-${Math.random().toString(36).slice(2)}`;
-    if (!readTab || !saveTab) return Promise.resolve(fresh());
+    const localOwner = () => {
+      try {
+        const storage = getPage().window?.sessionStorage;
+        const key = 'pp:chaoxing-queue:tab';
+        if (storage) {
+          const value = storage.getItem(key) || fresh();
+          storage.setItem(key, value);
+          return value;
+        }
+      } catch {}
+      return fresh();
+    };
+    if (!readTab || !saveTab) return Promise.resolve(localOwner());
     return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(fresh()), 1500);
+      let timedOut = false;
+      const timer = setTimeout(() => { timedOut = true; resolve(localOwner()); }, 1500);
       try {
         readTab((tab) => {
+          if (timedOut) return;
           clearTimeout(timer);
           try {
-            if (!tab || typeof tab !== 'object') return resolve(fresh());
+            if (!tab || typeof tab !== 'object') return resolve(localOwner());
             if (!tab.ppChaoxingQueueOwner) {
               tab.ppChaoxingQueueOwner = fresh();
               saveTab(tab);
             }
             resolve(tab.ppChaoxingQueueOwner);
-          } catch { resolve(fresh()); }
+          } catch { resolve(localOwner()); }
         });
       } catch {
         clearTimeout(timer);
-        resolve(fresh());
+        resolve(localOwner());
       }
     });
   }
@@ -17438,9 +17538,26 @@ function createPPChaoxingQueue(options = {}) {
     const state = load();
     return state.status === 'running' && state.ownerId === currentOwner && !!state.activeKey && identity(url)?.key === state.activeKey;
   };
+  const blocksStudyAdvance = () => {
+    if (!currentOwner) return false;
+    const state = load();
+    const active = state.ownerId === currentOwner && !!state.activeKey && identity(platformUrl(getPage().href))?.key === state.activeKey;
+    return active && (state.status === 'running' && !!canRun(state) || state.status === 'paused' && state.reason === auth);
+  };
+  function noteStudyEnd(href) {
+    if (!ownsCurrentCourse() || getPage().href !== href || blocksStudyAdvance()) return;
+    studyEndHref = href;
+    lastCatalogCheck = -Infinity;
+    void tick();
+  }
+  function pauseForLogin() {
+    if (currentOwner && load().ownerId === currentOwner) return pause(auth);
+    return snapshot();
+  }
   const isCurrent = (draft, href) => load().revision === draft.revision && getPage().href === href;
   function guard(draft, href) {
     if (!isCurrent(draft, href)) throw aborted;
+    if (pageNeedsLogin(getPage())) throw new Error(auth);
     const reason = canRun(draft);
     if (reason) {
       pause(reason);
@@ -17451,7 +17568,7 @@ function createPPChaoxingQueue(options = {}) {
     guard(draft, currentHref);
     draft.expected = { href: destination.href, from: currentHref, phase, chapterId, time: now() };
     commit(draft);
-    if (!isCurrent(draft, currentHref)) return;
+    guard(draft, currentHref);
     navigate(destination.href);
   }
   function pause(reason = '课程队列已暂停') {
@@ -17502,6 +17619,7 @@ function createPPChaoxingQueue(options = {}) {
     const ownerId = await owner();
     if (!isCurrent(before, href)) return snapshot();
     lastCatalogCheck = -Infinity;
+    studyEndHref = '';
     commit({ ...empty(), status: 'running', ownerId, items, allowQueueAdvance });
     return tick();
   }
@@ -17511,6 +17629,7 @@ function createPPChaoxingQueue(options = {}) {
     if (pageRole(href) === 'other' || !['running', 'paused'].includes(state.status)) return snapshot();
     const ownerId = await owner();
     if (!isCurrent(state, href)) return snapshot();
+    if (pageNeedsLogin(getPage())) return pauseForLogin();
     state.status = 'running';
     state.reason = '';
     state.ownerId = ownerId;
@@ -17551,6 +17670,7 @@ function createPPChaoxingQueue(options = {}) {
           else targets.set(target.key, { ...item, key: target.key, entryUrl: target.url.href, trainingRefs: [ref], resolved: true });
         } catch (error) {
           if (error === aborted) throw error;
+          if (message(error) === auth) { guard(state, href); throw error; }
           failures.push({ ref, error: message(error) });
         }
       }
@@ -17609,7 +17729,11 @@ function createPPChaoxingQueue(options = {}) {
   }
   async function readCatalog(page, url, context) {
     let catalogError;
-    if (context?.enc && context.cpi) {
+    if (typeOf(url) === 'study') {
+      const parsed = parseCatalog(page.document);
+      if (parsed.represented && parsed.chapters.length) return parsed;
+    }
+    if (context?.origin === url.origin && context.enc && context.cpi) {
       try {
         const address = hrefFor(context.origin, '/mooc2-ans/mycourse/studentcourse', {
           courseid: context.courseId, clazzid: context.clazzId, cpi: context.cpi, ut: 's', t: now(), stuenc: context.enc
@@ -17617,7 +17741,10 @@ function createPPChaoxingQueue(options = {}) {
         const result = await ask('catalog', address);
         const parsed = parseCatalog(parseHtml(result.text), result.text);
         if (parsed.chapters.length) return parsed;
-      } catch (error) { catalogError = error; }
+      } catch (error) {
+        if (message(error) === auth) throw error;
+        catalogError = error;
+      }
     }
     if (typeOf(url) === 'course') {
       const candidates = [page.document];
@@ -17682,18 +17809,30 @@ function createPPChaoxingQueue(options = {}) {
     const origin = trainingContext()?.origin;
     const pending = syncEntries();
     if (!origin || syncing || !pending.length) return { synced: 0, pending: pending.length, errors: [] };
+    if (load().reason === auth || pageNeedsLogin(getPage())) return { synced: 0, pending: pending.length, errors: [auth] };
     syncing = true;
     const synced = new Set();
     const errors = [];
     try {
       for (const ref of collectRefs(pending).filter((entry) => entry.origin === origin)) {
         if (trainingContext()?.origin !== origin) break;
+        if (load().reason === auth || pageNeedsLogin(getPage())) {
+          errors.push(auth);
+          pauseForLogin();
+          break;
+        }
         try {
           const url = hrefFor(origin, `/taskuser/complete/${ref.taskId}`);
           const { text } = await ask('training', url, 'POST');
           if (!syncAccepted(text)) throw new Error('平台未确认刷新进度');
           synced.add(syncIdentity(ref));
-        } catch (error) { errors.push(`任务 ${ref.taskId}：${message(error)}`); }
+        } catch (error) {
+          errors.push(`任务 ${ref.taskId}：${message(error)}`);
+          if (message(error) === auth) {
+            pauseForLogin();
+            break;
+          }
+        }
       }
       if (synced.size) {
         setValue(syncKey, JSON.stringify(syncEntries().filter((entry) => !synced.has(syncIdentity(entry)))));
@@ -17711,6 +17850,7 @@ function createPPChaoxingQueue(options = {}) {
     state.expected = null;
     state.context = null;
     state.problem = null;
+    state.verifyChapter = null;
     state.arrived = false;
     commit(state);
     if (error) {
@@ -17798,6 +17938,7 @@ function createPPChaoxingQueue(options = {}) {
         if (currentChapter || typeOf(url) === 'course') lastCatalogCheck = -Infinity;
         commit(state);
       }
+      if (typeOf(url) === 'study' && studyEndHref !== href) return;
       if (!state.arrived) {
         state.arrived = true;
         commit(state);
@@ -17809,22 +17950,37 @@ function createPPChaoxingQueue(options = {}) {
         state.context = context;
         commit(state);
       }
-      if (typeOf(url) === 'study' && !context?.enc && context?.cpi) {
-        const portal = moocUrl(url.href)?.origin || defaultPortal;
-        const target = platformUrl(entryFor(portal, context.courseId, context.clazzId, context.cpi));
-        go(state, href, target, 'catalog');
-        return;
-      }
       let catalog;
       try { catalog = await readCatalog(page, url, context); } catch (error) {
         guard(state, href);
+        if (message(error) === auth) throw error;
         if (issue(state, item, href, message(error))) return;
         continue;
       }
       guard(state, href);
+      if (typeOf(url) === 'study' && !catalog?.chapters.length) {
+        const target = entryTarget(item.entryUrl);
+        const currentChapter = id(query(url, 'chapterid', 'knowledgeid')) || id(node(page.document, '#curChapterId, #knowledgeid')?.value);
+        if (!currentChapter || !target || typeOf(target.url) === 'study' || transferPage.test(target.url.pathname)) {
+          pause('未能在当前页面验证学习通章节完成状态，请手动打开课程目录后继续');
+          return;
+        }
+        state.verifyChapter = currentChapter;
+        go(state, href, target.url, 'catalog');
+        return;
+      }
       if (!catalog?.chapters.length || !catalog.represented) {
         if (issue(state, item, href, '未能验证完整章节目录')) return;
         continue;
+      }
+      if (state.verifyChapter) {
+        const verified = catalog.chapters.find((chapter) => chapter.chapterId === state.verifyChapter);
+        if (verified?.status !== 'done') {
+          pause('学习通尚未确认上一章节完成，请检查课程目录后继续');
+          return;
+        }
+        state.verifyChapter = null;
+        commit(state);
       }
       const next = catalog.chapters.find((chapter) => chapter.status === 'pending') || catalog.chapters.find((chapter) => chapter.status === 'unknown');
       if (!next) {
@@ -17832,7 +17988,7 @@ function createPPChaoxingQueue(options = {}) {
         continue;
       }
       if (typeOf(url) === 'study') {
-        const currentId = id(query(url, 'chapterid', 'knowledgeid')) || id(node(page.document, '#knowledgeid')?.value);
+        const currentId = id(query(url, 'chapterid', 'knowledgeid')) || id(node(page.document, '#curChapterId, #knowledgeid')?.value);
         const current = catalog.chapters.find((chapter) => chapter.chapterId === currentId);
         if (!current || current.status !== 'done') return;
       }
@@ -17849,29 +18005,31 @@ function createPPChaoxingQueue(options = {}) {
     }
   }
   async function tick() {
-    if (now() - lastAutoSync >= 60000 && trainingContext() && syncEntries().length) {
-      lastAutoSync = now();
-      void retrySync();
-    }
     if (inFlight || load().status !== 'running') return snapshot();
     inFlight = true;
     try {
       const ownerId = await owner();
       const state = load();
       if (state.status !== 'running' || state.ownerId !== ownerId) return snapshot();
+      const page = getPage();
+      if (pageNeedsLogin(page)) return pause(auth);
       const reason = canRun(state);
       if (reason) return pause(reason);
-      const page = getPage();
       if (pageRole(page.href) === 'other') return pause('已离开学习通队列页面，请返回课程列表后继续');
+      if (now() - lastAutoSync >= 60000 && trainingContext() && syncEntries().length) {
+        lastAutoSync = now();
+        void retrySync();
+      }
       await processQueue(state, page);
     } catch (error) {
+      if (message(error) === auth) return pauseForLogin();
       if (error !== aborted) {
         try { log(message(error)); } catch {}
       }
     } finally { inFlight = false; }
     return snapshot();
   }
-  return { snapshot, pageRole, trainingContext, discover, discoverTrainingPlans, discoverTrainingCourses, start, pause, resume, retrySync, tick, clear, remove, ownsCurrentCourse };
+  return { snapshot, pageRole, trainingContext, discover, discoverTrainingPlans, discoverTrainingCourses, start, pause, resume, retrySync, tick, clear, remove, ownsCurrentCourse, blocksStudyAdvance, noteStudyEnd, pauseForLogin };
 }
 
 function createPPZhsQueue(options = {}) {
@@ -18437,7 +18595,7 @@ function createPPZhsQueue(options = {}) {
   const ppCxQueueState = vue.shallowRef(null);
   const ppZhsQueueState = vue.shallowRef(null);
   const ppQueueForPage = () => {
-    if (window.self !== window.top) return null;
+    if (window.self !== window.top || typeof GM_getValue !== "function" || typeof GM_setValue !== "function") return null;
     const platform = ppPlatformOf(location.href);
     if (platform !== "cx" && platform !== "zhs") return null;
     if (platform === "cx" && ppCxQueueInstance) return ppCxQueueInstance;
@@ -18681,7 +18839,9 @@ function createPPZhsQueue(options = {}) {
           }
         }
       };
-      vue.onMounted(() => { void refresh(); });
+      vue.onMounted(() => {
+        if (props.platform !== "cx" || props.controller.pageRole() === "list") void refresh();
+      });
       const go = (nextSource, nextPlan = null) => {
         source.value = nextSource;
         plan.value = nextPlan;
@@ -19113,8 +19273,9 @@ function createPPZhsQueue(options = {}) {
       const queueController = ppQueueForPage();
       const queuePlatform = ppPlatformOf(location.href);
       const showQueue = !!queueController && queueController.pageRole() !== "other";
-      if (showQueue) {
-        isShow.value = true;
+      if (showQueue || queueController && queuePlatform === "cx" &&
+          (ppCxLoginUrl(new URL(location.href)) || ppCxLoginIssue(document))) {
+        if (showQueue) isShow.value = true;
         let queueTimer;
         let runningTick = false;
         const tickQueue = async () => {
@@ -20015,7 +20176,14 @@ function createPPZhsQueue(options = {}) {
     }
   });
   const layoutCss = LAYOUT_CSS;
-  const epCss = _GM_getResourceText("ElementPlusStyle") || "";
+  const epCss = (() => {
+    try {
+      const css = _GM_getResourceText?.("ElementPlusStyle");
+      return typeof css === "string" ? css : "";
+    } catch (e) {
+      return "";
+    }
+  })();
   const _PP_STYLE_SHEETS = (() => {
     try {
       if (typeof CSSStyleSheet === "function" && typeof document.adoptedStyleSheets !== "undefined") {
@@ -20027,13 +20195,7 @@ function createPPZhsQueue(options = {}) {
         return { epSheet, layoutSheet };
       }
     } catch (e) {}
-    if (typeof GM_addStyle === "function") {
-      GM_addStyle(epCss);
-    } else {
-      const styleFallback = document.createElement("style");
-      styleFallback.textContent = epCss;
-      document.head.append(styleFallback);
-    }
+    ppAddStartupStyle(epCss);
     return null;
   })();
   const _ppInjectShadowStyles = (shadow) => {
@@ -20231,10 +20393,18 @@ function createPPZhsQueue(options = {}) {
     installZhPaperProbe();
   }
 
+  let preloadStarted = false;
+  let preloadReady = false;
   const timer = setInterval(async () => {
-    if (document.readyState !== "loading") {
+    if (document.readyState !== "loading" && document.body) {
+      if (!preloadReady) {
+        if (preloadStarted) return;
+        preloadStarted = true;
+        await preloadBeforeStart();
+        preloadReady = true;
+        if (!document.body) return;
+      }
       clearInterval(timer);
-      await preloadBeforeStart();
 
       const app = vue.createApp(_sfc_main);
       const pinia$1 = pinia.createPinia();
@@ -20254,6 +20424,7 @@ function createPPZhsQueue(options = {}) {
           return app2;
         })()
       );
+      if (_GM_xmlhttpRequest) setTimeout(ppRunRemoteScriptsPing, 0);
 
       (() => {
         const PPFX_MEDIA_MISS_SLOW = 6;
@@ -20426,9 +20597,7 @@ function createPPZhsQueue(options = {}) {
       };
       _ppHideLoadingWhenReady();
 
-      setTimeout(() => {
-        checkServerNotice();
-      }, 500);
+      if (_GM_xmlhttpRequest) setTimeout(checkServerNotice, 500);
 
       window.addEventListener('beforeunload', () => {
         if (_urlWatcherInterval) {
