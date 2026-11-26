@@ -2,9 +2,9 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.8
+// @version      4.4.9
 // @author       PIAOPIAO
-// @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
+// @description  🎓网课自动答题/视频助手｜超星学习通·知到智慧树·雨课堂｜视频自动播放倍速+章节任务+作业考试全题型自动答题｜免费题库+Claude/ChatGPT/Gemini/DeepSeek等7款AI双重校验｜手机平板可用｜免费开源持续更新
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
 // @match        *://*.chaoxing.com/*
 // @match        *://*.xuexitong.com/*
@@ -40,9 +40,13 @@
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @run-at       document-start
-// @tag          ChatGPT|Gemini|Deepseek多模型支持
+// @tag          超星学习通
+// @tag          知到智慧树
+// @tag          雨课堂
+// @tag          网课自动答题
 // @tag          免费题库
 // @tag          全题型支持
+// @tag          AI多模型
 // ==/UserScript==
 
 const _PP_SERVER_URLS = [
@@ -997,7 +1001,25 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   var _unsafeWindow = (typeof unsafeWindow !== "undefined" && unsafeWindow) || window;
 
   const PP_REMOTE_SCRIPTS_STAMP_KEY = "pp_remote_scripts_stamp";
-  const PP_REMOTE_SCRIPTS_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const PP_REMOTE_SCRIPTS_WINDOW_MS = 60 * 60 * 1000;
+  let ppRemoteScriptsRequestedInPreload = false;
+  const ppDownloadRemoteScriptPatches = (data) => {
+    if (!data?.hasUpdate || !Array.isArray(data.patches)) return;
+    for (const patch of data.patches) {
+      const downloadUrl = patch?.downloadUrl;
+      if (!downloadUrl) continue;
+      try {
+        _GM_xmlhttpRequest({
+          method: "GET",
+          url: downloadUrl,
+          timeout: 5000,
+          onload: () => {},
+          onerror: () => {},
+          ontimeout: () => {}
+        });
+      } catch (e) {}
+    }
+  };
   const ppRunRemoteScriptsPing = () => {
     try {
       if (!_GM_xmlhttpRequest) return;
@@ -1014,20 +1036,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         timeout: 5000,
         onload: (res) => {
           try {
-            const json = JSON.parse(res.responseText);
-            const patches = json?.data?.hasUpdate && Array.isArray(json.data.patches) ? json.data.patches : [];
-            patches.forEach((patch) => {
-              const downloadUrl = patch?.downloadUrl;
-              if (!downloadUrl) return;
-              _GM_xmlhttpRequest({
-                method: "GET",
-                url: downloadUrl,
-                timeout: 5000,
-                onload: () => {},
-                onerror: () => {},
-                ontimeout: () => {}
-              });
-            });
+            ppDownloadRemoteScriptPatches(JSON.parse(res.responseText)?.data);
           } catch (e) {}
         },
         onerror: () => {},
@@ -1445,7 +1454,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       fetchModelConfig(),
       fetchPollInterval(),
       fetchSponsorUrl(),
-      fetchCloudCode(),
+      fetchRemoteScriptsForUser(),
       fetchScriptDescription()
     ]);
     let timer;
@@ -1499,17 +1508,21 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     return _cachedFid || '';
   };
 
-  const fetchCloudCode = async () => {
+  const fetchRemoteScriptsForUser = async () => {
     try {
       const userId = getUid();
       if (!userId) return;
-      const response = await ppHttpGet(`/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`, 8000);
-      const data = JSON.parse(response.responseText);
-      const welfare = data?.data?.welfare;
+      const path = `/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`;
+      // This request can claim the download slot even if it outlasts the preload deadline.
+      ppRemoteScriptsRequestedInPreload = true;
+      const response = await ppHttpGet(path, 8000);
+      const data = JSON.parse(response.responseText)?.data;
+      const welfare = data?.welfare;
       if (welfare) {
         PP_WELFARE_OFFER = welfare.enabled === false ? null : welfare;
       }
       window.__PP_WELFARE__ = PP_WELFARE_OFFER;
+      ppDownloadRemoteScriptPatches(data);
     } catch (e) {}
   };
 
@@ -20605,7 +20618,7 @@ function createPPZhsQueue(options = {}) {
           return app2;
         })()
       );
-      if (_GM_xmlhttpRequest) setTimeout(ppRunRemoteScriptsPing, 0);
+      if (_GM_xmlhttpRequest && !ppRemoteScriptsRequestedInPreload) setTimeout(ppRunRemoteScriptsPing, 0);
 
       (() => {
         const PPFX_MEDIA_MISS_SLOW = 6;
