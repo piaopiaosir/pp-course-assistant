@@ -36,7 +36,6 @@
 // @grant        GM_getTab
 // @grant        GM_saveTab
 // @grant        GM_getValue
-// @grant        GM_info
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
