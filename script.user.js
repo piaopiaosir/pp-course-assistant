@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.9
+// @version      4.5.0
 // @author       PIAOPIAO
 // @description  🎓网课自动答题/视频助手｜超星学习通·知到智慧树·雨课堂｜视频自动播放倍速+章节任务+作业考试全题型自动答题｜免费题库+Claude/ChatGPT/Gemini/DeepSeek等7款AI双重校验｜手机平板可用｜免费开源持续更新
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
@@ -7830,6 +7830,46 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     return -1;
   };
 
+  // 超星「阅读理解 / 听力题」大题有两套 DOM：
+  //   旧版：.readCompreHensionItem（老章节测验页）
+  //   新版：.readComprehensionQues > .reading_answer（作业/考试 2026 版，选项在 .stem_answer .hoverDiv）
+  // 只认旧类名时，新版整道大题会解析成 0 个小题：类型 15/19 既没有 optionsList 也没有 _reading，
+  // 回填阶段直接 return false，日志里只剩一句「答案与页面选项对不上」。
+  const PP_CX_READ_ITEM_LEGACY = ".readCompreHensionItem";
+  const PP_CX_READ_ITEM_MODERN =
+    ".readComprehensionQues .reading_answer, .readCompreHensionQues .reading_answer";
+
+  const ppCxReadItems = (root) => {
+    if (!root || typeof root.querySelectorAll !== "function") return [];
+    const legacy = Array.from(root.querySelectorAll(PP_CX_READ_ITEM_LEGACY));
+    if (legacy.length) return legacy;
+    const modern = Array.from(root.querySelectorAll(PP_CX_READ_ITEM_MODERN));
+    if (modern.length) return modern;
+    return Array.from(root.querySelectorAll(".reading_answer"));
+  };
+
+  const ppCxReadItemIsLegacy = (item) =>
+    Boolean(item && item.classList && item.classList.contains("readCompreHensionItem"));
+
+  // 新版小题的题型挂在 qtype 属性上（0 单选 / 1 多选 / 3 判断），缺省按单选处理
+  const ppCxReadItemType = (item) => {
+    let qtype = "";
+    try {
+      qtype = String(item && item.getAttribute ? item.getAttribute("qtype") || "" : "").trim();
+    } catch (e) {
+      qtype = "";
+    }
+    return /^\d+$/.test(qtype) ? qtype : "0";
+  };
+
+  // 新版每行选项：<div class="clearfix hoverDiv" onclick="addChoice(this)">…</div>
+  const ppCxReadOptionNodes = (item) => {
+    if (!item || typeof item.querySelectorAll !== "function") return [];
+    const rows = Array.from(item.querySelectorAll(".stem_answer .hoverDiv"));
+    if (rows.length) return rows;
+    return Array.from(item.querySelectorAll(".stem_answer .clearfix"));
+  };
+
   class CxQuestionHandler extends QuestionProcessor {
     constructor(type, iframe) {
       super();
@@ -8017,7 +8057,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
         let subEl = null;
         try {
-          const subEls = question.element.querySelectorAll(".readCompreHensionItem");
+          const subEls = ppCxReadItems(question.element);
           subEl = subEls[index] || null;
         } catch (e) {}
         if (!subEl) return 0;
@@ -8147,6 +8187,17 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           } catch (e) {}
           await sleep(150);
         };
+        // 小题是否已经选好：新版把作答结果写进小题的隐藏域 answerXXXX（值为字母），
+        // 只靠 class 判断会漏，重复点击反而会把已选的单选取消掉。
+        const subPicked = (sub, idx) => {
+          const el = sub && sub.elements ? sub.elements[idx] : null;
+          if (!el) return false;
+          if (this.isChoiceChecked(el)) return true;
+          const stored = String((sub.input && sub.input.value) || "")
+            .toUpperCase()
+            .replace(/[^A-Z]/g, "");
+          return Boolean(stored) && stored.includes(String.fromCharCode(65 + idx));
+        };
         const indexOfText = (options, text) => {
           const want = norm(text);
           if (!want) return -1;
@@ -8191,13 +8242,16 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
           const picked = sub.type === "1" ? idxs : idxs.slice(0, 1);
           answeredSubs += 1;
+          let clicks = 0;
           for (const idx of picked) {
             const el = (sub.elements || [])[idx];
             if (!el) continue;
-            if (this.isChoiceChecked(el)) continue;
+            if (subPicked(sub, idx)) continue;
             await clickEl(el);
+            clicks += 1;
             filled += 1;
           }
+          if (!clicks) filled += 1; // 小题已经选好，不再重复点击
           await sleep(120);
         }
 
@@ -8211,6 +8265,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         try {
           if (Array.isArray(question._reading) && question._reading.length > 0) {
             return (await this.fillReadingQuestion(question)) === true;
+          }
+          if ((String(question.type) === "15" || String(question.type) === "19") && typeof this.addLog === "function") {
+            this.addLog("阅读/听力题没有解析到小题（.readComprehensionQues），无法按小题回填", "warning");
           }
           const rawAnswer = question.answer;
           const hasAnswerPayload = Array.isArray(rawAnswer)
@@ -8880,7 +8937,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         const zyKsSelector = SELECTORS.CX_OPTION_ZY_KS;
         const zjSelector = SELECTORS.CX_OPTION_ZJ;
 
-        const subItems = Array.from(questionElement.querySelectorAll(".readCompreHensionItem"));
+        const subItems = ppCxReadItems(questionElement);
         const subTypeCode = String(resolvedType);
         if ((subTypeCode === "15" || subTypeCode === "19") && subItems.length > 0) {
           const isListening = subTypeCode === "19";
@@ -8893,21 +8950,33 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
                 .trim()
             : "";
           const subs = subItems.map((subItem) => {
-
+            const legacyItem = ppCxReadItemIsLegacy(subItem);
             const childTypeEl = subItem.querySelector('input[name="readCompreHension-childType"]');
-            const subType = childTypeEl ? String(childTypeEl.value || "").trim() || "0" : "0";
-            const contentEl = subItem.querySelector(".clearfix");
+            const subType = childTypeEl
+              ? String(childTypeEl.value || "").trim() || "0"
+              : legacyItem
+                ? "0"
+                : ppCxReadItemType(subItem);
+            const contentEl = subItem.querySelector(legacyItem ? ".clearfix" : ".reader_answer_tit");
             const subTitle = this.stripTags(this.htmlWithAbsoluteImages(contentEl || subItem))
               .replace(/（[\d.]+分）/g, "")
               .replace(/\s+/g, " ")
               .trim();
-            const liList = Array.from(subItem.querySelectorAll("ul li"));
-            const optionTexts = liList.map((li, j) => {
-              const spans = li.querySelectorAll("span.fl");
-              const textEl =
-                li.querySelector("a.fl.after") ||
-                li.querySelector("a.after") ||
-                (spans.length >= 2 ? spans[1] : li);
+            const optionNodes = legacyItem
+              ? Array.from(subItem.querySelectorAll("ul li"))
+              : ppCxReadOptionNodes(subItem);
+            const optionTexts = optionNodes.map((node, j) => {
+              let textEl = node;
+              if (legacyItem) {
+                const spans = node.querySelectorAll("span.fl");
+                textEl =
+                  node.querySelector("a.fl.after") ||
+                  node.querySelector("a.after") ||
+                  (spans.length >= 2 ? spans[1] : node);
+              } else {
+                // 新版选项正文在 .answer_p，字母在单独的 span.num_option 里
+                textEl = node.querySelector(".answer_p") || node;
+              }
               let text = this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
               const letter = String.fromCharCode(65 + j);
               text = text.replace(new RegExp("^" + letter + "[.、:：\\s]+", "i"), "").trim();
@@ -8917,8 +8986,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
               type: subType,
               title: subTitle,
               options: optionTexts,
-              elements: liList,
+              elements: optionNodes,
               el: subItem,
+              input: subItem.querySelector('input[id^="answer"]'),
               blanks: Array.from(subItem.querySelectorAll(".blankItemDiv"))
             };
           });
