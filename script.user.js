@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.4.7
+// @version      4.4.8
 // @author       PIAOPIAO
 // @description  🏆🏆【超星学习通｜知到智慧树｜雨课堂】【Claude ChatGPT Gemini Deepseek 等7款模型接入】【多种自动答题【学习通全题型答题】免费题库】【手机平板支持】【拥有题库 AI双重校验】。
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
@@ -13616,6 +13616,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     quizSignature: "",
     booted: false,
     restudy: new Set(),
+    restudySections: new Set(),
+    sectionSwitchAt: 0,
+    sectionCardSig: "",
     lastBeat: 0,
     lastRestartAt: 0,
     waitMediaSince: 0,
@@ -13648,6 +13651,40 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   };
   const zhRestudyReset = () => {
     zhRuntime.restudy.clear();
+    zhRuntime.restudySections.clear();
+    zhRuntime.sectionSwitchAt = 0;
+    zhRuntime.sectionCardSig = "";
+  };
+
+  const zhRestudyStart = (stage, tune, log, current, media, done, list) => {
+    if (!tune || !tune.restudy || !done || !current || !media) return false;
+    let items = list;
+    if (!Array.isArray(items)) {
+      try {
+        items = typeof stage.chapters === "function" ? stage.chapters() : [];
+      } catch (e) {
+        items = [];
+      }
+    }
+    if (zhRestudySeen(stage, current, items)) return false;
+    zhRestudyMark(stage, current, items);
+    try {
+      if (Number(media.currentTime) > 1) media.currentTime = 0;
+    } catch (e) {}
+    zhLogCadence(log, "restudy-start-" + stage.id, "复习模式：从 0 秒起完整重刷当前任务点", "primary", 60);
+    return true;
+  };
+
+  const zhMediaMissingSkip = (stage, tune, log, current, done) => {
+    if (!tune || !tune.restudy || !done || !current) return true;
+    if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
+    if (Date.now() - zhRuntime.waitMediaSince > 15000) {
+      zhRuntime.waitMediaSince = 0;
+      log.addLog("复习模式：当前任务点 15 秒内未加载到媒体，已跳过", "warning");
+      return true;
+    }
+    zhLogCadence(log, "restudy-wait-" + stage.id, "复习模式：等待当前任务点媒体加载…", "warning", 20);
+    return false;
   };
 
   const zhResolveEnded = (stage, tune, log, media, current, done, options) => {    const opts = options || {};
@@ -14308,21 +14345,25 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       }
       const media = await zhFindMedia(["#vjs_container_html5_api", "#vjs_container video", "video"], 6);
       if (media) {
+        zhRuntime.waitMediaSince = 0;
+        const current = this.current();
         if (media.ended) {
-          const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)), {
             replayKey: "legacy-replay",
             replayLog: "视频播放结束但未计入完成，重播补齐时长"
           });
           if (plan === "advance") return await this.advance(tune, log);
         }
+        zhRestudyStart(this, tune, log, current, media, !!(current && this.isDone(current)));
         await zhKeepPlaying(media, tune);
         return true;
       }
       const resourceKind = await zhHandleResourceTask(log);
       if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
-      if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      if (pendingCurrent && this.isDone(pendingCurrent) && zhMediaMissingSkip(this, tune, log, pendingCurrent, true)) {
+        return await this.advance(tune, log);
+      }
       zhLogCadence(log, "wait-media-" + this.id, "当前节点视频尚未加载，等待中…", "warning", 20);
       return false;
     },
@@ -14368,18 +14409,21 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       const media = await zhFindMedia(["video", "audio"], 6);
       if (media) {
         zhRuntime.waitMediaSince = 0;
+        const current = this.current();
         if (zhMediaAtEnd(media)) {
-          const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)));
           if (plan === "advance") return await this.advance(tune, log);
         }
+        zhRestudyStart(this, tune, log, current, media, !!(current && this.isDone(current)));
         await zhKeepPlaying(media, tune);
         return true;
       }
       const resourceKind = await zhHandleResourceTask(log);
       if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
-      if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      if (pendingCurrent && this.isDone(pendingCurrent) && zhMediaMissingSkip(this, tune, log, pendingCurrent, true)) {
+        return await this.advance(tune, log);
+      }
       if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
       if (Date.now() - zhRuntime.waitMediaSince > 15000) {
         zhRuntime.waitMediaSince = 0;
@@ -14446,21 +14490,24 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       const media = await zhFindMedia(["video", "audio"], 6);
       if (media) {
         zhRuntime.waitMediaSince = 0;
+        const current = this.current();
         if (zhMediaAtEnd(media)) {
-          const current = this.current();
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(current)), {
             replayKey: "wisdom-replay",
             replayLog: "当前节点未出现完成标记，重新播放补齐时长"
           });
           if (plan === "advance") return await this.advance(tune, log);
         }
+        zhRestudyStart(this, tune, log, current, media, !!(current && this.isDone(current)));
         await zhKeepPlaying(media, tune);
         return true;
       }
       const resourceKind = await zhHandleResourceTask(log);
       if (resourceKind) return await zhFinishResourceTask(this, tune, log, resourceKind);
       const pendingCurrent = this.current();
-      if (pendingCurrent && this.isDone(pendingCurrent)) return await this.advance(tune, log);
+      if (pendingCurrent && this.isDone(pendingCurrent) && zhMediaMissingSkip(this, tune, log, pendingCurrent, true)) {
+        return await this.advance(tune, log);
+      }
       if (!zhRuntime.waitMediaSince) zhRuntime.waitMediaSince = Date.now();
       if (Date.now() - zhRuntime.waitMediaSince > 15000) {
         zhRuntime.waitMediaSince = 0;
@@ -14524,8 +14571,63 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
   const zhBoundMedia = new WeakSet();
 
+  const zhSectionKey = (section, index) => {
+    const text = String(zhTxtOf(zhPick(".section-item-collapse-title", section), "") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    return text || `#${index}`;
+  };
+
+  const zhCardSignature = () => {
+    try {
+      const cards = zhCardList();
+      if (cards.length) {
+        return cards
+          .map((card) => {
+            const titleEl = zhPick(".common-text, .video-title, .basic-info-video-card-container", card);
+            return String(zhTxtOf(titleEl || card, "")).replace(/\s+/g, " ").trim().slice(0, 40);
+          })
+          .join("|");
+      }
+      return zhPickAll(".clearfix.video")
+        .map((el) => String(zhTxtOf(zhPick(".title, .catalogue_title", el) || el, "")).replace(/\s+/g, " ").trim().slice(0, 40))
+        .join("|");
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const zhFindNextRestudySection = (sections) => {
+    const active = sections.find((section) => /(^|\s)active(\s|$)/.test(section.className || "")) || null;
+    const keys = sections.map((section, index) => zhSectionKey(section, index));
+    const activeIndex = active ? sections.indexOf(active) : -1;
+    if (activeIndex >= 0) zhRuntime.restudySections.add(keys[activeIndex]);
+    for (let step = 1; step <= sections.length; step += 1) {
+      const index = (activeIndex + step + sections.length) % sections.length;
+      if (index === activeIndex) continue;
+      if (!zhRuntime.restudySections.has(keys[index])) return sections[index];
+    }
+    return null;
+  };
+
   const zhAdvanceSection = async (tune, log) => {
-    const target = zhFindNextStudySection(zhPickAll(".section-item-collapse-info"));
+    const sections = zhPickAll(".section-item-collapse-info");
+    if (tune && tune.restudy) {
+      if (zhRuntime.sectionSwitchAt) {
+        const sig = zhCardSignature();
+        const loaded = sig !== "" && sig !== zhRuntime.sectionCardSig;
+        const overdue = Date.now() - zhRuntime.sectionSwitchAt > 20000;
+        if (!loaded && !overdue) return true;
+      }
+      const target = zhFindNextRestudySection(sections);
+      if (!target) return false;
+      const head = zhPick(".section-item-collapse-title", target) || target;
+      log.addLog(`复习模式：切换到下一节：${zhTxtOf(head, "下一章")}`, "primary");
+      zhRuntime.sectionCardSig = zhCardSignature();
+      zhRuntime.sectionSwitchAt = Date.now();
+      await zhOpenSection(target);
+      await zhSleep(2.4);
+      return true;
+    }
+    const target = zhFindNextStudySection(sections);
     if (!target) return false;
 
     const head = zhPick(".section-item-collapse-title", target) || target;
@@ -14546,15 +14648,17 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     },
     async chapterStep(tune, log) {
       const media = await zhFindMedia(["#vjs_container video", "#vjs_container_html5_api", "video", "audio"], 6);
+      const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
       if (media) {
         if (media.ended) {
-          const current = zhPick(".clearfix.video.current_play") || zhPick(".clearfix.video.activeNode");
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.chapterDone(current)));
           if (plan === "advance") return await this.chapterAdvance(tune, log);
         }
+        zhRestudyStart(this, tune, log, current, media, !!(current && this.chapterDone(current)));
         await zhKeepPlaying(media, tune);
         return true;
       }
+      if (!zhMediaMissingSkip(this, tune, log, current, !!(current && this.chapterDone(current)))) return true;
       return await this.chapterAdvance(tune, log);
     },
     async chapterAdvance(tune, log) {
@@ -14598,6 +14702,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       if (kind === "video") {
         const media = await zhFindMedia(["#vjs_container video", ".video-player-wrapper video", "video"], 6);
         if (media) {
+          if (tune && tune.restudy && card) {
+            zhRestudyStart(this, tune, log, card, media, zhCardDone(card), zhCardList());
+          }
           if (!zhBoundMedia.has(media)) {
             zhBoundMedia.add(media);
             media.onpause = () => {
@@ -14617,6 +14724,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           await zhKeepPlaying(media, tune);
           return true;
         }
+        if (!zhMediaMissingSkip(this, tune, log, card, zhCardDone(card))) return true;
       }
       if (kind === "ppt") {
         if (await zhPptSweep([".ppt-preview-container", ".ppt-btn-container"], log)) return true;
@@ -14642,7 +14750,8 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       if (pending.length) {
         if (tune.restudy && activeCard) zhRestudyMark(this, activeCard, cards);
         const after = pending.find((card) => cards.indexOf(card) > activeIndex);
-        const target = after || (activeIndex >= 0 ? null : pending[0]) || null;
+        const fallback = tune.restudy ? pending[0] : activeIndex >= 0 ? null : pending[0];
+        const target = after || fallback || null;
         if (target) {
           log.addLog(`切换到下一节：${zhTxtOf(target.querySelector(".common-text, .video-title, .basic-info-video-card-container")) || "下一个资源"}`, "primary");
           zhTapNode(zhPick(".basic-info-video-card-container", target) || zhPick(".common-text", target) || target);
@@ -14740,8 +14849,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       }
       const media = this.findMediaDeep(profile.media);
       if (media) {
+        zhRuntime.waitMediaSince = 0;
+        const current = this.current(profile);
         if (media.ended) {
-          const current = this.current(profile);
           const progress = zhTxtOf(zhPick(profile.rate, current));
           const plan = zhResolveEnded(this, tune, log, media, current, !!(current && this.isDone(profile, current)), {
             list: this.items(profile),
@@ -14750,7 +14860,12 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           });
           if (plan === "advance") return await this.advance(profile, tune, log);
         }
+        zhRestudyStart(this, tune, log, current, media, !!(current && this.isDone(profile, current)), this.items(profile));
         await zhKeepPlaying(media, tune);
+        return true;
+      }
+      const pendingCurrent = this.current(profile);
+      if (!zhMediaMissingSkip(this, tune, log, pendingCurrent, !!(pendingCurrent && this.isDone(profile, pendingCurrent)))) {
         return true;
       }
       return await this.advance(profile, tune, log);
@@ -14914,7 +15029,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
               } catch (e) {
                 tune = null;
               }
-              if (tune && tune.modeOn) {
+              if (tune && tune.modeOn && !tune.restudy) {
                 zhRuntime.lastAdvanceAt = Date.now();
                 Promise.resolve(stage.advance(tune, zhRuntime.log)).catch(() => {});
               }
@@ -15754,7 +15869,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       }
     } catch (e) {}
     syncSpeedLabel();
-    try { if (!media.currentTime || media.currentTime < 1) media.currentTime = 1; } catch (e) {}
+    try {
+      if ((opts && opts.restart) || !media.currentTime || media.currentTime < 1) media.currentTime = 1;
+    } catch (e) {}
     media.onended = () => finish("ended");
     media.onpause = () => {
       if (!media.ended && !settled) setTimeout(() => { try { media.play(); } catch (e) {} }, 800);
@@ -16957,6 +17074,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
             ? await yktPlayMediaCalm(media, { getRate: computeEffectiveRate, logStore })
             : await yktPlayMedia(media, {
                 getRate: computeEffectiveRate,
+                restart: restudy,
                 title: (() => { try { const act = yktJobs().find((el) => el.classList.contains("is-active")); return act ? yktJobTitle(act) : ""; } catch (e) { return ""; } })(),
               });
           logStore.addLog(
