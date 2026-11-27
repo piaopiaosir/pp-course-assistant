@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.5.2
+// @version      4.5.3
 // @author       PIAOPIAO
 // @description  🎓网课自动答题/视频助手｜超星学习通·知到智慧树·雨课堂｜视频自动播放倍速+章节任务+作业考试全题型自动答题｜免费题库+Claude/ChatGPT/Gemini/DeepSeek等7款AI双重校验｜手机平板可用｜免费开源持续更新
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
@@ -28,8 +28,8 @@
 // @require      https://lib.baomitu.com/rxjs/7.8.2/rxjs.umd.min.js
 // @require      https://lib.baomitu.com/blueimp-md5/2.19.0/js/md5.min.js
 // @resource     ElementPlusStyle  https://lib.baomitu.com/element-plus/2.8.2/index.min.css
-// @resource     fontDecryptLib    https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.1.0/font-decrypt.js
-// @resource     fontDecryptLibGh  https://gh-proxy.com/https://raw.githubusercontent.com/piaopiaosir/pp-font-decrypt/v1.1.0/font-decrypt.js
+// @resource     fontDecryptLib    https://cdn.jsdmirror.com/gh/piaopiaosir/pp-font-decrypt@v1.2.0/font-decrypt.js
+// @resource     fontDecryptLibGh  https://gh-proxy.com/https://raw.githubusercontent.com/piaopiaosir/pp-font-decrypt/v1.2.0/font-decrypt.js
 // @connect      *
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
@@ -1330,8 +1330,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         const selection = doc.getSelection ? doc.getSelection() : null;
         const text = selection ? String(selection) : "";
         if (!text) return;
-        decodeCipherFontSafe(doc);
-        const decoded = _ppApplyCipherMap(text, doc);
+        const lib = ppGetFontDecrypt();
+        if (!lib || typeof lib.decodeText !== "function") return;
+        const decoded = lib.decodeText(text, doc);
         if (decoded !== text && event.clipboardData) {
           event.clipboardData.setData("text/plain", decoded);
           event.preventDefault();
@@ -1386,15 +1387,24 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         } catch (e) {}
       } catch (e) {}
     };
+    const scanDoc = (doc, depth) => {
+      if (!doc || depth > 6) return;
+      installDoc(doc);
+      let frames = [];
+      try {
+        frames = Array.from(doc.querySelectorAll("iframe"));
+      } catch (e) {
+        return;
+      }
+      frames.forEach((frame) => {
+        try {
+          if (frame.contentDocument) scanDoc(frame.contentDocument, depth + 1);
+        } catch (e) {}
+      });
+    };
     const scan = () => {
       try {
-        installDoc((_unsafeWindow && _unsafeWindow.document) || document);
-        const root = (_unsafeWindow && _unsafeWindow.document) || document;
-        root.querySelectorAll("iframe").forEach((frame) => {
-          try {
-            if (frame.contentDocument) installDoc(frame.contentDocument);
-          } catch (e) {}
-        });
+        scanDoc((_unsafeWindow && _unsafeWindow.document) || document, 0);
       } catch (e) {}
     };
     scan();
@@ -6627,17 +6637,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       return result;
     }
   };
-  function _ppApplyCipherMap(text, doc) {
-    const map = doc && doc.__ppCipherCharMap;
-    if (!map || !text) return text;
-    let out = "";
-    for (let i = 0; i < text.length; i++) {
-      const codePoint = text.charCodeAt(i);
-      out += map[codePoint] ? String.fromCharCode(map[codePoint]) : text[i];
-    }
-    return out;
-  }
-
   const ppGetFontDecrypt = () => {
     try {
       if (typeof _unsafeWindow !== "undefined" && _unsafeWindow.FontDecrypt) return _unsafeWindow.FontDecrypt;
@@ -7377,6 +7376,30 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     } catch (e) {}
   };
 
+  let _ppDeskNotifyLast = { key: "", at: 0 };
+  const ppDeskNotify = (title, body, tag) => {
+    try {
+      const key = `${tag || ""}|${title}|${body}`;
+      const now = Date.now();
+      if (key === _ppDeskNotifyLast.key && now - _ppDeskNotifyLast.at < 60000) return;
+      _ppDeskNotifyLast = { key, at: now };
+      if (typeof Notification === "undefined") return;
+      const fire = () => {
+        try {
+          new Notification(title, { body, tag: tag || "pp-notice" });
+        } catch (e) {}
+      };
+      if (Notification.permission === "granted") return fire();
+      if (Notification.permission === "default" && typeof Notification.requestPermission === "function") {
+        Promise.resolve(Notification.requestPermission())
+          .then((permission) => {
+            if (permission === "granted") fire();
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
+  };
+
   const PP_LOG_SUBMIT_NOTES = {
     manual: ["当前页面不支持自动提交：请检查已填入的答案后手动提交", "warning"],
     autoOff: ["未开启自动提交：请检查已填入的答案后手动提交", "warning"],
@@ -7420,6 +7443,11 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       await opts.submit();
       return { fillRate, threshold, action: "submit" };
     }
+    ppDeskNotify(
+      "网课小助手",
+      `${pageLabel}填入率 ${fillRate}% 低于填涂阈值 ${threshold}%，未自动提交，请手动补答`,
+      "pp-answer-notice",
+    );
     if (canDraft) {
       addLog(`填入率 ${fillRate}% < 填涂阈值 ${threshold}%：不自动提交，已暂存`, "warning");
       await opts.draft();
@@ -9436,6 +9464,28 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
   const ppCxTaskTab = (doc) => doc.querySelector("#prev_tab .prev_ul li.active");
 
+  const ppCxUnfinishedJobIcons = (cardDoc) => {
+    if (!cardDoc || typeof cardDoc.querySelectorAll !== "function") return [];
+    try {
+      return Array.from(cardDoc.querySelectorAll(".ans-job-icon")).filter(
+        (el) => /未完成/.test(el.getAttribute?.("aria-label") || ""),
+      );
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const ppCxAdvanceSnapshot = (doc, cardDoc) => {
+    const tab = ppCxTaskTab(doc);
+    const frame = document.querySelector("iframe#iframe") || document.querySelector("iframe");
+    const tabKey = tab && tab.getAttribute
+      ? `${tab.getAttribute("cardid") || ""}:${(tab.textContent || "").trim()}`
+      : "";
+    return [window.location.href, tabKey, frame ? frame.src || "" : "", ppCxUnfinishedJobIcons(cardDoc).length].join("|");
+  };
+
+  const ppCxDeskNotify = (title, body) => ppDeskNotify(title, body, "pp-cx-notice");
+
   const ppCxAdvanceTaskPage = async ({ doc, wait, isCurrent, getMode, onEnd, onLogin, cardDoc }) => {
     if (!isCurrent()) return "changed";
     if (ppCxLoginIssue(doc) || ppCxLoginIssue(cardDoc)) {
@@ -9466,6 +9516,13 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       }
     }
     if (!button) return "missing";
+
+    if (ppCxUnfinishedJobIcons(cardDoc).length) {
+      await wait(3);
+      if (!isCurrent()) return "changed";
+      if (ppCxUnfinishedJobIcons(cardDoc).length) return "locked";
+    }
+
     button.click();
     if (confirmation) return "clicked";
 
@@ -9640,6 +9697,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     let _lastTaskTab = null;
     let _lastScanHref = "";
     let _resumeAdvance = null;
+    let _advanceLockedSig = "";
 
     window.__getAnswerTaskId__ = () => _globalTaskId;
 
@@ -9675,6 +9733,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       const onLogin = () => {
         ppCxQueueInstance?.pauseForLogin();
         logStore.addLog("检测到学习通登录异常，已停止自动切换，请在学习通确认登录状态", "warning");
+        ppDeskNotify("网课小助手", "学习通登录异常，已停止自动切换，请确认登录状态", "pp-cx-notice");
       };
       if (ppCxLoginIssue(document) || ppCxLoginIssue(cardDoc)) {
         onLogin();
@@ -9699,10 +9758,29 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           ppCxQueueInstance?.ownsCurrentCourse() ? "queue" :
             readCxParamValue(PP_KEY.CHAPTER, PP_KEY.AUTO_NEXT, true) ? "normal" : "off";
         const advance = async () => {
+          const before = ppCxAdvanceSnapshot(document, cardDoc);
+          if (_advanceLockedSig && _advanceLockedSig === before) return;
           const result = await ppCxAdvanceTaskPage({
             doc: document, cardDoc, wait: delay, isCurrent, onLogin, getMode,
             onEnd: () => ppCxQueueInstance?.noteStudyEnd(href)
           });
+          let jumpBlocked = result === "locked";
+          if (!jumpBlocked && result === "clicked") {
+            let after = ppCxAdvanceSnapshot(document, cardDoc);
+            for (let attempt = 0; attempt < 16 && after === before; attempt++) {
+              await delay(0.5);
+              after = ppCxAdvanceSnapshot(document, cardDoc);
+            }
+            jumpBlocked = after === before;
+          }
+          if (jumpBlocked) {
+            const signature = ppCxAdvanceSnapshot(document, cardDoc);
+            if (signature !== _advanceLockedSig) {
+              _advanceLockedSig = signature;
+              logStore.addLog("下一节任务点尚未解锁：本页还有未完成任务点，已停止自动切换。请在页面上完成并提交当前任务点后，手动点「下一节」继续", "warning");
+              ppCxDeskNotify("网课小助手", "学习通下一节任务点未解锁，已暂停自动切换，请先完成当前任务点");
+            }
+          }
           if (result === "held" && isCurrent()) {
             _resumeAdvance = () => {
               if (!isCurrent()) { _resumeAdvance = null; return; }
@@ -11029,6 +11107,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
                     if (afkEnabled) { BackgroundWorker.stop(simulateLoopId); } else { clearInterval(loopInterval); }
                     window._simulateActive = false;
                     logStore.addLog(`完成上报重试${maxCompleteRetries}次仍未通过，请检查视频是否需要其他操作`, "danger");
+                    ppDeskNotify("网课小助手", "视频任务点完成上报未通过，请检查视频是否需要其他操作", "pp-cx-notice");
                     progressStore.update({
                       percent: 100,
                       currentTime: duration,
@@ -14281,6 +14360,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   const zhCaptchaHold = async (tune, log) => {
     if (!zhCaptchaNode()) return false;
     log.addLog("检测到平台验证码，已暂停学习流程；验证完成后会自动继续", "danger");
+    if (typeof ppDeskNotify === "function") ppDeskNotify("网课小助手", "智慧树出现验证码，学习流程已暂停，验证完成后会自动继续", "pp-zhs-notice");
     const originTitle = document.title;
     let flasher = null;
     if (tune.captchaNotify) {
@@ -17993,6 +18073,7 @@ function createPPChaoxingQueue(options = {}) {
     state.status = 'paused';
     state.reason = typeof reason === 'string' ? reason : '课程队列已暂停';
     commit(state);
+    if (typeof ppDeskNotify === 'function') ppDeskNotify('网课小助手', '学习通课程队列已暂停：' + state.reason, 'pp-queue-notice');
     return snapshot();
   }
   function clear() {
@@ -18832,6 +18913,7 @@ function createPPZhsQueue(options = {}) {
     activeRead?.abort();
     Object.assign(state, { status: 'paused', expected: null, reason: typeof reason === 'string' ? reason : '课程队列已暂停' });
     publish(state);
+    if (typeof ppDeskNotify === 'function') ppDeskNotify('网课小助手', '智慧树课程队列已暂停：' + state.reason, 'pp-queue-notice');
     return snapshot();
   }
   function clear() {

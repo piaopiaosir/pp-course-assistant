@@ -108,7 +108,7 @@ async function chapterFixture() {
   assert.equal(await fireDelay(), true);
   assert.equal(typeof complete, 'function');
   return {
-    controls, complete, fireDelay, logs,
+    card, controls, complete, fireDelay, logs,
     moveToNextChapter: () => loc.searchParams.set('chapterId', '2'),
     setQueue: sandbox.setChapterFixtureQueue,
     checkPage: [...intervals.values()].find(timer => timer.run.name === 'checkUrlChange').run,
@@ -161,6 +161,45 @@ for (const action of ['resume', 'clear']) {
     assert.equal(fixture.logs.filter(text => text === '本页任务点已处理').length, 1);
   });
 }
+
+test('an unfinished task point stops the chapter jump and notifies the user once', async () => {
+  const fixture = await chapterFixture();
+  let clicks = 0;
+  const unfinished = { getAttribute: name => name === 'aria-label' ? '任务点未完成' : null };
+  fixture.card.querySelectorAll = selector => selector === '.ans-job-icon' ? [unfinished] : [];
+  fixture.controls.set('#prevNextFocusNext', [nextButton(() => { clicks += 1; })]);
+  const blocked = fixture.complete();
+  assert.equal(await fixture.fireDelay(), true);
+  assert.equal(await fixture.fireDelay(3000), true);
+  await blocked;
+  assert.equal(clicks, 0);
+  assert.equal(fixture.logs.filter(text => text.includes('下一节任务点尚未解锁')).length, 1);
+
+  fixture.card.querySelectorAll = () => [];
+  fixture.controls.set('#prevNextFocusNext', [nextButton(() => { clicks += 1; fixture.moveToNextChapter(); })]);
+  const resumed = fixture.complete();
+  assert.equal(await fixture.fireDelay(), true);
+  await resumed;
+  assert.equal(clicks, 1);
+});
+
+test('a chapter jump that leaves the task unchanged notifies once and stops retrying', async () => {
+  const fixture = await chapterFixture();
+  let clicks = 0;
+  fixture.controls.set('#prevNextFocusNext', [nextButton(() => { clicks += 1; })]);
+  const finished = fixture.complete();
+  assert.equal(await fixture.fireDelay(), true);
+  while (await fixture.fireDelay(250)) {}
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    assert.equal(await fixture.fireDelay(500), true);
+  }
+  await finished;
+  assert.equal(clicks, 1);
+  assert.equal(fixture.logs.filter(text => text.includes('下一节任务点尚未解锁')).length, 1);
+
+  await fixture.complete();
+  assert.equal(clicks, 1);
+});
 
 function downloadCounterTimer(timeouts) {
   return [...timeouts.values()].find(timer => timer.run.name === 'ppRunRemoteScriptsPing');
