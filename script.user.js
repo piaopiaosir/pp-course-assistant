@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.5.1
+// @version      4.5.2
 // @author       PIAOPIAO
 // @description  🎓网课自动答题/视频助手｜超星学习通·知到智慧树·雨课堂｜视频自动播放倍速+章节任务+作业考试全题型自动答题｜免费题库+Claude/ChatGPT/Gemini/DeepSeek等7款AI双重校验｜手机平板可用｜免费开源持续更新
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
