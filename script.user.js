@@ -3211,7 +3211,8 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
                 if (res.data.newToken) {
                   vue.unref(configStore).queryApis[0].token = res.data.newToken;
-                  logStore.addLog(`新用户免费Token已注册，可查询40次题目`, 'success');
+                  const giftCount = Number(res.data.num);
+                  logStore.addLog(giftCount > 0 ? `新用户免费Token已注册，可查询${giftCount}次题目` : '新用户免费Token已注册', 'success');
                 }
 
                 if (res.data.num <= 0) {
@@ -3646,12 +3647,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       const renderWelfareCard = () => {
         const promo = PP_WELFARE_OFFER || (typeof _unsafeWindow !== "undefined" ? _unsafeWindow.__PP_WELFARE__ : null);
         if (!promo || promo.enabled === false) return null;
-        let plans = Array.isArray(promo.plans) ? promo.plans : [];
-        if (!plans.length && Array.isArray(globalScriptDescription?.plans)) {
-          plans = globalScriptDescription.plans
-            .filter((plan) => Number(plan.count) > 0)
-            .map((plan) => ({ from: Number(plan.count), to: Math.ceil(Number(plan.count) * 1.3) }));
-        }
+        const plans = Array.isArray(promo.plans) ? promo.plans : [];
         const link = promo.link || SPONSOR_URL;
         if (!link) return null;
         return vue.h("section", { class: "pp-welfare" }, [
@@ -3659,7 +3655,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
             vue.h("span", { class: "pp-welfare-ico" }, ppIcon("gift", 14)),
             vue.h("div", { class: "pp-welfare-copy" }, [
               vue.h("b", null, promo.title || "专属福利"),
-              vue.h("span", null, promo.text || "赞助加赠 30% 额度")
+              promo.text ? vue.h("span", null, promo.text) : null
             ]),
             vue.h("span", { class: "pp-welfare-tag" }, "未领取")
           ]),
