@@ -2663,8 +2663,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     }),
     actions: {
       update(progress) {
-        // 换任务类型时先清掉另一类任务的字段：否则从「章节测验」切到视频后，
-        // card 里会一直挂着上一次的「题目 第 20/20 题」，看起来像没刷新。
         if (progress.type !== undefined) {
           const nextType = String(progress.type || "");
           const mediaTask = nextType === "视频" || nextType === "音频";
@@ -2931,7 +2929,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       vue.onUnmounted(ppfxPctStop);
       return () => {
         const answerTotal = Number(progress.questionTotal) || 0;
-        // 只有当前任务真的是答题时才走答题卡；只看 questionTotal 会把上一次答题的残留数据当成本次任务。
         const answering = progress.type === "答题" && (answerTotal > 0 || progress.isPlaying);
         if (answering) {
           const index = Math.min(Number(progress.questionIndex) || 0, answerTotal);
@@ -9736,7 +9733,6 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         ppCxTaskTab(document) === activeTab;
       hasLoggedSkipTip = false;
 
-      // 只在真正换了任务点/章节时重置：面板要立刻反映当前任务，而不是挂着上一题组的「题目 x/y」。
       const taskIdentity = [href, source, activeTab ? (activeTab.getAttribute("cardid") || activeTab.textContent || "") : ""].join("|");
       if (_lastTaskIdentity !== taskIdentity) {
         _lastTaskIdentity = taskIdentity;
