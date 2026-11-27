@@ -2663,6 +2663,23 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     }),
     actions: {
       update(progress) {
+        // 换任务类型时先清掉另一类任务的字段：否则从「章节测验」切到视频后，
+        // card 里会一直挂着上一次的「题目 第 20/20 题」，看起来像没刷新。
+        if (progress.type !== undefined) {
+          const nextType = String(progress.type || "");
+          const mediaTask = nextType === "视频" || nextType === "音频";
+          const answerTask = nextType === "答题";
+          if (this.type !== nextType && (mediaTask || answerTask)) {
+            if (progress.questionIndex === undefined) this.questionIndex = 0;
+            if (progress.questionTotal === undefined) this.questionTotal = 0;
+            if (progress.filledCount === undefined) this.filledCount = 0;
+            if (progress.fillRate === undefined) this.fillRate = 0;
+            if (answerTask) {
+              if (progress.currentTime === undefined) this.currentTime = 0;
+              if (progress.totalTime === undefined) this.totalTime = 0;
+            }
+          }
+        }
         if (progress.taskName !== undefined) this.taskName = progress.taskName;
         if (progress.percent !== undefined) this.percent = Math.min(100, Math.max(0, progress.percent));
         if (progress.currentTime !== undefined) this.currentTime = progress.currentTime;
@@ -2914,7 +2931,8 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       vue.onUnmounted(ppfxPctStop);
       return () => {
         const answerTotal = Number(progress.questionTotal) || 0;
-        const answering = answerTotal > 0 || (progress.type === "答题" && progress.isPlaying);
+        // 只有当前任务真的是答题时才走答题卡；只看 questionTotal 会把上一次答题的残留数据当成本次任务。
+        const answering = progress.type === "答题" && (answerTotal > 0 || progress.isPlaying);
         if (answering) {
           const index = Math.min(Number(progress.questionIndex) || 0, answerTotal);
           const answered = questionStore.questionList.length;
@@ -9696,6 +9714,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     let _lastIframeDoc = null;
     let _lastTaskTab = null;
     let _lastScanHref = "";
+    let _lastTaskIdentity = "";
     let _resumeAdvance = null;
     let _advanceLockedSig = "";
 
@@ -9716,6 +9735,32 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         chapterFrame() === iframe && iframe.src === source && iframe.contentDocument === cardDoc &&
         ppCxTaskTab(document) === activeTab;
       hasLoggedSkipTip = false;
+
+      // 只在真正换了任务点/章节时重置：面板要立刻反映当前任务，而不是挂着上一题组的「题目 x/y」。
+      const taskIdentity = [href, source, activeTab ? (activeTab.getAttribute("cardid") || activeTab.textContent || "") : ""].join("|");
+      if (_lastTaskIdentity !== taskIdentity) {
+        _lastTaskIdentity = taskIdentity;
+        let taskTitle = "";
+        try {
+          const titleEl = document.querySelector("#mainid .prev_title") || document.querySelector(".prev_title");
+          taskTitle = titleEl ? String(titleEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+        } catch (e) {}
+        if (progressStore && typeof progressStore.update === "function") {
+          progressStore.update({
+            taskName: taskTitle || "正在解析任务点",
+            type: "-",
+            percent: 0,
+            currentTime: 0,
+            totalTime: 0,
+            questionIndex: 0,
+            questionTotal: 0,
+            filledCount: 0,
+            fillRate: 0,
+            detail: "正在解析任务点",
+            isPlaying: false
+          });
+        }
+      }
 
       const afkEnabledWatch = readGlobalAfk();
       if (afkEnabledWatch) {
@@ -21074,7 +21119,15 @@ function createPPZhsQueue(options = {}) {
             const percent = ended ? 100 : Math.min(100, Math.round((current / duration) * 100));
             const keepTask = (store.type === "视频" || store.type === "音频") &&
               store.taskName && store.taskName !== "暂无任务" && store.taskName !== "等待任务开始";
-            const pageTitle = String(document.title || "").split(/[—–\-_|]/)[0].trim().slice(0, 40);
+            const readTaskTitle = () => {
+              for (const selector of ["#mainid .prev_title", ".prev_title", ".chapter_title", ".posCatalog_active"]) {
+                const el = document.querySelector(selector);
+                const text = el ? String(el.textContent || "").replace(/\s+/g, " ").trim() : "";
+                if (text) return text.slice(0, 40);
+              }
+              return String(document.title || "").split(/[—–\-_|]/)[0].trim().slice(0, 40);
+            };
+            const pageTitle = readTaskTitle();
             const taskName = keepTask ? store.taskName : (pageTitle || "视频播放");
             const detail = ended ? "播放完成" : (paused ? "已暂停" : formatMediaTime(current) + "/" + formatMediaTime(duration));
             const key = taskName + "|" + duration + "|" + current + "|" + paused + "|" + percent;
