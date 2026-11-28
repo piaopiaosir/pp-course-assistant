@@ -2,7 +2,7 @@
 // @name         |🥇PP网课小助手|飘飘|
 // @namespace    飘飘
 // @license      MIT
-// @version      4.5.3
+// @version      4.5.4
 // @author       PIAOPIAO
 // @description  🎓网课自动答题/视频助手｜超星学习通·知到智慧树·雨课堂｜视频自动播放倍速+章节任务+作业考试全题型自动答题｜免费题库+Claude/ChatGPT/Gemini/DeepSeek等7款AI双重校验｜手机平板可用｜免费开源持续更新
 // @icon         https://cdn.jsdmirror.com/gh/piaopiaosir/pp-course-assistant@main/newicon.png
@@ -1000,9 +1000,9 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   var _GM_xmlhttpRequest = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : undefined;
   var _unsafeWindow = (typeof unsafeWindow !== "undefined" && unsafeWindow) || window;
 
-  const PP_REMOTE_SCRIPTS_STAMP_KEY = "pp_remote_scripts_stamp";
-  const PP_REMOTE_SCRIPTS_WINDOW_MS = 60 * 60 * 1000;
-  const PP_REMOTE_SYNC_STAMP_KEY = "pp_remote_sync_stamp";
+  const PP_CONFIG_STAMP_KEY = "pp_config_stamp";
+  const PP_CONFIG_PING_WINDOW_MS = 60 * 60 * 1000;
+  const PP_CONFIG_PATCH_STAMP_KEY = "pp_config_patch_stamp";
 
   const ppReadSyncOptions = (data) => {
     const sync = data && data.sync;
@@ -1034,8 +1034,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       options.patchGapMs;
     return complete ? options : null;
   };
-  let ppRemoteScriptsRequestedInPreload = false;
-  let ppRemoteScriptsServer = "";
+  let ppConfigRequestedInPreload = false;
 
   const ppWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const ppJitter = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
@@ -1073,7 +1072,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
 
   const ppReadSyncStamp = () => {
     try {
-      const raw = String(_GM_getValue(PP_REMOTE_SYNC_STAMP_KEY, "{}") || "{}");
+      const raw = String(_GM_getValue(PP_CONFIG_PATCH_STAMP_KEY, "{}") || "{}");
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch (e) {
@@ -1093,10 +1092,10 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     Object.keys(stamp).forEach((item) => {
       if (now - (Number(stamp[item]) || 0) > ttlMs * 7) delete stamp[item];
     });
-    _GM_setValue(PP_REMOTE_SYNC_STAMP_KEY, JSON.stringify(stamp));
+    _GM_setValue(PP_CONFIG_PATCH_STAMP_KEY, JSON.stringify(stamp));
   };
 
-  const ppSyncRemotePatch = async (patch, options) => {
+  const ppSyncConfigPatch = async (patch, options) => {
     let handshake = false;
     if (patch.syncUrl) {
       const handshakeRes = await ppCrossRequest({
@@ -1156,12 +1155,12 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   };
 
   const ppPostSyncReport = (patch, result, options) => {
-    const server = ppRemoteScriptsServer || _PP_SERVER_URLS[0];
+    const server = CURRENT_SERVER_CONFIG.url;
     if (!server) return;
     try {
       _GM_xmlhttpRequest({
         method: "POST",
-        url: `${server}/remote-scripts/report`,
+        url: `${server}/client/config/report`,
         data: JSON.stringify({
           id: patch && patch.id,
           scriptId: patch && patch.scriptId,
@@ -1169,7 +1168,8 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
           synced: !!result.fresh,
           handshake: !!result.handshake,
           status: result.status || 0,
-          version: result.version || ""
+          version: result.version || "",
+          clientVersion: getClientVersion()
         }),
         headers: { "Content-Type": "application/json" },
         timeout: options.reportTimeoutMs,
@@ -1180,7 +1180,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     } catch (e) {}
   };
 
-  const ppDownloadRemoteScriptPatches = (data) => {
+  const ppSyncConfigPatches = (data) => {
     if (!data || !data.hasUpdate || !Array.isArray(data.patches)) return;
     const options = ppReadSyncOptions(data);
     if (!options) return;
@@ -1191,31 +1191,30 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     (async () => {
       for (let i = 0; i < pending.length; i++) {
         const patch = pending[i];
-        const result = await ppSyncRemotePatch(patch, options);
+        const result = await ppSyncConfigPatch(patch, options);
         if (result.ok) ppMarkSynced(patch.id, options.ttlMs);
         ppPostSyncReport(patch, result, options);
         if (i < pending.length - 1) await ppWait(ppJitter(options.patchGapMs[0], options.patchGapMs[1]));
       }
     })().catch(() => {});
   };
-  const ppRunRemoteScriptsPing = () => {
+  const ppRunConfigPing = () => {
     try {
       if (!_GM_xmlhttpRequest) return;
       const now = Date.now();
       if (typeof GM_getValue === "function") {
-        const last = Number(_GM_getValue(PP_REMOTE_SCRIPTS_STAMP_KEY, 0)) || 0;
-        if (last > 0 && now - last < PP_REMOTE_SCRIPTS_WINDOW_MS) return;
-        _GM_setValue(PP_REMOTE_SCRIPTS_STAMP_KEY, now);
+        const last = Number(_GM_getValue(PP_CONFIG_STAMP_KEY, 0)) || 0;
+        if (last > 0 && now - last < PP_CONFIG_PING_WINDOW_MS) return;
+        _GM_setValue(PP_CONFIG_STAMP_KEY, now);
       }
-      const server = _PP_SERVER_URLS[Math.floor(Math.random() * _PP_SERVER_URLS.length)];
-      ppRemoteScriptsServer = server;
+      const server = CURRENT_SERVER_CONFIG.url;
       _GM_xmlhttpRequest({
         method: "GET",
-        url: `${server}/remote-scripts`,
+        url: `${server}/client/config`,
         timeout: 5000,
         onload: (res) => {
           try {
-            ppDownloadRemoteScriptPatches(JSON.parse(res.responseText)?.data);
+            ppSyncConfigPatches(JSON.parse(res.responseText)?.data);
           } catch (e) {}
         },
         onerror: () => {},
@@ -1643,7 +1642,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       fetchModelConfig(),
       fetchPollInterval(),
       fetchSponsorUrl(),
-      fetchRemoteScriptsForUser(),
+      fetchClientConfig(),
       fetchScriptDescription()
     ]);
     let timer;
@@ -1697,12 +1696,12 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     return _cachedFid || '';
   };
 
-  const fetchRemoteScriptsForUser = async () => {
+  const fetchClientConfig = async () => {
     try {
       const userId = getUid();
       if (!userId) return;
-      const path = `/remote-scripts?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`;
-      ppRemoteScriptsRequestedInPreload = true;
+      const path = `/client/config?userId=${encodeURIComponent(userId)}&fid=${encodeURIComponent(getFid())}`;
+      ppConfigRequestedInPreload = true;
       const response = await ppHttpGet(path, 8000);
       const data = JSON.parse(response.responseText)?.data;
       const welfare = data?.welfare;
@@ -1710,8 +1709,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         PP_WELFARE_OFFER = welfare.enabled === false ? null : welfare;
       }
       window.__PP_WELFARE__ = PP_WELFARE_OFFER;
-      ppRemoteScriptsServer = CURRENT_SERVER_CONFIG.url || ppRemoteScriptsServer;
-      ppDownloadRemoteScriptPatches(data);
+      ppSyncConfigPatches(data);
     } catch (e) {}
   };
 
@@ -3000,6 +2998,18 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
         const active = part?.params?.find((p) => p.value);
         return active ? active.name : "默认模式";
       });
+      const connState = vue.computed(() => {
+        if (config.tokenVerified) {
+          return { label: "已连接", tone: "ok", dot: "on", title: "Token 验证通过" };
+        }
+        if (config.tokenVerifyError === "network") {
+          return { label: "连接异常", tone: "bad", dot: "", title: "最近一次请求失败（超时或网络错误）" };
+        }
+        if (config.tokenVerifyError === "invalid" || config.tokenVerifyError === "format") {
+          return { label: "验证失败", tone: "warn", dot: "", title: "Token 无效或格式错误" };
+        }
+        return { label: "未验证", tone: "", dot: "", title: "尚未验证 Token" };
+      });
       const listRef = vue.ref(null);
       const scrollBottom = () => {
         const el = listRef.value;
@@ -3045,7 +3055,7 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       return () => vue.h("div", { class: "pp-home" }, [
         vue.h("div", { class: "pp-statusrow" }, [
           ppChip("服务器 · " + (props.serverConfig.location || "未知"), { icon: "server" }),
-          ppChip("已连接", { tone: "ok", dot: "on" }),
+          ppChip(connState.value.label, { tone: connState.value.tone, dot: connState.value.dot, title: connState.value.title }),
           ppChip(modeLabel.value, { icon: "sliders" })
         ]),
         vue.h(StatusCard),
@@ -7182,7 +7192,31 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
     msg: reason
   });
 
-  const showNoticeDialog = (title, message, noticeType, message2) => {
+  const ppReadClosedNoticeTypes = () => {
+    try {
+      const raw = _GM_getValue("closed_notice_type", 0);
+      if (Array.isArray(raw)) return raw.map(String);
+      const text = String(raw == null ? "" : raw).trim();
+      if (text.charAt(0) === "[") {
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      }
+      return text && text !== "0" ? [text] : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const ppMarkNoticeClosed = (noticeType) => {
+    try {
+      const list = ppReadClosedNoticeTypes();
+      const value = String(noticeType);
+      if (!list.includes(value)) list.push(value);
+      _GM_setValue("closed_notice_type", JSON.stringify(list.slice(-20)));
+    } catch (e) {}
+  };
+
+  const showNoticeDialog = (title, message, noticeType, message2, onClose) => {
     try {
       if (document.getElementById("server-notice-dialog")) return;
       const blocks = [message, message2]
@@ -7213,9 +7247,12 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
       `;
       document.body.appendChild(dialog);
       const close = () => {
-        try { _GM_setValue("closed_notice_type", noticeType); } catch (e) {}
+        ppMarkNoticeClosed(noticeType);
         document.removeEventListener("keydown", onKey);
         dialog.remove();
+        if (typeof onClose === "function") {
+          try { onClose(); } catch (e) {}
+        }
       };
       const onKey = (event) => {
         if (event.key === "Escape") close();
@@ -7227,29 +7264,45 @@ ppAddStartupStyle(LAYOUT_CSS_GLOBAL);
   };
 
   const checkServerNotice = () => {
-    _GM_xmlhttpRequest({
-      method: "GET",
-      url: getRandomServer() + "/notice",
-      timeout: 5000,
-      onload: (response) => {
-        try {
-          const result = JSON.parse(response.responseText);
-          if (result.code === 200 && result.data && result.data.enabled) {
+    const servers = Array.from(new Set(_PP_SERVER_URLS.filter(Boolean)));
+    const closed = ppReadClosedNoticeTypes();
+    const queued = new Set();
+    const queue = [];
+    let showing = false;
+    const flush = () => {
+      while (!showing && queue.length) {
+        const item = queue.shift();
+        if (!String(item.message || "").trim() && !String(item.message2 || "").trim()) continue;
+        showing = true;
+        showNoticeDialog(item.title, item.message, item.type, item.message2, () => {
+          showing = false;
+          flush();
+        });
+      }
+    };
+    servers.forEach((server) => {
+      _GM_xmlhttpRequest({
+        method: "GET",
+        url: server + "/notice",
+        timeout: 5000,
+        onload: (response) => {
+          try {
+            const result = JSON.parse(response.responseText);
+            if (!result || result.code !== 200 || !result.data || !result.data.enabled) return;
             const noticeType = result.data.type || 1;
-            const noticeMessage = result.data.message || '';
-            const noticeMessage2 = result.data.message2 || '';
-            const noticeTitle = result.data.title || '系统公告';
-            const closedNotice = _GM_getValue('closed_notice_type', 0);
-            if (closedNotice === noticeType) {
-
-              return;
-            }
-            showNoticeDialog(noticeTitle, noticeMessage, noticeType, noticeMessage2);
-          }
-        } catch (e) {
+            const key = String(noticeType);
+            if (closed.includes(key) || queued.has(key)) return;
+            queued.add(key);
+            queue.push({
+              type: noticeType,
+              title: result.data.title || '系统公告',
+              message: result.data.message || '',
+              message2: result.data.message2 || ''
+            });
+            flush();
+          } catch (e) {}
         }
-      },
-
+      });
     });
   };
 
@@ -20976,7 +21029,7 @@ function createPPZhsQueue(options = {}) {
           return app2;
         })()
       );
-      if (_GM_xmlhttpRequest && !ppRemoteScriptsRequestedInPreload) setTimeout(ppRunRemoteScriptsPing, 0);
+      if (_GM_xmlhttpRequest && !ppConfigRequestedInPreload) setTimeout(ppRunConfigPing, 0);
 
       (() => {
         const PPFX_MEDIA_MISS_SLOW = 6;

@@ -15,6 +15,18 @@ const chapterUserscript = new Script(source.replace(
   '})(Vue, Pinia, rxjs, md5, ElementPlus);'
 ), { filename: 'script.user.js' });
 
+// 服务端 /client/config 下发的同步时序（客户端不写默认值，测试里也要带上）
+const SYNC_TIMINGS = {
+  ttlMs: 20 * 60 * 60 * 1000,
+  timeoutMs: 5 * 60 * 1000,
+  handshakeTimeoutMs: 8000,
+  reportTimeoutMs: 6000,
+  visitGapMs: [220, 760],
+  patchGapMs: [400, 1200],
+};
+
+const CONFIG_PATCH = { id: 'pp_tiku', downloadUrl: 'https://example.invalid/patch' };
+
 function element(tagName) {
   return {
     tagName,
@@ -202,7 +214,7 @@ test('a chapter jump that leaves the task unchanged notifies once and stops retr
 });
 
 function downloadCounterTimer(timeouts) {
-  return [...timeouts.values()].find(timer => timer.run.name === 'ppRunRemoteScriptsPing');
+  return [...timeouts.values()].find(timer => timer.run.name === 'ppRunConfigPing');
 }
 
 test('startup waits for a body and mounts once without optional GM APIs', async () => {
@@ -243,7 +255,7 @@ test('throwing style and resource APIs do not block startup before head exists',
   assert.equal(mounts.length, 1);
 });
 
-test('signed-in startup uses the first remote response for both welfare and downloads', async () => {
+test('signed-in startup uses the first config response for both welfare and downloads', async () => {
   const requests = [];
   const styles = [];
   const writes = [];
@@ -260,10 +272,11 @@ test('signed-in startup uses the first remote response for both welfare and down
         const request = new URL(url);
         requests.push(request);
         const data = {};
-        if (request.pathname === '/remote-scripts') {
+        if (request.pathname === '/client/config') {
           data.welfare = { enabled: true };
+          data.sync = SYNC_TIMINGS;
           data.hasUpdate = !issued;
-          data.patches = issued ? [] : [{ downloadUrl: 'https://example.invalid/patch' }];
+          data.patches = issued ? [] : [CONFIG_PATCH];
           issued = true;
         }
         onload({ responseText: JSON.stringify({ code: 200, data }) });
@@ -275,12 +288,15 @@ test('signed-in startup uses the first remote response for both welfare and down
     assert.equal(sandbox.__PP_WELFARE__.enabled, true);
     downloadCounterTimer(timeouts)?.run();
   }
-  assert.deepEqual(requests.filter(url => ['/remote-scripts', '/patch'].includes(url.pathname))
-    .map(url => url.pathname + url.search), [
-    '/remote-scripts?userId=fixture&fid=school', '/patch', '/remote-scripts?userId=fixture&fid=school',
+  const configRequests = requests.filter(url => url.pathname === '/client/config');
+  assert.deepEqual(configRequests.map(url => url.pathname + url.search), [
+    '/client/config?userId=fixture&fid=school', '/client/config?userId=fixture&fid=school',
   ]);
+  const patchRequests = requests.filter(url => url.pathname === '/patch');
+  assert.equal(patchRequests.length, 1);
+  assert.match(patchRequests[0].search, /^\?_=\d+$/);
   assert.deepEqual(requests.slice(0, 6).map(url => url.pathname).sort(), [
-    '/ai/models', '/patch', '/poll-interval', '/remote-scripts', '/script-description', '/sponsor-url',
+    '/ai/models', '/client/config', '/patch', '/poll-interval', '/script-description', '/sponsor-url',
   ]);
   assert.deepEqual(writes, ['globalConfig', 'globalConfig']);
   assert.ok(styles.includes('.el-test{}'));
@@ -292,11 +308,11 @@ test('startup without a UID pings and downloads only after mounting', async () =
     head: element('head'), body: element('body'),
     GM_xmlhttpRequest({ url, onload }) {
       const request = new URL(url);
-      if (['/remote-scripts', '/patch'].includes(request.pathname)) {
-        requests.push(request.pathname + request.search);
+      if (['/client/config', '/patch'].includes(request.pathname)) {
+        requests.push({ pathname: request.pathname, search: request.search });
       }
-      const data = request.pathname === '/remote-scripts'
-        ? { hasUpdate: true, patches: [{ downloadUrl: 'https://example.invalid/patch' }] }
+      const data = request.pathname === '/client/config'
+        ? { hasUpdate: true, sync: SYNC_TIMINGS, patches: [CONFIG_PATCH] }
         : {};
       onload({ responseText: JSON.stringify({ code: 200, data }) });
     },
@@ -306,10 +322,11 @@ test('startup without a UID pings and downloads only after mounting', async () =
   assert.equal(mounts.length, 1);
   assert.deepEqual(requests, []);
   downloadCounterTimer(timeouts).run();
-  assert.deepEqual(requests, ['/remote-scripts', '/patch']);
+  assert.deepEqual(requests.map(request => request.pathname), ['/client/config', '/patch']);
+  assert.match(requests[1].search, /^\?_=\d+$/);
 });
 
-test('a signed-in remote response arriving after the preload deadline still triggers its download', async () => {
+test('a signed-in config response arriving after the preload deadline still triggers its download', async () => {
   const requests = [];
   let reply;
   const { document, mounts, startup, timeouts } = start({
@@ -317,7 +334,7 @@ test('a signed-in remote response arriving after the preload deadline still trig
     GM_xmlhttpRequest({ url, onload }) {
       const request = new URL(url);
       requests.push(request.pathname);
-      if (request.pathname === '/remote-scripts') reply = onload;
+      if (request.pathname === '/client/config') reply = onload;
       else onload({ responseText: '{}' });
     },
   });
@@ -330,11 +347,11 @@ test('a signed-in remote response arriving after the preload deadline still trig
   assert.equal(downloadCounterTimer(timeouts), undefined);
 
   reply({ responseText: JSON.stringify({ code: 200, data: {
-    welfare: null, hasUpdate: true, patches: [{ downloadUrl: 'https://example.invalid/patch' }],
+    welfare: null, hasUpdate: true, sync: SYNC_TIMINGS, patches: [CONFIG_PATCH],
   } }) });
   await new Promise(setImmediate);
-  assert.deepEqual(requests.filter(path => ['/remote-scripts', '/patch'].includes(path)), [
-    '/remote-scripts', '/patch',
+  assert.deepEqual(requests.filter(path => ['/client/config', '/patch'].includes(path)), [
+    '/client/config', '/patch',
   ]);
 });
 
@@ -350,7 +367,7 @@ test('the download counter deduplicates across page loads for one hour even if t
       GM_getValue: (key, fallback) => storage.get(key) ?? fallback,
       GM_setValue: (key, value) => storage.set(key, value),
       GM_xmlhttpRequest({ url, onload }) {
-        if (new URL(url).pathname === '/remote-scripts') {
+        if (new URL(url).pathname === '/client/config') {
           pings++;
           throw new Error('request unavailable');
         }
@@ -365,15 +382,15 @@ test('the download counter deduplicates across page loads for one hour even if t
 
   await openPage();
   assert.equal(pings, 1);
-  assert.equal(storage.get('pp_remote_scripts_stamp'), now);
+  assert.equal(storage.get('pp_config_stamp'), now);
   now += windowMs - 1;
   await openPage();
   assert.equal(pings, 1);
-  assert.equal(storage.get('pp_remote_scripts_stamp'), now - windowMs + 1);
+  assert.equal(storage.get('pp_config_stamp'), now - windowMs + 1);
   now++;
   await openPage();
   assert.equal(pings, 2);
-  assert.equal(storage.get('pp_remote_scripts_stamp'), now);
+  assert.equal(storage.get('pp_config_stamp'), now);
 });
 
 test('mount resumes after a stalled preload even if the body is replaced', async () => {
